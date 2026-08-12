@@ -1,0 +1,44 @@
+# --- env / secrets ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Go (src/api) ---
+src/api/bin/
+src/api/tmp/
+*.exe
+*.test
+*.out
+
+# --- Node / Next.js (src/back-office, src/web) ---
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+npm-debug.log*
+
+# --- Flutter (src/mobile) ---
+src/mobile/.dart_tool/
+src/mobile/.flutter-plugins
+src/mobile/.flutter-plugins-dependencies
+src/mobile/.pub-cache/
+src/mobile/.pub/
+src/mobile/build/
+src/mobile/ios/Pods/
+src/mobile/ios/.symlinks/
+src/mobile/android/.gradle/
+src/mobile/**/*.g.dart
+
+# --- editors ---
+.vscode/
+.idea/
+
+# --- local tool config ---
+.claude/settings.local.json

@@ -1,0 +1,89 @@
+package auth
+
+import (
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/o1egl/paseto/v2"
+)
+
+var (
+	ErrInvalidToken = errors.New("token is invalid")
+	ErrExpiredToken = errors.New("token has expired")
+)
+
+// ActorType identifies which kind of principal a token was issued to.
+type ActorType string
+
+const (
+	ActorMerchant  ActorType = "merchant" // merchant owner, via the mobile app
+	ActorStaff     ActorType = "staff"    // merchant staff (Section 4.9), via the mobile app
+	ActorAdminUser ActorType = "admin_user"
+)
+
+// Payload is the claim set embedded in every PASETO token issued by the API.
+type Payload struct {
+	ID         uuid.UUID `json:"id"`
+	ActorID    uuid.UUID `json:"actor_id"`
+	ActorType  ActorType `json:"actor_type"`
+	MerchantID uuid.UUID `json:"merchant_id,omitempty"`
+	Role       string    `json:"role"`
+	IssuedAt   time.Time `json:"issued_at"`
+	ExpiredAt  time.Time `json:"expired_at"`
+}
+
+func (p Payload) Valid() error {
+	if time.Now().After(p.ExpiredAt) {
+		return ErrExpiredToken
+	}
+	return nil
+}
+
+// Maker issues and verifies PASETO v2 local (symmetric) tokens.
+type Maker interface {
+	CreateToken(actorID uuid.UUID, actorType ActorType, merchantID uuid.UUID, role string, duration time.Duration) (string, *Payload, error)
+	VerifyToken(token string) (*Payload, error)
+}
+
+type pasetoMaker struct {
+	symmetricKey []byte
+}
+
+// NewPasetoMaker builds a Maker from a 32-byte symmetric key.
+func NewPasetoMaker(symmetricKey string) (Maker, error) {
+	if len(symmetricKey) != 32 {
+		return nil, errors.New("symmetric key must be exactly 32 bytes")
+	}
+	return &pasetoMaker{symmetricKey: []byte(symmetricKey)}, nil
+}
+
+func (m *pasetoMaker) CreateToken(actorID uuid.UUID, actorType ActorType, merchantID uuid.UUID, role string, duration time.Duration) (string, *Payload, error) {
+	now := time.Now()
+	payload := &Payload{
+		ID:         uuid.New(),
+		ActorID:    actorID,
+		ActorType:  actorType,
+		MerchantID: merchantID,
+		Role:       role,
+		IssuedAt:   now,
+		ExpiredAt:  now.Add(duration),
+	}
+
+	token, err := paseto.NewV2().Encrypt(m.symmetricKey, payload, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	return token, payload, nil
+}
+
+func (m *pasetoMaker) VerifyToken(token string) (*Payload, error) {
+	payload := &Payload{}
+	if err := paseto.NewV2().Decrypt(token, m.symmetricKey, payload, nil); err != nil {
+		return nil, ErrInvalidToken
+	}
+	if err := payload.Valid(); err != nil {
+		return nil, err
+	}
+	return payload, nil
+}

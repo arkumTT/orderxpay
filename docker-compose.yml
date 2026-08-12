@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: orderxpay-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-orderxpay_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Xgonnagiveit2u}
+    ports:
+      - "5432:5432"
+    volumes:
+      - orderxpay_pg_data:/var/lib/postgresql/data
+
+volumes:
+  orderxpay_pg_data:

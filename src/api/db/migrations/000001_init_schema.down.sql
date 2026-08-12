@@ -1,0 +1,14 @@
+DROP TABLE IF EXISTS audit_log_entries;
+DROP TABLE IF EXISTS fee_rules;
+DROP TABLE IF EXISTS conversations;
+DROP TABLE IF EXISTS settlements;
+DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS invoice_line_items;
+DROP TABLE IF EXISTS invoices;
+DROP TABLE IF EXISTS delivery_options;
+DROP TABLE IF EXISTS order_requests;
+DROP TABLE IF EXISTS items;
+DROP TABLE IF EXISTS staff;
+DROP TABLE IF EXISTS merchants;
+DROP TABLE IF EXISTS admin_users;
+DROP FUNCTION IF EXISTS set_updated_at();
