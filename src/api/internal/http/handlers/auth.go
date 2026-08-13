@@ -11,19 +11,20 @@ import (
 	"github.com/orderxpay/api/internal/auth"
 )
 
-const adminTokenDuration = 12 * time.Hour
+const userTokenDuration = 12 * time.Hour
 
-type adminLoginRequest struct {
+type userLoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// AdminLogin authenticates Back Office staff (Section 7.8: Super Admin,
-// Compliance/KYC Reviewer, Finance/Settlement, Support). There is no public
-// admin-signup endpoint — admin_users are provisioned out-of-band (seed
-// script / direct DB insert by a Super Admin), never self-registered.
-func (h *Handler) AdminLogin(c *fiber.Ctx) error {
-	var req adminLoginRequest
+// UserLogin authenticates Back Office users (Section 7.8 RBAC: roles like
+// Super Admin, Compliance Reviewer, Finance, Support — see
+// db/migrations/000002_rbac_users.up.sql for the seeded catalog). There is
+// no public signup endpoint — users are provisioned out-of-band via
+// cmd/seed (first user) or by an existing Super Admin (everyone after).
+func (h *Handler) UserLogin(c *fiber.Ctx) error {
+	var req userLoginRequest
 	if err := c.BodyParser(&req); err != nil {
 		return badRequest(c, "invalid request body")
 	}
@@ -31,19 +32,42 @@ func (h *Handler) AdminLogin(c *fiber.Ctx) error {
 		return badRequest(c, "email and password are required")
 	}
 
-	user, err := h.Queries.GetAdminUserByEmail(c.Context(), req.Email)
+	user, err := h.Queries.GetUserByEmail(c.Context(), req.Email)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid credentials"})
 	} else if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to look up admin user"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to look up user"})
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid credentials"})
 	}
+	if user.Status != "active" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "user account is not active"})
+	}
+
+	roles, err := h.Queries.ListUserRoles(c.Context(), user.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load roles"})
+	}
+	permissionKeys, err := h.Queries.GetUserPermissionKeys(c.Context(), user.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load permissions"})
+	}
+
+	roleNames := make([]string, len(roles))
+	for i, r := range roles {
+		roleNames[i] = r.Name
+	}
 
 	actorID := user.ID.Bytes
-	token, payload, err := h.TokenMaker.CreateToken(actorID, auth.ActorAdminUser, [16]byte{}, user.Role, adminTokenDuration)
+	token, payload, err := h.TokenMaker.CreateToken(auth.CreateTokenParams{
+		ActorID:     actorID,
+		ActorType:   auth.ActorUser,
+		Roles:       roleNames,
+		Permissions: permissionKeys,
+		Duration:    userTokenDuration,
+	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create token"})
 	}
@@ -51,7 +75,8 @@ func (h *Handler) AdminLogin(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"access_token": token,
 		"expires_at":   payload.ExpiredAt,
-		"role":         user.Role,
+		"roles":        roleNames,
+		"permissions":  permissionKeys,
 	})
 }
 

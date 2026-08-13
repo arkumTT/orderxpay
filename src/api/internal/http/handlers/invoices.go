@@ -25,6 +25,11 @@ func (h *Handler) GetInvoiceByReference(c *fiber.Ctx) error {
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice"})
 	}
+	if invoice.Status == "draft" {
+		// A draft was never sent — treat it the same as "doesn't exist" to
+		// an unauthenticated caller rather than leaking it.
+		return notFound(c)
+	}
 
 	lineItems, err := h.Queries.ListInvoiceLineItems(c.Context(), invoice.ID)
 	if err != nil {
@@ -54,10 +59,55 @@ func (h *Handler) ListInvoicesByMerchant(c *fiber.Ctx) error {
 	return c.JSON(invoices)
 }
 
-// CreateInvoice is not yet implemented: it depends on the order/invoice
-// engine (Section 4.3) — computing subtotal/service-charge/total from line
-// items per the merchant's fee-allocation rule (Section 4.8) — which needs
-// its own design pass rather than being scaffolded ad hoc.
+type createInvoiceRequest struct {
+	CustomerContact     string            `json:"customer_contact"`
+	LineItems           []lineItemRequest `json:"line_items"`
+	DeliveryOptionID    string            `json:"delivery_option_id"`
+	DeliveryAddress     string            `json:"delivery_address"`
+	DeliveryFeeHandling string            `json:"delivery_fee_handling"` // "bundled" | "external"
+	DeliveryFeePesewas  int64             `json:"delivery_fee_pesewas"`
+}
+
+// CreateInvoice builds an order from the catalog or quick-add custom lines,
+// computes subtotal/service-charge/total per the merchant's fee-allocation
+// rule, and issues a payment-ready invoice (Section 4.3/4.8).
 func (h *Handler) CreateInvoice(c *fiber.Ctx) error {
-	return notImplemented(c, "invoice engine not yet implemented — see Section 4.3/4.8 of the architecture doc")
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+
+	var req createInvoiceRequest
+	if err := c.BodyParser(&req); err != nil {
+		return badRequest(c, "invalid request body")
+	}
+	if req.CustomerContact == "" {
+		return badRequest(c, "customer_contact is required")
+	}
+
+	deliveryOptionID, err := uuidOrNull(req.DeliveryOptionID)
+	if err != nil {
+		return badRequest(c, "invalid delivery_option_id")
+	}
+	if req.DeliveryFeeHandling != "" && req.DeliveryFeeHandling != "bundled" && req.DeliveryFeeHandling != "external" {
+		return badRequest(c, "delivery_fee_handling must be bundled or external")
+	}
+
+	invoice, lineItems, err := h.createInvoiceCore(c.Context(), createInvoiceCoreParams{
+		MerchantID:          merchantID,
+		CustomerContact:     req.CustomerContact,
+		LineItems:           req.LineItems,
+		DeliveryOptionID:    deliveryOptionID,
+		DeliveryAddress:     req.DeliveryAddress,
+		DeliveryFeeHandling: req.DeliveryFeeHandling,
+		DeliveryFeePesewas:  req.DeliveryFeePesewas,
+	})
+	if err != nil {
+		if isValidationError(err) {
+			return badRequest(c, err.Error())
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create invoice"})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"invoice": invoice, "line_items": lineItems})
 }

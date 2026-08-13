@@ -12,51 +12,79 @@ import (
 
 type Querier interface {
 	ArchiveItem(ctx context.Context, id pgtype.UUID) error
-	CreateAdminUser(ctx context.Context, arg CreateAdminUserParams) (AdminUser, error)
+	AssignUserRole(ctx context.Context, arg AssignUserRoleParams) error
 	CreateAuditLogEntry(ctx context.Context, arg CreateAuditLogEntryParams) (AuditLogEntry, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateDeliveryOption(ctx context.Context, arg CreateDeliveryOptionParams) (DeliveryOption, error)
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLineItemParams) (InvoiceLineItem, error)
 	CreateItem(ctx context.Context, arg CreateItemParams) (Item, error)
+	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
 	CreateMerchant(ctx context.Context, arg CreateMerchantParams) (Merchant, error)
 	CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	CreateSettlement(ctx context.Context, arg CreateSettlementParams) (Settlement, error)
 	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteMenu(ctx context.Context, id pgtype.UUID) error
 	DeleteStaff(ctx context.Context, id pgtype.UUID) error
-	GetAdminUser(ctx context.Context, id pgtype.UUID) (AdminUser, error)
-	GetAdminUserByEmail(ctx context.Context, email string) (AdminUser, error)
 	GetDeliveryOption(ctx context.Context, id pgtype.UUID) (DeliveryOption, error)
 	GetFeeRuleByMerchant(ctx context.Context, merchantID pgtype.UUID) (FeeRule, error)
 	GetGlobalFeeRule(ctx context.Context) (FeeRule, error)
 	GetInvoice(ctx context.Context, id pgtype.UUID) (Invoice, error)
 	GetInvoiceByReference(ctx context.Context, reference string) (Invoice, error)
 	GetItem(ctx context.Context, id pgtype.UUID) (Item, error)
+	GetMenu(ctx context.Context, id pgtype.UUID) (Menu, error)
 	GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error)
 	GetMerchantByPhone(ctx context.Context, phone string) (Merchant, error)
 	GetOrderRequest(ctx context.Context, id pgtype.UUID) (OrderRequest, error)
 	GetPaymentByPSPReference(ctx context.Context, pspReference string) (Payment, error)
+	GetPermissionByKey(ctx context.Context, key string) (Permission, error)
+	GetRoleByName(ctx context.Context, name string) (Role, error)
 	GetStaffByPhone(ctx context.Context, phone string) (Staff, error)
-	ListAdminUsers(ctx context.Context) ([]AdminUser, error)
+	GetUser(ctx context.Context, id pgtype.UUID) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	// GetUserPermissionKeys is the union of permissions granted via the user's
+	// roles and any direct per-user grants — this is what gets embedded in the
+	// PASETO token payload at login time.
+	GetUserPermissionKeys(ctx context.Context, userID pgtype.UUID) ([]string, error)
+	GrantUserPermission(ctx context.Context, arg GrantUserPermissionParams) error
 	ListAuditLogEntriesByTarget(ctx context.Context, arg ListAuditLogEntriesByTargetParams) ([]AuditLogEntry, error)
 	ListConversationsByMerchant(ctx context.Context, arg ListConversationsByMerchantParams) ([]Conversation, error)
 	ListDeliveryOptionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]DeliveryOption, error)
 	ListInvoiceLineItems(ctx context.Context, invoiceID pgtype.UUID) ([]InvoiceLineItem, error)
 	ListInvoicesByMerchant(ctx context.Context, arg ListInvoicesByMerchantParams) ([]Invoice, error)
 	ListItemsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Item, error)
+	ListMenus(ctx context.Context) ([]Menu, error)
+	// ListMenusForUser returns every menu with no permission requirement, every
+	// menu whose permission is among the caller's effective permissions (via
+	// role or direct grant), AND every ancestor of such a menu — otherwise a
+	// child could pass its own permission check while its parent doesn't,
+	// leaving it with no reachable parent in the assembled tree. This is what
+	// the Back Office sidebar calls.
+	ListMenusForUser(ctx context.Context, userID pgtype.UUID) ([]ListMenusForUserRow, error)
 	ListMerchants(ctx context.Context, arg ListMerchantsParams) ([]Merchant, error)
 	ListPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) ([]Payment, error)
 	ListPendingOrderRequestsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]OrderRequest, error)
+	ListPermissions(ctx context.Context) ([]Permission, error)
+	ListPermissionsByRole(ctx context.Context, roleID pgtype.UUID) ([]Permission, error)
+	ListRoles(ctx context.Context) ([]Role, error)
 	ListSettlementsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Settlement, error)
 	ListStaffByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Staff, error)
+	ListUserDirectPermissions(ctx context.Context, userID pgtype.UUID) ([]Permission, error)
+	ListUserRoles(ctx context.Context, userID pgtype.UUID) ([]Role, error)
+	ListUsers(ctx context.Context) ([]User, error)
+	RemoveUserRole(ctx context.Context, arg RemoveUserRoleParams) error
+	RevokeUserPermission(ctx context.Context, arg RevokeUserPermissionParams) error
 	SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) error
 	SetInvoiceStatus(ctx context.Context, arg SetInvoiceStatusParams) (Invoice, error)
 	SetOrderRequestStatus(ctx context.Context, arg SetOrderRequestStatusParams) (OrderRequest, error)
 	SetPaymentStatus(ctx context.Context, arg SetPaymentStatusParams) (Payment, error)
 	SetSettlementStatus(ctx context.Context, arg SetSettlementStatusParams) (Settlement, error)
+	SetUserStatus(ctx context.Context, arg SetUserStatusParams) (User, error)
 	SumSuccessfulPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) (int64, error)
 	UpdateItem(ctx context.Context, arg UpdateItemParams) (Item, error)
+	UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error)
 	UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerchantFeeSettingsParams) (Merchant, error)
 	UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantKYCTierParams) (Merchant, error)
 	UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantStatusParams) (Merchant, error)

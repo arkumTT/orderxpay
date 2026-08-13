@@ -37,7 +37,7 @@ func RequireAuth(maker auth.Maker) fiber.Handler {
 	}
 }
 
-// RequireActorType restricts a route to one or more actor types (e.g. admin_user-only routes).
+// RequireActorType restricts a route to one or more actor types (e.g. user-only routes).
 func RequireActorType(types ...auth.ActorType) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		payload, ok := c.Locals(AuthPayloadKey).(*auth.Payload)
@@ -50,5 +50,21 @@ func RequireActorType(types ...auth.ActorType) fiber.Handler {
 			}
 		}
 		return fiber.NewError(fiber.StatusForbidden, "actor type not permitted for this route")
+	}
+}
+
+// RequirePermission restricts a Back Office route to users whose token
+// carries the given permission key (Section 7.8 RBAC — see
+// GetUserPermissionKeys). Must run after RequireAuth.
+func RequirePermission(key string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		payload, ok := c.Locals(AuthPayloadKey).(*auth.Payload)
+		if !ok {
+			return fiber.NewError(fiber.StatusUnauthorized, "missing auth payload")
+		}
+		if !payload.HasPermission(key) {
+			return fiber.NewError(fiber.StatusForbidden, "missing required permission: "+key)
+		}
+		return c.Next()
 	}
 }

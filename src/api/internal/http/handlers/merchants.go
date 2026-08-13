@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/orderxpay/api/internal/db/sqlc"
 )
@@ -160,6 +161,50 @@ func (h *Handler) UpdateMerchantKYCTier(c *fiber.Ctx) error {
 		return notFound(c)
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update KYC tier"})
+	}
+	return c.JSON(merchant)
+}
+
+type updateMerchantFeeSettingsRequest struct {
+	ServiceChargeAllocation string `json:"service_charge_allocation"` // customer_only | merchant_only | split
+	ServiceChargeSplitBps   *int32 `json:"service_charge_split_bps"`  // required when allocation is split; % of the commission charged to the customer
+}
+
+// UpdateMerchantFeeSettings is the merchant app's own fee-allocation control
+// (Section 4.8) — this is what the invoice engine reads at invoice-creation
+// time (see internal/http/handlers/invoice_engine.go).
+func (h *Handler) UpdateMerchantFeeSettings(c *fiber.Ctx) error {
+	id, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+
+	var req updateMerchantFeeSettingsRequest
+	if err := c.BodyParser(&req); err != nil {
+		return badRequest(c, "invalid request body")
+	}
+
+	var splitBps pgtype.Int4
+	switch req.ServiceChargeAllocation {
+	case "customer_only", "merchant_only":
+	case "split":
+		if req.ServiceChargeSplitBps == nil || *req.ServiceChargeSplitBps < 0 || *req.ServiceChargeSplitBps > 10000 {
+			return badRequest(c, "service_charge_split_bps must be between 0 and 10000 when allocation is split")
+		}
+		splitBps = pgtype.Int4{Int32: *req.ServiceChargeSplitBps, Valid: true}
+	default:
+		return badRequest(c, "service_charge_allocation must be one of customer_only, merchant_only, split")
+	}
+
+	merchant, err := h.Queries.UpdateMerchantFeeSettings(c.Context(), db.UpdateMerchantFeeSettingsParams{
+		ID:                      id,
+		ServiceChargeAllocation: req.ServiceChargeAllocation,
+		ServiceChargeSplitBps:   splitBps,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update fee settings"})
 	}
 	return c.JSON(merchant)
 }

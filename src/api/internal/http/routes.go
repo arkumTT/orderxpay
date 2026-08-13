@@ -12,14 +12,14 @@ import (
 //
 //	/api/v1/public/...  no auth — hosted checkout/catalog, order requests, PSP webhooks (Section 5, 4.6)
 //	/api/v1/app/...     merchant app auth (merchant owner or staff)      (Section 4)
-//	/api/v1/admin/...   Back Office auth (admin_users only)              (Section 7)
+//	/api/v1/admin/...   Back Office auth (users only, gated per-route by RBAC permission — Section 7.8)
 func RegisterRoutes(app *fiber.App, h *handlers.Handler) {
 	app.Get("/healthz", h.Health)
 
 	v1 := app.Group("/api/v1")
 
 	public := v1.Group("/public")
-	public.Post("/admin/auth/login", h.AdminLogin)
+	public.Post("/admin/auth/login", h.UserLogin)
 	public.Post("/merchants", h.CreateMerchant)
 	public.Post("/merchants/:id/otp/request", h.RequestMerchantOTP)
 	public.Post("/merchants/:id/otp/verify", h.VerifyMerchantOTP)
@@ -32,7 +32,7 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handler) {
 	app_ := v1.Group("/app", middleware.RequireAuth(h.TokenMaker), middleware.RequireActorType(auth.ActorMerchant, auth.ActorStaff))
 	registerMerchantScopedRoutes(app_, h)
 
-	admin := v1.Group("/admin", middleware.RequireAuth(h.TokenMaker), middleware.RequireActorType(auth.ActorAdminUser))
+	admin := v1.Group("/admin", middleware.RequireAuth(h.TokenMaker), middleware.RequireActorType(auth.ActorUser))
 	registerAdminRoutes(admin, h)
 }
 
@@ -69,21 +69,49 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 
 	merchants.Get("/:id/settlements", h.ListSettlements)
 	merchants.Get("/:id/fee-rule", h.GetMerchantFeeRuleOrGlobal)
+	merchants.Patch("/:id/fee-settings", h.UpdateMerchantFeeSettings)
 }
 
-// registerAdminRoutes covers the Back Office platform (Section 7).
+// registerAdminRoutes covers the Back Office platform (Section 7). Every
+// route is gated by a specific permission key from the RBAC seed catalog
+// (db/migrations/000002_rbac_users.up.sql) via middleware.RequirePermission
+// — actor-type auth alone (any Back Office user) is not enough.
 func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
+	perm := middleware.RequirePermission
+
 	merchants := r.Group("/merchants")
-	merchants.Get("", h.ListMerchants)
-	merchants.Get("/:id", h.GetMerchant)
-	merchants.Patch("/:id/status", h.UpdateMerchantStatus)    // 7.1 suspend/restrict/activate
-	merchants.Patch("/:id/kyc-tier", h.UpdateMerchantKYCTier) // 7.1 KYC review queue decision
-	merchants.Get("/:id/settlements", h.ListSettlements)      // 7.2 reconciliation view
-	merchants.Post("/:id/fee-rule", h.UpsertMerchantFeeRule)  // 7.4 per-merchant override
+	merchants.Get("", perm("merchants.view"), h.ListMerchants)
+	merchants.Get("/:id", perm("merchants.view"), h.GetMerchant)
+	merchants.Patch("/:id/status", perm("merchants.manage_status"), h.UpdateMerchantStatus)
+	merchants.Patch("/:id/kyc-tier", perm("merchants.kyc_review"), h.UpdateMerchantKYCTier)
+	merchants.Get("/:id/settlements", perm("settlements.view"), h.ListSettlements)
+	merchants.Post("/:id/fee-rule", perm("pricing.manage"), h.UpsertMerchantFeeRule)
 
-	r.Post("/settlements", h.CreateSettlement) // 7.2 batch run
-	r.Get("/fee-rules/global", h.GetGlobalFeeRule)
-	r.Post("/fee-rules/global", h.UpsertGlobalFeeRule) // 7.4 global default
+	r.Post("/settlements", perm("settlements.manage"), h.CreateSettlement)
+	r.Get("/fee-rules/global", perm("pricing.view"), h.GetGlobalFeeRule)
+	r.Post("/fee-rules/global", perm("pricing.manage"), h.UpsertGlobalFeeRule)
 
-	r.Get("/audit-log/:targetId", h.ListAuditLogForTarget) // 7.9
+	r.Get("/audit-log/:targetId", perm("audit.view"), h.ListAuditLogForTarget)
+
+	// 7.8: managing Back Office users themselves.
+	users := r.Group("/users", perm("admin.manage_users"))
+	users.Post("", h.CreateUser)
+	users.Get("", h.ListUsers)
+	users.Patch("/:id/status", h.SetUserStatus)
+	users.Get("/:id/roles", h.ListUserRoles)
+	users.Post("/:id/roles", h.AssignUserRole)
+	users.Delete("/:id/roles/:roleId", h.RemoveUserRole)
+	r.Get("/roles", perm("admin.manage_users"), h.ListRoles)
+	r.Get("/permissions", perm("admin.manage_users"), h.ListPermissions)
+
+	// Section 13 "Admin shell/navigation": /menus/me is the one exception to
+	// "every route needs a specific permission" — it's available to any
+	// authenticated Back Office user, since it's how the sidebar itself is
+	// rendered. Managing the menu catalog is a separate, gated concern.
+	r.Get("/menus/me", h.ListMyMenus)
+	menus := r.Group("/menus", perm("admin.manage_menus"))
+	menus.Get("", h.ListMenus)
+	menus.Post("", h.CreateMenu)
+	menus.Put("/:id", h.UpdateMenu)
+	menus.Delete("/:id", h.DeleteMenu)
 }

@@ -8,16 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type AdminUser struct {
-	ID           pgtype.UUID        `json:"id"`
-	Name         string             `json:"name"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	Role         string             `json:"role"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-}
-
 type AuditLogEntry struct {
 	ID           pgtype.UUID        `json:"id"`
 	ActorID      pgtype.UUID        `json:"actor_id"`
@@ -108,6 +98,18 @@ type Item struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Menu struct {
+	ID           pgtype.UUID        `json:"id"`
+	ParentID     pgtype.UUID        `json:"parent_id"`
+	PermissionID pgtype.UUID        `json:"permission_id"`
+	Label        string             `json:"label"`
+	Path         pgtype.Text        `json:"path"`
+	Icon         pgtype.Text        `json:"icon"`
+	SortOrder    int32              `json:"sort_order"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Merchant struct {
 	ID                        pgtype.UUID        `json:"id"`
 	BusinessName              string             `json:"business_name"`
@@ -147,6 +149,38 @@ type Payment struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
+type Permission struct {
+	ID                pgtype.UUID        `json:"id"`
+	PermissionGroupID pgtype.UUID        `json:"permission_group_id"`
+	Key               string             `json:"key"`
+	Name              string             `json:"name"`
+	Description       pgtype.Text        `json:"description"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PermissionGroup struct {
+	ID          pgtype.UUID        `json:"id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Role struct {
+	ID          pgtype.UUID        `json:"id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type RolePermission struct {
+	RoleID       pgtype.UUID        `json:"role_id"`
+	PermissionID pgtype.UUID        `json:"permission_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type Settlement struct {
 	ID                      pgtype.UUID        `json:"id"`
 	MerchantID              pgtype.UUID        `json:"merchant_id"`
@@ -169,4 +203,26 @@ type Staff struct {
 	Role       string             `json:"role"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+type User struct {
+	ID           pgtype.UUID        `json:"id"`
+	Name         string             `json:"name"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	Status       string             `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserPermission struct {
+	UserID       pgtype.UUID        `json:"user_id"`
+	PermissionID pgtype.UUID        `json:"permission_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type UserRole struct {
+	UserID    pgtype.UUID        `json:"user_id"`
+	RoleID    pgtype.UUID        `json:"role_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }

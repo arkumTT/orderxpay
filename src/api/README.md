@@ -29,7 +29,11 @@ Money is stored as `bigint` pesewas (GHS lowest unit) everywhere — see
    ```
 2. Start Postgres (from repo root): `docker compose up -d`
 3. Run migrations: `make migrate-up`
-4. `make run`
+4. Create your first Back Office user (there's no public signup):
+   ```bash
+   make seed name="Ama Owusu" email=ama@orderxpay.test password=changeme123
+   ```
+5. `make run`
 
 Health check: `GET /healthz`
 
@@ -38,7 +42,74 @@ Health check: `GET /healthz`
 - `/api/v1/public/...` — no auth: merchant sign-up, hosted checkout lookup,
   customer-initiated order requests, PSP webhooks
 - `/api/v1/app/...` — merchant app auth (merchant owner or staff)
-- `/api/v1/admin/...` — Back Office auth (admin_users only)
+- `/api/v1/admin/...` — Back Office auth, gated per-route by RBAC permission
+
+## Back Office auth (Section 7.8 RBAC)
+
+Users, roles, and permissions — no hardcoded role enum. Schema in
+`db/migrations/000002_rbac_users.up.sql`:
+
+- `permission_groups` → `permissions` (the catalog, seeded to match Section 7's module list)
+- `roles` ↔ `permissions` via `role_permissions` (seeded: Super Admin, Compliance Reviewer, Finance, Support)
+- `users` ↔ `roles` via `user_roles`
+- `users` ↔ `permissions` directly via `user_permissions`, for one-off grants without a new role
+
+At login (`POST /api/v1/public/admin/auth/login`), the union of a user's
+role permissions and direct grants (`GetUserPermissionKeys`) is baked into
+the PASETO token as a snapshot — a role/permission change takes effect on
+the user's next login, not mid-session. Each admin route is gated with
+`middleware.RequirePermission("some.key")`; add new permission keys to the
+seed migration (or grant them via `POST /api/v1/admin/users/:id/roles` /
+`user_permissions`) as new routes need them.
+
+There's no public admin signup — provision the first user with `make seed`
+(above); every user after that is created by someone holding
+`admin.manage_users` via `POST /api/v1/admin/users`.
+
+## Navigation menus (Section 13 "Admin shell/navigation")
+
+`GET /api/v1/admin/menus/me` returns the caller's own sidebar as a nested
+tree — submenus live in `children`, filtered to menus with no permission
+requirement plus menus gated by a permission the caller actually holds
+(role or direct grant). Any authenticated Back Office user can call it, no
+extra permission needed. Managing the menu catalog itself
+(`GET/POST /api/v1/admin/menus`, `PUT/DELETE /api/v1/admin/menus/:id`) is
+gated behind `admin.manage_menus`.
+
+If a submenu's permission is granted but its parent's isn't, the parent
+still appears (as a pure grouping, permission-null in the response) so the
+child has somewhere to live — see `ListMenusForUser`'s recursive CTE in
+`db/queries/menus.sql`. The seed tree lives in
+`db/migrations/000003_menus.up.sql`. `src/back-office` now renders its
+sidebar from `/menus/me` directly — see its README.
+
+## Order & invoice engine (Section 4.3/4.8)
+
+`POST /api/v1/app/merchants/:id/invoices` and confirming an order request
+(`PATCH .../order-requests/:requestId` with `status: "confirmed"`) both go
+through `internal/http/handlers/invoice_engine.go`:
+
+- Line items are either a catalog `item_id` (price snapshotted from the
+  merchant's own catalog at that instant) or a one-off `description` +
+  `unit_price_pesewas` "quick-add" line.
+- The commission rate comes from the merchant's `fee_rules` override, else
+  the global default (`GET/POST /api/v1/admin/fee-rules/global`) — creating
+  an invoice with no fee rule configured anywhere is a `500`, not a `400`,
+  since that's a platform setup gap, not the caller's fault.
+- `merchants.service_charge_allocation` (set via the merchant's own
+  `PATCH /api/v1/app/merchants/:id/fee-settings`, Section 4.8) decides how
+  much of the commission is disclosed to and paid by the customer:
+  `customer_only` (full amount), `merchant_only` (zero — merchant absorbs
+  it at settlement), or `split` (`service_charge_split_bps` % of the
+  commission charged to the customer, the rest absorbed by the merchant).
+- A bundled delivery fee (`delivery_fee_handling: "bundled"`) is added to
+  the total; `"external"` records the fee without adding it.
+- References are 10 random characters (`INV-XXXXXXXXXX`, excluding
+  0/O/1/I) generated with `crypto/rand`, retried up to 3 times on the
+  astronomically unlikely event of a collision.
+- Creation and "send" are one action today — there's no separate Draft
+  state in practice, since Messaging (Section 4.4) isn't built yet to
+  advance an invoice out of Draft.
 
 ## What's stubbed, not implemented
 
@@ -47,14 +118,16 @@ depend on decisions not yet made in the architecture doc (which PSP, which
 SMS/WhatsApp BSP) or on business logic that needs its own design pass rather
 than being scaffolded ad hoc:
 
-- Invoice creation (order/invoice engine — Section 4.3/4.8)
 - PSP webhook handling (Section 4.5/9.1)
 - Settlement batch reconciliation (Section 7.2)
-- Merchant OTP request/verify (Section 4.1/9)
+- Merchant OTP request/verify (Section 4.1/9) — until that's built,
+  `cmd/devtoken` issues a merchant/staff token directly for local testing;
+  dev-only, never for production
 
-Everything else (merchants, staff, items, delivery options, fee rules,
-conversations, order-request review, audit log reads, admin login) is fully
-wired end-to-end against Postgres.
+Everything else — merchants, staff, items, delivery options, fee rules,
+conversations, order-request review (including invoice auto-generation on
+confirm), audit log reads, RBAC users/roles, navigation menus, admin
+login — is fully wired end-to-end against Postgres.
 
 ## After changing the schema or queries
 

@@ -1,10 +1,16 @@
 include .env
 export
 
-.PHONY: run build sqlc migrate-up migrate-down migrate-create
+role ?= Super Admin
+
+.PHONY: run build sqlc migrate-up migrate-down migrate-create seed
 
 run:
 	go run ./cmd/api
+
+# usage: make seed email=you@orderxpay.test password=... name="Ama Owusu" [role="Super Admin"]
+seed:
+	go run ./cmd/seed -name="$(name)" -email="$(email)" -password="$(password)" -role="$(role)"
 
 build:
 	go build -o bin/api ./cmd/api

@@ -7,7 +7,11 @@ import (
 )
 
 func parseUUIDParam(c *fiber.Ctx, name string) (pgtype.UUID, error) {
-	id, err := uuid.Parse(c.Params(name))
+	return parseUUID(c.Params(name))
+}
+
+func parseUUID(s string) (pgtype.UUID, error) {
+	id, err := uuid.Parse(s)
 	if err != nil {
 		return pgtype.UUID{}, err
 	}
@@ -16,6 +20,14 @@ func parseUUIDParam(c *fiber.Ctx, name string) (pgtype.UUID, error) {
 
 func toPgUUID(id uuid.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: id, Valid: true}
+}
+
+// uuidOrNull parses s as a UUID, or returns a null pgtype.UUID when s is empty.
+func uuidOrNull(s string) (pgtype.UUID, error) {
+	if s == "" {
+		return pgtype.UUID{}, nil
+	}
+	return parseUUID(s)
 }
 
 func textOrNull(s string) pgtype.Text {
