@@ -44,6 +44,11 @@ export type CheckoutResponse = {
   line_items: InvoiceLineItem[];
 };
 
+export type InitiatePaymentResponse = {
+  authorization_url: string;
+  reference: string;
+};
+
 export type MerchantPublicProfile = {
   id: string;
   business_name: string;

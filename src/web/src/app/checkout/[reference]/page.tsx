@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import { formatPesewas } from "@/lib/money";
 import type { CheckoutResponse } from "@/lib/types";
+import { PaymentPanel } from "./payment-panel";
+
+const TERMINAL_STATUSES = new Set(["expired", "cancelled", "refunded"]);
 
 // Hosted checkout page (Section 5.1): single-purpose, lightweight, no login.
 // The reference in the URL is a bearer credential (Section 5.3) — rate
@@ -10,18 +13,34 @@ export default async function CheckoutPage(
   props: PageProps<"/checkout/[reference]">,
 ) {
   const { reference } = await props.params;
+  const searchParams = await props.searchParams;
+  // Paystack appends both `reference` and `trxref` (same value) to the
+  // callback_url on redirect back — either is fine to key off of.
+  const trxReference = firstParam(
+    searchParams.trxref ?? searchParams.reference,
+  );
 
   let data: CheckoutResponse;
   try {
-    data = await apiFetch<CheckoutResponse>(
-      `/api/v1/public/checkout/${reference}`,
-    );
+    data = trxReference
+      ? await apiFetch<CheckoutResponse>(
+          `/api/v1/public/checkout/${reference}/verify?trx_reference=${encodeURIComponent(trxReference)}`,
+        )
+      : await apiFetch<CheckoutResponse>(
+          `/api/v1/public/checkout/${reference}`,
+        );
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
   }
 
   const { invoice, line_items } = data;
+  // The API always computes the exact amount still owed server-side when a
+  // payment is initiated (it accounts for prior partial payments) — this is
+  // only a display figure, so "full total" is the right default everywhere
+  // except the fully-paid state.
+  const amountOwedPesewas = invoice.status === "paid" ? 0 : invoice.total_pesewas;
+  const canPay = !TERMINAL_STATUSES.has(invoice.status) && invoice.status !== "paid";
 
   return (
     <div className="mx-auto max-w-md px-4 py-8">
@@ -59,14 +78,38 @@ export default async function CheckoutPage(
           </div>
         </div>
 
-        {/* TODO: Mobile Money / card payment method tabs via the PSP's
-            hosted fields or redirect (Section 5.1, 9.1) — not yet wired,
-            payment collection depends on PSP selection. */}
-        <div className="mt-6 rounded-lg border border-dashed border-neutral-300 p-4 text-center text-sm text-neutral-400">
-          Payment methods not yet implemented — depends on PSP selection
-          (Section 9.1).
-        </div>
+        {invoice.status === "paid" && (
+          <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-center text-sm font-medium text-green-800">
+            Payment received — thank you.
+          </div>
+        )}
+
+        {invoice.status === "partially_paid" && (
+          <p className="mt-6 text-center text-sm text-neutral-500">
+            A partial payment has been received. Pay the remaining balance
+            below.
+          </p>
+        )}
+
+        {TERMINAL_STATUSES.has(invoice.status) && (
+          <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-center text-sm text-neutral-500">
+            This invoice is {invoice.status} and can no longer be paid.
+          </div>
+        )}
+
+        {canPay && (
+          <PaymentPanel
+            reference={reference}
+            amountOwedPesewas={amountOwedPesewas}
+          />
+        )}
       </div>
     </div>
   );
+}
+
+function firstParam(
+  value: string | string[] | undefined,
+): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }

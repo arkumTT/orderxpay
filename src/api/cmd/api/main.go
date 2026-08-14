@@ -34,7 +34,13 @@ func main() {
 		log.Fatalf("auth: %v", err)
 	}
 
-	app := server.New(pool, tokenMaker, cfg.Env == "development")
+	app := server.New(server.Options{
+		Pool:              pool,
+		TokenMaker:        tokenMaker,
+		DevMode:           cfg.Env == "development",
+		PaystackSecretKey: cfg.PaystackSecretKey,
+		WebBaseURL:        cfg.WebBaseURL,
+	})
 
 	log.Printf("orderxpay-api listening on :%s (%s)", cfg.Port, cfg.Env)
 	if err := app.Listen(":" + cfg.Port); err != nil {

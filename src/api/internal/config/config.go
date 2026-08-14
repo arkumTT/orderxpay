@@ -10,6 +10,8 @@ type Config struct {
 	Port               string
 	DatabaseURL        string
 	PasetoSymmetricKey string // must be exactly 32 bytes
+	PaystackSecretKey  string // Section 9.1 — empty disables payment initiation, not a startup error
+	WebBaseURL         string // customer-facing web app, for PSP callback_url construction
 }
 
 func Load() (Config, error) {
@@ -18,6 +20,8 @@ func Load() (Config, error) {
 		Port:               getEnv("PORT", "8080"),
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
 		PasetoSymmetricKey: os.Getenv("PASETO_SYMMETRIC_KEY"),
+		PaystackSecretKey:  os.Getenv("PAYSTACK_SECRET_KEY"),
+		WebBaseURL:         getEnv("WEB_BASE_URL", "http://localhost:3000"),
 	}
 
 	if cfg.DatabaseURL == "" {
