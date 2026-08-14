@@ -73,6 +73,7 @@ type Invoice struct {
 	ExpiresAt               pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+	CommissionPesewas       int64              `json:"commission_pesewas"`
 }
 
 type InvoiceLineItem struct {
@@ -147,6 +148,8 @@ type Payment struct {
 	Status        string             `json:"status"`
 	PaidAt        pgtype.Timestamptz `json:"paid_at"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	PspFeePesewas int64              `json:"psp_fee_pesewas"`
+	SettlementID  pgtype.UUID        `json:"settlement_id"`
 }
 
 type Permission struct {

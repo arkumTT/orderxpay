@@ -11,7 +11,7 @@ SELECT * FROM payments WHERE invoice_id = $1 ORDER BY created_at;
 
 -- name: SetPaymentStatus :one
 UPDATE payments
-SET status = $2, paid_at = CASE WHEN $2 = 'success' THEN now() ELSE paid_at END
+SET status = $2, psp_fee_pesewas = $3, method = $4, paid_at = CASE WHEN $2 = 'success' THEN now() ELSE paid_at END
 WHERE id = $1
 RETURNING *;
 

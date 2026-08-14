@@ -153,7 +153,7 @@ func (h *Handler) VerifyCheckoutPayment(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "failed to verify payment with provider"})
 		}
 		if result.Status == "success" {
-			if err := h.creditSuccessfulPayment(c.Context(), trxReference, result.Channel); err != nil {
+			if err := h.creditSuccessfulPayment(c.Context(), trxReference, result.Channel, result.Fees); err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record payment"})
 			}
 		}
@@ -184,6 +184,7 @@ func (h *Handler) HandlePSPWebhook(c *fiber.Ctx) error {
 			Reference string `json:"reference"`
 			Status    string `json:"status"`
 			Channel   string `json:"channel"`
+			Fees      *int64 `json:"fees"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &event); err != nil {
@@ -194,7 +195,7 @@ func (h *Handler) HandlePSPWebhook(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusOK)
 	}
 
-	if err := h.creditSuccessfulPayment(c.Context(), event.Data.Reference, event.Data.Channel); err != nil {
+	if err := h.creditSuccessfulPayment(c.Context(), event.Data.Reference, event.Data.Channel, event.Data.Fees); err != nil {
 		log.Printf("paystack webhook: failed to credit payment %s: %v", event.Data.Reference, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to process webhook"})
 	}
@@ -207,7 +208,7 @@ func (h *Handler) HandlePSPWebhook(c *fiber.Ctx) error {
 // Idempotent: a payment already marked successful is a no-op, so calling
 // this from both the webhook and the verify-on-return path never double
 // -credits (Section 4.5, 8: financial writes must be safe to retry).
-func (h *Handler) creditSuccessfulPayment(ctx context.Context, pspReference, channel string) error {
+func (h *Handler) creditSuccessfulPayment(ctx context.Context, pspReference, channel string, feesPesewas *int64) error {
 	payment, err := h.Queries.GetPaymentByPSPReference(ctx, pspReference)
 	if errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("paystack: received success for unknown reference %s — ignoring", pspReference)
@@ -220,7 +221,16 @@ func (h *Handler) creditSuccessfulPayment(ctx context.Context, pspReference, cha
 	}
 
 	method := paystackChannelToMethod(channel, payment.Method)
-	if _, err := h.Queries.SetPaymentStatus(ctx, db.SetPaymentStatusParams{ID: payment.ID, Status: "success"}); err != nil {
+	var fee int64
+	if feesPesewas != nil {
+		fee = *feesPesewas
+	}
+	if _, err := h.Queries.SetPaymentStatus(ctx, db.SetPaymentStatusParams{
+		ID:            payment.ID,
+		Status:        "success",
+		PspFeePesewas: fee,
+		Method:        method,
+	}); err != nil {
 		return err
 	}
 
@@ -244,7 +254,7 @@ func (h *Handler) creditSuccessfulPayment(ctx context.Context, pspReference, cha
 	}
 
 	before, _ := json.Marshal(fiber.Map{"status": invoice.Status, "payment_status": payment.Status})
-	after, _ := json.Marshal(fiber.Map{"status": updated.Status, "payment_status": "success", "method": method, "amount_pesewas": payment.AmountPesewas})
+	after, _ := json.Marshal(fiber.Map{"status": updated.Status, "payment_status": "success", "method": method, "amount_pesewas": payment.AmountPesewas, "psp_fee_pesewas": fee})
 	if _, err := h.Queries.CreateAuditLogEntry(ctx, db.CreateAuditLogEntryParams{
 		ActorID:      systemActorID,
 		ActorType:    "system",

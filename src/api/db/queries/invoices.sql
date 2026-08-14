@@ -2,9 +2,10 @@
 INSERT INTO invoices (
   merchant_id, order_request_id, reference, customer_contact,
   subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas,
-  delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at
+  delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at,
+  commission_pesewas
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 RETURNING *;
 
 -- name: CreateInvoiceLineItem :one

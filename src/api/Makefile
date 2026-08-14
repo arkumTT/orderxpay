@@ -18,13 +18,14 @@ build:
 sqlc:
 	sqlc generate
 
-# golang-migrate is not vendored; installs on first use.
+# golang-migrate is not vendored; installs on first use. -tags 'postgres'
+# is required — the migrate CLI only registers the drivers built with tags.
 migrate-up:
-	go run -mod=mod github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path db/migrations -database "$(DATABASE_URL)" up
+	go run -mod=mod -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path db/migrations -database "$(DATABASE_URL)" up
 
 migrate-down:
-	go run -mod=mod github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path db/migrations -database "$(DATABASE_URL)" down 1
+	go run -mod=mod -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path db/migrations -database "$(DATABASE_URL)" down 1
 
 # usage: make migrate-create name=add_something
 migrate-create:
-	go run -mod=mod github.com/golang-migrate/migrate/v4/cmd/migrate@latest create -ext sql -dir db/migrations -seq $(name)
+	go run -mod=mod -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest create -ext sql -dir db/migrations -seq $(name)

@@ -11,6 +11,61 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const computeSettlementAggregate = `-- name: ComputeSettlementAggregate :one
+SELECT
+  COALESCE(SUM(p.amount_pesewas), 0)::bigint AS gross_collections_pesewas,
+  COALESCE(SUM(p.psp_fee_pesewas), 0)::bigint AS psp_fees_pesewas,
+  COALESCE(SUM(i.commission_pesewas * p.amount_pesewas / NULLIF(i.total_pesewas, 0)), 0)::bigint AS commission_pesewas,
+  COALESCE(SUM(
+    (i.subtotal_pesewas + i.service_charge_pesewas
+      + CASE WHEN i.delivery_fee_handling = 'bundled' THEN COALESCE(i.delivery_fee_pesewas, 0) ELSE 0 END
+      - i.commission_pesewas
+    ) * p.amount_pesewas / NULLIF(i.total_pesewas, 0)
+  ), 0)::bigint AS net_payout_pesewas,
+  COUNT(*)::bigint AS payment_count
+FROM payments p
+JOIN invoices i ON i.id = p.invoice_id
+WHERE i.merchant_id = $1
+  AND p.status = 'success'
+  AND p.settlement_id IS NULL
+  AND p.paid_at >= $2::timestamptz
+  AND p.paid_at < $3::timestamptz
+`
+
+type ComputeSettlementAggregateParams struct {
+	MerchantID  pgtype.UUID        `json:"merchant_id"`
+	PeriodStart pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd   pgtype.Timestamptz `json:"period_end"`
+}
+
+type ComputeSettlementAggregateRow struct {
+	GrossCollectionsPesewas int64 `json:"gross_collections_pesewas"`
+	PspFeesPesewas          int64 `json:"psp_fees_pesewas"`
+	CommissionPesewas       int64 `json:"commission_pesewas"`
+	NetPayoutPesewas        int64 `json:"net_payout_pesewas"`
+	PaymentCount            int64 `json:"payment_count"`
+}
+
+// Section 7.2 batch-run reconciliation: sums every not-yet-settled
+// successful payment for the merchant in [period_start, period_end), and
+// prorates each invoice's commission/merchant-entitlement by how much of
+// that invoice was actually collected in the period — so a partially paid
+// invoice settles correctly on whichever payment(s) landed in this window,
+// without ever needing to touch a payment already claimed by an earlier
+// settlement (p.settlement_id IS NULL).
+func (q *Queries) ComputeSettlementAggregate(ctx context.Context, arg ComputeSettlementAggregateParams) (ComputeSettlementAggregateRow, error) {
+	row := q.db.QueryRow(ctx, computeSettlementAggregate, arg.MerchantID, arg.PeriodStart, arg.PeriodEnd)
+	var i ComputeSettlementAggregateRow
+	err := row.Scan(
+		&i.GrossCollectionsPesewas,
+		&i.PspFeesPesewas,
+		&i.CommissionPesewas,
+		&i.NetPayoutPesewas,
+		&i.PaymentCount,
+	)
+	return i, err
+}
+
 const createSettlement = `-- name: CreateSettlement :one
 INSERT INTO settlements (merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -54,6 +109,95 @@ func (q *Queries) CreateSettlement(ctx context.Context, arg CreateSettlementPara
 	return i, err
 }
 
+const getSettlement = `-- name: GetSettlement :one
+SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at FROM settlements WHERE id = $1
+`
+
+func (q *Queries) GetSettlement(ctx context.Context, id pgtype.UUID) (Settlement, error) {
+	row := q.db.QueryRow(ctx, getSettlement, id)
+	var i Settlement
+	err := row.Scan(
+		&i.ID,
+		&i.MerchantID,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.GrossCollectionsPesewas,
+		&i.PspFeesPesewas,
+		&i.CommissionPesewas,
+		&i.NetPayoutPesewas,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listSettlementsAdmin = `-- name: ListSettlementsAdmin :many
+SELECT s.id, s.merchant_id, s.period_start, s.period_end, s.gross_collections_pesewas, s.psp_fees_pesewas, s.commission_pesewas, s.net_payout_pesewas, s.status, s.created_at, s.updated_at, m.business_name AS merchant_business_name
+FROM settlements s
+JOIN merchants m ON m.id = s.merchant_id
+WHERE ($1::text = '' OR s.status = $1::text)
+ORDER BY s.created_at DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListSettlementsAdminParams struct {
+	StatusFilter string `json:"status_filter"`
+	RowOffset    int32  `json:"row_offset"`
+	RowLimit     int32  `json:"row_limit"`
+}
+
+type ListSettlementsAdminRow struct {
+	ID                      pgtype.UUID        `json:"id"`
+	MerchantID              pgtype.UUID        `json:"merchant_id"`
+	PeriodStart             pgtype.Date        `json:"period_start"`
+	PeriodEnd               pgtype.Date        `json:"period_end"`
+	GrossCollectionsPesewas int64              `json:"gross_collections_pesewas"`
+	PspFeesPesewas          int64              `json:"psp_fees_pesewas"`
+	CommissionPesewas       int64              `json:"commission_pesewas"`
+	NetPayoutPesewas        int64              `json:"net_payout_pesewas"`
+	Status                  string             `json:"status"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+	MerchantBusinessName    string             `json:"merchant_business_name"`
+}
+
+// Cross-merchant view backing the Back Office 7.2 landing page — the
+// per-merchant ListSettlementsByMerchant above stays as-is for the merchant
+// detail page's drill-down.
+func (q *Queries) ListSettlementsAdmin(ctx context.Context, arg ListSettlementsAdminParams) ([]ListSettlementsAdminRow, error) {
+	rows, err := q.db.Query(ctx, listSettlementsAdmin, arg.StatusFilter, arg.RowOffset, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSettlementsAdminRow{}
+	for rows.Next() {
+		var i ListSettlementsAdminRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MerchantID,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.GrossCollectionsPesewas,
+			&i.PspFeesPesewas,
+			&i.CommissionPesewas,
+			&i.NetPayoutPesewas,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MerchantBusinessName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSettlementsByMerchant = `-- name: ListSettlementsByMerchant :many
 SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at FROM settlements WHERE merchant_id = $1 ORDER BY period_start DESC
 `
@@ -88,6 +232,38 @@ func (q *Queries) ListSettlementsByMerchant(ctx context.Context, merchantID pgty
 		return nil, err
 	}
 	return items, nil
+}
+
+const markPaymentsSettled = `-- name: MarkPaymentsSettled :exec
+UPDATE payments p
+SET settlement_id = $1
+FROM invoices i
+WHERE p.invoice_id = i.id
+  AND i.merchant_id = $2
+  AND p.status = 'success'
+  AND p.settlement_id IS NULL
+  AND p.paid_at >= $3::timestamptz
+  AND p.paid_at < $4::timestamptz
+`
+
+type MarkPaymentsSettledParams struct {
+	SettlementID pgtype.UUID        `json:"settlement_id"`
+	MerchantID   pgtype.UUID        `json:"merchant_id"`
+	PeriodStart  pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd    pgtype.Timestamptz `json:"period_end"`
+}
+
+// Stamps every payment just aggregated into ComputeSettlementAggregate with
+// the resulting settlement's id — must run with the exact same filter, in
+// the same transaction, or a payment could be double-counted by a later run.
+func (q *Queries) MarkPaymentsSettled(ctx context.Context, arg MarkPaymentsSettledParams) error {
+	_, err := q.db.Exec(ctx, markPaymentsSettled,
+		arg.SettlementID,
+		arg.MerchantID,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+	)
+	return err
 }
 
 const setSettlementStatus = `-- name: SetSettlementStatus :one

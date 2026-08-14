@@ -273,6 +273,7 @@ func (h *Handler) insertInvoice(ctx context.Context, p createInvoiceCoreParams, 
 		DeliveryAddress:         textOrNull(p.DeliveryAddress),
 		DeliveryFeeHandling:     textOrNull(p.DeliveryFeeHandling),
 		DeliveryFeePesewas:      deliveryFeePesewas,
+		CommissionPesewas:       amounts.CommissionPesewas,
 	})
 	if err != nil {
 		return db.Invoice{}, nil, fmt.Errorf("create invoice: %w", err)

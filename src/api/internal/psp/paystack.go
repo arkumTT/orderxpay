@@ -88,6 +88,10 @@ type VerifyResult struct {
 	Currency        string `json:"currency"`
 	GatewayResponse string `json:"gateway_response"`
 	Channel         string `json:"channel"` // "card" | "mobile_money" | ...
+	// Fees is nil when Paystack hasn't reported a fee for this transaction
+	// (observed on some test-mode charges) — callers should treat that as
+	// "unknown," not "zero," when it matters for reporting.
+	Fees *int64 `json:"fees"`
 }
 
 func (c *Client) VerifyTransaction(ctx context.Context, reference string) (*VerifyResult, error) {

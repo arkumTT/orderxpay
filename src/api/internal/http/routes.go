@@ -90,7 +90,9 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	merchants.Get("/:id/settlements", perm("settlements.view"), h.ListSettlements)
 	merchants.Post("/:id/fee-rule", perm("pricing.manage"), h.UpsertMerchantFeeRule)
 
-	r.Post("/settlements", perm("settlements.manage"), h.CreateSettlement)
+	r.Get("/settlements", perm("settlements.view"), h.ListAllSettlements)
+	r.Post("/settlements", perm("settlements.manage"), h.GenerateSettlement)
+	r.Patch("/settlements/:id/status", perm("settlements.manage"), h.UpdateSettlementStatus)
 	r.Get("/fee-rules/global", perm("pricing.view"), h.GetGlobalFeeRule)
 	r.Post("/fee-rules/global", perm("pricing.manage"), h.UpsertGlobalFeeRule)
 

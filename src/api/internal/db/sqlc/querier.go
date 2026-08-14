@@ -13,6 +13,14 @@ import (
 type Querier interface {
 	ArchiveItem(ctx context.Context, id pgtype.UUID) error
 	AssignUserRole(ctx context.Context, arg AssignUserRoleParams) error
+	// Section 7.2 batch-run reconciliation: sums every not-yet-settled
+	// successful payment for the merchant in [period_start, period_end), and
+	// prorates each invoice's commission/merchant-entitlement by how much of
+	// that invoice was actually collected in the period — so a partially paid
+	// invoice settles correctly on whichever payment(s) landed in this window,
+	// without ever needing to touch a payment already claimed by an earlier
+	// settlement (p.settlement_id IS NULL).
+	ComputeSettlementAggregate(ctx context.Context, arg ComputeSettlementAggregateParams) (ComputeSettlementAggregateRow, error)
 	CreateAuditLogEntry(ctx context.Context, arg CreateAuditLogEntryParams) (AuditLogEntry, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateDeliveryOption(ctx context.Context, arg CreateDeliveryOptionParams) (DeliveryOption, error)
@@ -41,6 +49,7 @@ type Querier interface {
 	GetPaymentByPSPReference(ctx context.Context, pspReference string) (Payment, error)
 	GetPermissionByKey(ctx context.Context, key string) (Permission, error)
 	GetRoleByName(ctx context.Context, name string) (Role, error)
+	GetSettlement(ctx context.Context, id pgtype.UUID) (Settlement, error)
 	GetStaffByPhone(ctx context.Context, phone string) (Staff, error)
 	GetUser(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -69,11 +78,19 @@ type Querier interface {
 	ListPermissions(ctx context.Context) ([]Permission, error)
 	ListPermissionsByRole(ctx context.Context, roleID pgtype.UUID) ([]Permission, error)
 	ListRoles(ctx context.Context) ([]Role, error)
+	// Cross-merchant view backing the Back Office 7.2 landing page — the
+	// per-merchant ListSettlementsByMerchant above stays as-is for the merchant
+	// detail page's drill-down.
+	ListSettlementsAdmin(ctx context.Context, arg ListSettlementsAdminParams) ([]ListSettlementsAdminRow, error)
 	ListSettlementsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Settlement, error)
 	ListStaffByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Staff, error)
 	ListUserDirectPermissions(ctx context.Context, userID pgtype.UUID) ([]Permission, error)
 	ListUserRoles(ctx context.Context, userID pgtype.UUID) ([]Role, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	// Stamps every payment just aggregated into ComputeSettlementAggregate with
+	// the resulting settlement's id — must run with the exact same filter, in
+	// the same transaction, or a payment could be double-counted by a later run.
+	MarkPaymentsSettled(ctx context.Context, arg MarkPaymentsSettledParams) error
 	RemoveUserRole(ctx context.Context, arg RemoveUserRoleParams) error
 	RevokeUserPermission(ctx context.Context, arg RevokeUserPermissionParams) error
 	SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) error

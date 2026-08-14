@@ -2,9 +2,8 @@
 //
 // Simple reference-data endpoints (merchants, staff, items, delivery options,
 // fee rules, conversations, audit reads) are fully wired here, as is the
-// invoice engine (Section 4.3/4.8) and Paystack payment collection (Section
-// 4.5/9.1). Settlement reconciliation (Section 7.2) is still an explicit 501
-// stub; see the TODO there.
+// invoice engine (Section 4.3/4.8), Paystack payment collection (Section
+// 4.5/9.1), and the settlement/payout engine (Section 7.2).
 package handlers
 
 import (
