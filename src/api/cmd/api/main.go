@@ -34,7 +34,7 @@ func main() {
 		log.Fatalf("auth: %v", err)
 	}
 
-	app := server.New(pool, tokenMaker)
+	app := server.New(pool, tokenMaker, cfg.Env == "development")
 
 	log.Printf("orderxpay-api listening on :%s (%s)", cfg.Port, cfg.Env)
 	if err := app.Listen(":" + cfg.Port); err != nil {

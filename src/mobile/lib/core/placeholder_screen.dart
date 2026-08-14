@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'design/app_colors.dart';
+import 'design/app_theme.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   const PlaceholderScreen({
@@ -17,31 +19,35 @@ class PlaceholderScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.xl),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Section $section',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              style: const TextStyle(
                 fontFamily: 'monospace',
-                color: Colors.grey,
+                fontSize: 11,
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
-            Text(description, style: Theme.of(context).textTheme.bodyMedium),
+            Text(
+              description,
+              style: const TextStyle(color: AppColors.textSecondary, height: 1.4),
+            ),
             const SizedBox(height: 24),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(AppSpace.xxl),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(AppRadius.card),
               ),
-              child: Text(
+              child: const Text(
                 'Not yet implemented — structural placeholder only.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade500),
+                style: TextStyle(color: AppColors.textDisabled),
               ),
             ),
           ],

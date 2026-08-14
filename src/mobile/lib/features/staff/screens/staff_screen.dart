@@ -1,17 +1,164 @@
 import 'package:flutter/material.dart';
-import '../../../core/placeholder_screen.dart';
+import '../../../core/api_client.dart';
+import '../../../core/session.dart';
+import '../../../core/design/app_colors.dart';
+import '../../../core/design/app_theme.dart';
+import '../../../core/design/widgets.dart';
 
-class StaffScreen extends StatelessWidget {
+class _Staff {
+  _Staff({required this.id, required this.name, required this.phone, required this.role});
+  final String id;
+  final String name;
+  final String phone;
+  final String role;
+
+  factory _Staff.fromJson(Map<String, dynamic> j) => _Staff(
+    id: j['id'] as String,
+    name: j['name'] as String,
+    phone: j['phone'] as String,
+    role: j['role'] as String,
+  );
+}
+
+/// Section 4.9 — Staff can create/send invoices but never see payout
+/// settings or full KYC/bank details (enforced server-side by actor type,
+/// not by anything client-side).
+class StaffScreen extends StatefulWidget {
   const StaffScreen({super.key});
 
   @override
+  State<StaffScreen> createState() => _StaffScreenState();
+}
+
+class _StaffScreenState extends State<StaffScreen> {
+  final _api = ApiClient();
+  late Future<List<_Staff>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<List<_Staff>> _load() async {
+    final res = await _api.listStaff(Session.instance.merchantId!);
+    return res.map(_Staff.fromJson).toList();
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _future = _load());
+    await _future;
+  }
+
+  Future<void> _addStaff() async {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Add Staff', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 16),
+            OxpField(label: 'Name', controller: nameController),
+            const SizedBox(height: 12),
+            OxpField(label: 'Phone', controller: phoneController, keyboardType: TextInputType.phone),
+            const SizedBox(height: 20),
+            OxpButton(
+              label: 'Save',
+              onPressed: () async {
+                try {
+                  await _api.post(
+                    '/api/v1/app/merchants/${Session.instance.merchantId}/staff',
+                    {'name': nameController.text, 'phone': phoneController.text, 'role': 'staff'},
+                  );
+                  if (context.mounted) Navigator.pop(context, true);
+                } on ApiException catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == true) _refresh();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const PlaceholderScreen(
-      title: 'Multi-User / Staff Roles',
-      section: '4.9',
-      description:
-          'Staff role: can create/send invoices, cannot change payout settings '
-          'or view full KYC/bank details.',
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Staff'),
+        actions: [
+          IconButton(icon: const Icon(Icons.add, color: AppColors.accent), onPressed: _addStaff),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: FutureBuilder<List<_Staff>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final staff = snapshot.data ?? [];
+            return ListView(
+              padding: const EdgeInsets.all(AppSpace.xl),
+              children: [
+                const Text(
+                  'Staff can create/send invoices, but cannot change payout '
+                  'settings or view full KYC/bank details.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                if (staff.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Text('No staff added yet.', style: TextStyle(color: AppColors.textSecondary)),
+                  )
+                else
+                  for (final s in staff)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: OxpCard(
+                        child: Row(
+                          children: [
+                            AvatarInitials(name: s.name),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(s.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                                  Text(s.phone, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            StatusPill(
+                              label: s.role,
+                              color: s.role == 'owner' ? AppColors.statusPartial : AppColors.textSecondary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }

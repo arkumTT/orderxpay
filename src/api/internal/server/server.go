@@ -12,7 +12,7 @@ import (
 	"github.com/orderxpay/api/internal/http/handlers"
 )
 
-func New(pool *pgxpool.Pool, tokenMaker auth.Maker) *fiber.App {
+func New(pool *pgxpool.Pool, tokenMaker auth.Maker, devMode bool) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName: "orderxpay-api",
 	})
@@ -21,7 +21,7 @@ func New(pool *pgxpool.Pool, tokenMaker auth.Maker) *fiber.App {
 	app.Use(logger.New())
 	app.Use(cors.New())
 
-	h := handlers.New(pool, tokenMaker)
+	h := handlers.New(pool, tokenMaker, devMode)
 	orderxpayhttp.RegisterRoutes(app, h)
 
 	return app

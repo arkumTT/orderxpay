@@ -23,6 +23,7 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handler) {
 	public.Post("/merchants", h.CreateMerchant)
 	public.Post("/merchants/:id/otp/request", h.RequestMerchantOTP)
 	public.Post("/merchants/:id/otp/verify", h.VerifyMerchantOTP)
+	public.Post("/dev/token", h.DevIssueMerchantToken) // ENV=development only — see auth.go
 	public.Get("/checkout/:reference", h.GetInvoiceByReference)
 	public.Get("/merchants/:id", h.GetMerchantPublicProfile) // Section 4.6 hosted catalog page
 	public.Get("/merchants/:id/items", h.ListItems)          // same — catalog data is meant to be public

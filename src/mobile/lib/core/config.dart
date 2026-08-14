@@ -7,4 +7,11 @@ class AppConfig {
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2:8080',
   );
+
+  /// src/web's origin, for building the checkout link shown after sending
+  /// an invoice (Section 5.1). Same default-vs-emulator reasoning as above.
+  static const String webBaseUrl = String.fromEnvironment(
+    'WEB_BASE_URL',
+    defaultValue: 'http://10.0.2.2:3001',
+  );
 }

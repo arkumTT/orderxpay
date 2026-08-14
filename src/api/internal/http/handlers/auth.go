@@ -90,3 +90,53 @@ func (h *Handler) RequestMerchantOTP(c *fiber.Ctx) error {
 func (h *Handler) VerifyMerchantOTP(c *fiber.Ctx) error {
 	return notImplemented(c, "OTP verification not yet implemented — depends on SMS provider selection (Section 9)")
 }
+
+const merchantTokenDuration = 24 * time.Hour
+
+type devIssueTokenRequest struct {
+	MerchantID string `json:"merchant_id"`
+}
+
+// DevIssueMerchantToken stands in for RequestMerchantOTP/VerifyMerchantOTP
+// until that's built — same idea as cmd/devtoken, exposed over HTTP so the
+// mobile app can get a session automatically right after onboarding instead
+// of a developer running a CLI command by hand. Registered under
+// /api/v1/public but refuses to do anything unless h.DevMode is true
+// (ENV=development) — see cmd/api/main.go.
+func (h *Handler) DevIssueMerchantToken(c *fiber.Ctx) error {
+	if !h.DevMode {
+		return notFound(c)
+	}
+
+	var req devIssueTokenRequest
+	if err := c.BodyParser(&req); err != nil {
+		return badRequest(c, "invalid request body")
+	}
+	merchantID, err := parseUUID(req.MerchantID)
+	if err != nil {
+		return badRequest(c, "invalid merchant_id")
+	}
+
+	merchant, err := h.Queries.GetMerchant(c.Context(), merchantID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load merchant"})
+	}
+
+	actorID := merchant.ID.Bytes
+	token, payload, err := h.TokenMaker.CreateToken(auth.CreateTokenParams{
+		ActorID:    actorID,
+		ActorType:  auth.ActorMerchant,
+		MerchantID: actorID,
+		Duration:   merchantTokenDuration,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create token"})
+	}
+
+	return c.JSON(fiber.Map{
+		"access_token": token,
+		"expires_at":   payload.ExpiredAt,
+	})
+}
