@@ -83,12 +83,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             key: _formKey,
             child: Column(
               children: [
-                Image.asset(
-                  'assets/images/orderxpay_logo.png',
-                  width: 162,
-                  height: 104,
-                  fit: BoxFit.contain,
-                ),
+                const OxpWordmark(fontSize: 34),
                 const SizedBox(height: 14),
                 const Text(
                   'Invoice your customers. Get paid instantly.',
