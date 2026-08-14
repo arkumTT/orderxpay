@@ -30,6 +30,16 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Impeller (the default renderer) hangs indefinitely under the
+             software-GL fallback this emulator uses on memory-constrained
+             hosts. Force the legacy Skia backend so the app actually
+             renders regardless of how it's launched (icon tap, am start,
+             flutter run all read this, unlike the flutter run "no enable
+             impeller" flag, which only applies to flutter run). Revisit
+             once this stops being the dev bottleneck. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
