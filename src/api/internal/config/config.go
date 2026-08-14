@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -15,6 +16,8 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	loadDotEnv(".env")
+
 	cfg := Config{
 		Env:                getEnv("ENV", "development"),
 		Port:               getEnv("PORT", "8080"),
@@ -39,4 +42,31 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// loadDotEnv is a minimal, dependency-free .env reader for local
+// development — populates process env vars from the file without
+// overriding any already set (so real deployments, which inject env vars
+// directly and have no .env file, are unaffected). Missing file is not an
+// error; it's the expected case outside local dev.
+func loadDotEnv(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		os.Setenv(key, strings.TrimSpace(value))
+	}
 }
