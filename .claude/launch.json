@@ -4,12 +4,7 @@
     {
       "name": "api",
       "runtimeExecutable": "go",
-      "runtimeArgs": [
-        "-C",
-        "/Users/jbc960/Downloads/OrderxPay v1.0/src/api",
-        "run",
-        "./cmd/api"
-      ],
+      "runtimeArgs": ["-C", "src/api", "run", "./cmd/api"],
       "port": 8080
     },
     {
@@ -17,7 +12,7 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
-        "/Users/jbc960/Downloads/OrderxPay v1.0/src/back-office",
+        "src/back-office",
         "run",
         "dev",
         "--",
@@ -31,7 +26,7 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
-        "/Users/jbc960/Downloads/OrderxPay v1.0/src/web",
+        "src/web",
         "run",
         "dev",
         "--",
