@@ -4,6 +4,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/orderxpay/api/internal/auth"
+	"github.com/orderxpay/api/internal/middleware"
 )
 
 func parseUUIDParam(c *fiber.Ctx, name string) (pgtype.UUID, error) {
@@ -47,4 +50,11 @@ func notFound(c *fiber.Ctx) error {
 
 func notImplemented(c *fiber.Ctx, msg string) error {
 	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"error": msg})
+}
+
+// actorPayload fetches the authenticated request's PASETO payload — set by
+// middleware.RequireAuth earlier in the chain.
+func actorPayload(c *fiber.Ctx) (*auth.Payload, bool) {
+	payload, ok := c.Locals(middleware.AuthPayloadKey).(*auth.Payload)
+	return payload, ok
 }

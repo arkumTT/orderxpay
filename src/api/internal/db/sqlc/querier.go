@@ -27,6 +27,7 @@ type Querier interface {
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLineItemParams) (InvoiceLineItem, error)
 	CreateItem(ctx context.Context, arg CreateItemParams) (Item, error)
+	CreateKYCSubmission(ctx context.Context, arg CreateKYCSubmissionParams) (KycSubmission, error)
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
 	CreateMerchant(ctx context.Context, arg CreateMerchantParams) (Merchant, error)
 	CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error)
@@ -42,9 +43,11 @@ type Querier interface {
 	GetInvoice(ctx context.Context, id pgtype.UUID) (Invoice, error)
 	GetInvoiceByReference(ctx context.Context, reference string) (Invoice, error)
 	GetItem(ctx context.Context, id pgtype.UUID) (Item, error)
+	GetKYCSubmission(ctx context.Context, id pgtype.UUID) (KycSubmission, error)
 	GetMenu(ctx context.Context, id pgtype.UUID) (Menu, error)
 	GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error)
 	GetMerchantByPhone(ctx context.Context, phone string) (Merchant, error)
+	GetOpenKYCSubmissionByMerchant(ctx context.Context, merchantID pgtype.UUID) (KycSubmission, error)
 	GetOrderRequest(ctx context.Context, id pgtype.UUID) (OrderRequest, error)
 	GetPaymentByPSPReference(ctx context.Context, pspReference string) (Payment, error)
 	GetPermissionByKey(ctx context.Context, key string) (Permission, error)
@@ -64,6 +67,8 @@ type Querier interface {
 	ListInvoiceLineItems(ctx context.Context, invoiceID pgtype.UUID) ([]InvoiceLineItem, error)
 	ListInvoicesByMerchant(ctx context.Context, arg ListInvoicesByMerchantParams) ([]Invoice, error)
 	ListItemsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Item, error)
+	ListKYCSubmissionsAdmin(ctx context.Context, arg ListKYCSubmissionsAdminParams) ([]ListKYCSubmissionsAdminRow, error)
+	ListKYCSubmissionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]KycSubmission, error)
 	ListMenus(ctx context.Context) ([]Menu, error)
 	// ListMenusForUser returns every menu with no permission requirement, every
 	// menu whose permission is among the caller's effective permissions (via
@@ -92,6 +97,12 @@ type Querier interface {
 	// the same transaction, or a payment could be double-counted by a later run.
 	MarkPaymentsSettled(ctx context.Context, arg MarkPaymentsSettledParams) error
 	RemoveUserRole(ctx context.Context, arg RemoveUserRoleParams) error
+	// Reuses the existing row after a more_info_requested response instead of
+	// inserting a second one — kyc_submissions_one_open_per_merchant would
+	// reject a second open row anyway, and this is the correct UX: the
+	// reviewer's original notes/decision get replaced by the fresh review cycle.
+	ResubmitKYCSubmission(ctx context.Context, arg ResubmitKYCSubmissionParams) (KycSubmission, error)
+	ReviewKYCSubmission(ctx context.Context, arg ReviewKYCSubmissionParams) (KycSubmission, error)
 	RevokeUserPermission(ctx context.Context, arg RevokeUserPermissionParams) error
 	SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) error
 	SetInvoiceStatus(ctx context.Context, arg SetInvoiceStatusParams) (Invoice, error)

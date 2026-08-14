@@ -152,6 +152,36 @@ class OrderRequest {
   );
 }
 
+class KYCSubmission {
+  KYCSubmission({
+    required this.id,
+    required this.status,
+    required this.ghanaCardNumber,
+    required this.businessRegNumber,
+    required this.notes,
+    required this.reviewerNotes,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String status; // pending | approved | rejected | more_info_requested
+  final String ghanaCardNumber;
+  final String? businessRegNumber;
+  final String? notes;
+  final String? reviewerNotes;
+  final DateTime createdAt;
+
+  factory KYCSubmission.fromJson(Map<String, dynamic> j) => KYCSubmission(
+    id: _str(j['id']),
+    status: _str(j['status']),
+    ghanaCardNumber: _str(j['ghana_card_number']),
+    businessRegNumber: _strOrNull(j['business_reg_number']),
+    notes: _strOrNull(j['notes']),
+    reviewerNotes: _strOrNull(j['reviewer_notes']),
+    createdAt: DateTime.tryParse(_str(j['created_at'])) ?? DateTime.now(),
+  );
+}
+
 class DeliveryOption {
   DeliveryOption({
     required this.id,

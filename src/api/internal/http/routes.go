@@ -67,6 +67,9 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	merchants.Get("/:id/delivery-options", h.ListDeliveryOptions)
 	merchants.Patch("/delivery-options/:optionId", h.SetDeliveryOptionStatus)
 
+	merchants.Post("/:id/kyc-submissions", h.CreateKYCSubmission)
+	merchants.Get("/:id/kyc-submissions", h.ListKYCSubmissionsByMerchant)
+
 	merchants.Post("/:id/conversations", h.LogConversation)
 	merchants.Get("/:id/conversations", h.ListConversations)
 
@@ -89,6 +92,9 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	merchants.Patch("/:id/kyc-tier", perm("merchants.kyc_review"), h.UpdateMerchantKYCTier)
 	merchants.Get("/:id/settlements", perm("settlements.view"), h.ListSettlements)
 	merchants.Post("/:id/fee-rule", perm("pricing.manage"), h.UpsertMerchantFeeRule)
+
+	r.Get("/kyc-submissions", perm("merchants.kyc_review"), h.ListKYCSubmissionsAdmin)
+	r.Patch("/kyc-submissions/:id/status", perm("merchants.kyc_review"), h.ReviewKYCSubmission)
 
 	r.Get("/settlements", perm("settlements.view"), h.ListAllSettlements)
 	r.Post("/settlements", perm("settlements.manage"), h.GenerateSettlement)

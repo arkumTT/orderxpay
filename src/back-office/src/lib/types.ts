@@ -21,6 +21,27 @@ export type SettlementWithMerchant = Settlement & {
   merchant_business_name: string;
 };
 
+export type KYCSubmission = {
+  id: string;
+  merchant_id: string;
+  requested_tier: number;
+  ghana_card_number: string;
+  business_reg_number: string | null;
+  notes: string | null;
+  status: "pending" | "approved" | "rejected" | "more_info_requested";
+  reviewer_notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// The cross-merchant admin list joins in the merchant's name — matches
+// ListKYCSubmissionsAdminRow, not the plain KYCSubmission shape above.
+export type KYCSubmissionWithMerchant = KYCSubmission & {
+  merchant_business_name: string;
+};
+
 export type Merchant = {
   id: string;
   business_name: string;

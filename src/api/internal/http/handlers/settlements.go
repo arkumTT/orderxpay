@@ -12,7 +12,6 @@ import (
 
 	"github.com/orderxpay/api/internal/auth"
 	db "github.com/orderxpay/api/internal/db/sqlc"
-	"github.com/orderxpay/api/internal/middleware"
 )
 
 func (h *Handler) ListSettlements(c *fiber.Ctx) error {
@@ -226,7 +225,7 @@ func (h *Handler) UpdateSettlementStatus(c *fiber.Ctx) error {
 // admin user (Section 7.9) — separate from the "system" actor used for
 // PSP-webhook-driven changes in payments.go.
 func writeAdminAuditLog(c *fiber.Ctx, h *Handler, action, targetEntity string, targetID pgtype.UUID, before, after []byte) error {
-	payload, ok := c.Locals(middleware.AuthPayloadKey).(*auth.Payload)
+	payload, ok := actorPayload(c)
 	if !ok {
 		return fiber.NewError(fiber.StatusUnauthorized, "missing auth payload")
 	}

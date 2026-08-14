@@ -99,6 +99,21 @@ type Item struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
+type KycSubmission struct {
+	ID                pgtype.UUID        `json:"id"`
+	MerchantID        pgtype.UUID        `json:"merchant_id"`
+	RequestedTier     int16              `json:"requested_tier"`
+	GhanaCardNumber   string             `json:"ghana_card_number"`
+	BusinessRegNumber pgtype.Text        `json:"business_reg_number"`
+	Notes             pgtype.Text        `json:"notes"`
+	Status            string             `json:"status"`
+	ReviewerNotes     pgtype.Text        `json:"reviewer_notes"`
+	ReviewedBy        pgtype.UUID        `json:"reviewed_by"`
+	ReviewedAt        pgtype.Timestamptz `json:"reviewed_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Menu struct {
 	ID           pgtype.UUID        `json:"id"`
 	ParentID     pgtype.UUID        `json:"parent_id"`

@@ -24,6 +24,17 @@ class StatusPill extends StatelessWidget {
     return StatusPill(label: label, color: color);
   }
 
+  factory StatusPill.forKYCStatus(String status) {
+    final (label, color) = switch (status) {
+      'approved' => ('Approved', AppColors.statusPaid),
+      'rejected' => ('Rejected', AppColors.statusDeclined),
+      'more_info_requested' => ('More info needed', AppColors.statusPartial),
+      'pending' => ('Pending review', AppColors.statusPending),
+      _ => (status, AppColors.textSecondary),
+    };
+    return StatusPill(label: label, color: color);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(

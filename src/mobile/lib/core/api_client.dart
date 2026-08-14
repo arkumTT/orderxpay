@@ -277,6 +277,32 @@ class ApiClient {
     return (res as Map<String, dynamic>)['commission_bps'] as int;
   }
 
+  Future<List<KYCSubmission>> listKYCSubmissions(String merchantId) async {
+    final res = await _send(
+      'GET',
+      '/api/v1/app/merchants/$merchantId/kyc-submissions',
+    );
+    return (res as List).map((e) => KYCSubmission.fromJson(e)).toList();
+  }
+
+  Future<KYCSubmission> submitKYC(
+    String merchantId, {
+    required String ghanaCardNumber,
+    String? businessRegNumber,
+    String? notes,
+  }) async {
+    final res = await _send(
+      'POST',
+      '/api/v1/app/merchants/$merchantId/kyc-submissions',
+      body: {
+        'ghana_card_number': ghanaCardNumber,
+        if (businessRegNumber != null) 'business_reg_number': businessRegNumber,
+        if (notes != null) 'notes': notes,
+      },
+    );
+    return KYCSubmission.fromJson(res as Map<String, dynamic>);
+  }
+
   Future<Merchant> updateFeeSettings(
     String merchantId, {
     required String allocation,
