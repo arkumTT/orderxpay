@@ -211,6 +211,9 @@ func (h *Handler) createInvoiceCore(ctx context.Context, p createInvoiceCorePara
 	if err != nil {
 		return db.Invoice{}, nil, fmt.Errorf("load merchant: %w", err)
 	}
+	if merchant.Status == "suspended" {
+		return db.Invoice{}, nil, newValidationError("merchant is suspended and cannot create new invoices")
+	}
 
 	resolvedLines, subtotal, err := h.resolveLineItems(ctx, p.MerchantID, p.LineItems)
 	if err != nil {

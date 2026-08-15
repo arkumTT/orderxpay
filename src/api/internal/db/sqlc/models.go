@@ -199,6 +199,14 @@ type Merchant struct {
 	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
 }
 
+type MerchantNote struct {
+	ID         pgtype.UUID        `json:"id"`
+	MerchantID pgtype.UUID        `json:"merchant_id"`
+	AuthorID   pgtype.UUID        `json:"author_id"`
+	Body       string             `json:"body"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type OrderRequest struct {
 	ID              pgtype.UUID        `json:"id"`
 	MerchantID      pgtype.UUID        `json:"merchant_id"`

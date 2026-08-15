@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
@@ -103,8 +104,9 @@ type updateMerchantStatusRequest struct {
 	Status string `json:"status"`
 }
 
-// UpdateMerchantStatus is a Back Office action (Section 7.1: suspend/restrict/activate).
-// TODO: route through the maker-checker / audit-log conventions once Module 11 equivalent exists.
+// UpdateMerchantStatus is a Back Office action (Section 7.1: suspend/restrict/activate) —
+// suspending immediately blocks new invoice creation (see CreateInvoice) and
+// payouts (see settlement generation), without touching historical data.
 func (h *Handler) UpdateMerchantStatus(c *fiber.Ctx) error {
 	id, err := parseUUIDParam(c, "id")
 	if err != nil {
@@ -122,6 +124,13 @@ func (h *Handler) UpdateMerchantStatus(c *fiber.Ctx) error {
 		return badRequest(c, "status must be one of pending, active, restricted, suspended")
 	}
 
+	before, err := h.Queries.GetMerchant(c.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load merchant"})
+	}
+
 	merchant, err := h.Queries.UpdateMerchantStatus(c.Context(), db.UpdateMerchantStatusParams{
 		ID:     id,
 		Status: req.Status,
@@ -131,6 +140,13 @@ func (h *Handler) UpdateMerchantStatus(c *fiber.Ctx) error {
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update merchant status"})
 	}
+
+	beforeJSON, _ := json.Marshal(fiber.Map{"status": before.Status})
+	afterJSON, _ := json.Marshal(fiber.Map{"status": merchant.Status})
+	if err := writeAdminAuditLog(c, h, "merchant.status_change", "merchant", id, beforeJSON, afterJSON); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
+	}
+
 	return c.JSON(merchant)
 }
 
@@ -153,6 +169,13 @@ func (h *Handler) UpdateMerchantKYCTier(c *fiber.Ctx) error {
 		return badRequest(c, "kyc_tier must be 0 or 1")
 	}
 
+	before, err := h.Queries.GetMerchant(c.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load merchant"})
+	}
+
 	merchant, err := h.Queries.UpdateMerchantKYCTier(c.Context(), db.UpdateMerchantKYCTierParams{
 		ID:      id,
 		KycTier: req.KYCTier,
@@ -162,6 +185,13 @@ func (h *Handler) UpdateMerchantKYCTier(c *fiber.Ctx) error {
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update KYC tier"})
 	}
+
+	beforeJSON, _ := json.Marshal(fiber.Map{"kyc_tier": before.KycTier})
+	afterJSON, _ := json.Marshal(fiber.Map{"kyc_tier": merchant.KycTier})
+	if err := writeAdminAuditLog(c, h, "merchant.kyc_tier_change", "merchant", id, beforeJSON, afterJSON); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
+	}
+
 	return c.JSON(merchant)
 }
 

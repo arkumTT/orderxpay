@@ -330,6 +330,28 @@ export type SupportTransactionDetail = {
   checkout_url: string;
 };
 
+export type Item = {
+  id: string;
+  merchant_id: string;
+  name: string;
+  unit_price_pesewas: number;
+  qty_unit: string | null;
+  image_url: string | null;
+  availability_status: string;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MerchantNote = {
+  id: string;
+  merchant_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+};
+
 export type AuditLogEntry = {
   id: string;
   actor_id: string;

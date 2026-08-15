@@ -34,6 +34,7 @@ type Querier interface {
 	CreateKYCSubmission(ctx context.Context, arg CreateKYCSubmissionParams) (KycSubmission, error)
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
 	CreateMerchant(ctx context.Context, arg CreateMerchantParams) (Merchant, error)
+	CreateMerchantNote(ctx context.Context, arg CreateMerchantNoteParams) (MerchantNote, error)
 	CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	// Silently skipped when an identical open flag already exists
@@ -125,12 +126,15 @@ type Querier interface {
 	// the Back Office sidebar calls.
 	ListMenusForUser(ctx context.Context, userID pgtype.UUID) ([]ListMenusForUserRow, error)
 	ListMerchantFeeRuleOverrides(ctx context.Context) ([]ListMerchantFeeRuleOverridesRow, error)
+	ListMerchantNotes(ctx context.Context, merchantID pgtype.UUID) ([]ListMerchantNotesRow, error)
 	ListMerchants(ctx context.Context, arg ListMerchantsParams) ([]Merchant, error)
 	ListPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) ([]Payment, error)
 	ListPendingOrderRequestsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]OrderRequest, error)
 	ListPermissions(ctx context.Context) ([]Permission, error)
 	ListPermissionsByRole(ctx context.Context, roleID pgtype.UUID) ([]Permission, error)
 	ListRiskFlagsAdmin(ctx context.Context, arg ListRiskFlagsAdminParams) ([]ListRiskFlagsAdminRow, error)
+	// Backs the Section 7.1 merchant detail view's "flags" panel.
+	ListRiskFlagsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]RiskFlag, error)
 	ListRoles(ctx context.Context) ([]Role, error)
 	// Cross-merchant view backing the Back Office 7.2 landing page — the
 	// per-merchant ListSettlementsByMerchant above stays as-is for the merchant

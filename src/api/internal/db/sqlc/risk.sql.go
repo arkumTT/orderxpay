@@ -232,6 +232,43 @@ func (q *Queries) ListRiskFlagsAdmin(ctx context.Context, arg ListRiskFlagsAdmin
 	return items, nil
 }
 
+const listRiskFlagsByMerchant = `-- name: ListRiskFlagsByMerchant :many
+SELECT id, merchant_id, flag_type, dedupe_key, details, status, resolution_notes, reviewed_by, reviewed_at, created_at, updated_at FROM risk_flags WHERE merchant_id = $1 ORDER BY created_at DESC
+`
+
+// Backs the Section 7.1 merchant detail view's "flags" panel.
+func (q *Queries) ListRiskFlagsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]RiskFlag, error) {
+	rows, err := q.db.Query(ctx, listRiskFlagsByMerchant, merchantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RiskFlag{}
+	for rows.Next() {
+		var i RiskFlag
+		if err := rows.Scan(
+			&i.ID,
+			&i.MerchantID,
+			&i.FlagType,
+			&i.DedupeKey,
+			&i.Details,
+			&i.Status,
+			&i.ResolutionNotes,
+			&i.ReviewedBy,
+			&i.ReviewedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const resolveRiskFlag = `-- name: ResolveRiskFlag :one
 UPDATE risk_flags
 SET status = $1, resolution_notes = $2,
