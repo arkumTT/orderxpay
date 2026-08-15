@@ -92,6 +92,26 @@ export type DisputeDetail = {
   refundable_payments: RefundablePayment[];
 };
 
+export type RiskFlag = {
+  id: string;
+  merchant_id: string;
+  flag_type: "duplicate_ghana_card" | "velocity_spike";
+  dedupe_key: string;
+  details: string;
+  status: "open" | "dismissed" | "escalated";
+  resolution_notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// The cross-merchant admin list joins in the merchant's name — matches
+// ListRiskFlagsAdminRow, not the plain RiskFlag shape above.
+export type RiskFlagWithMerchant = RiskFlag & {
+  merchant_business_name: string;
+};
+
 export type Merchant = {
   id: string;
   business_name: string;

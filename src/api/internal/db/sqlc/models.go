@@ -202,6 +202,20 @@ type PermissionGroup struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type RiskFlag struct {
+	ID              pgtype.UUID        `json:"id"`
+	MerchantID      pgtype.UUID        `json:"merchant_id"`
+	FlagType        string             `json:"flag_type"`
+	DedupeKey       string             `json:"dedupe_key"`
+	Details         string             `json:"details"`
+	Status          string             `json:"status"`
+	ResolutionNotes pgtype.Text        `json:"resolution_notes"`
+	ReviewedBy      pgtype.UUID        `json:"reviewed_by"`
+	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Role struct {
 	ID          pgtype.UUID        `json:"id"`
 	Name        string             `json:"name"`

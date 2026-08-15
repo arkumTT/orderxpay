@@ -34,11 +34,23 @@ type Querier interface {
 	CreateMerchant(ctx context.Context, arg CreateMerchantParams) (Merchant, error)
 	CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
+	// Silently skipped when an identical open flag already exists
+	// (risk_flags_dedupe_open) — a scan re-run should never spam duplicates.
+	CreateRiskFlag(ctx context.Context, arg CreateRiskFlagParams) error
 	CreateSettlement(ctx context.Context, arg CreateSettlementParams) (Settlement, error)
 	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteMenu(ctx context.Context, id pgtype.UUID) error
 	DeleteStaff(ctx context.Context, id pgtype.UUID) error
+	// One row per merchant that shares a Ghana Card number with at least one
+	// other merchant's KYC submission (any status — even a rejected submission
+	// reusing someone else's card number is a real signal).
+	FindDuplicateGhanaCardFlags(ctx context.Context) ([]FindDuplicateGhanaCardFlagsRow, error)
+	// Flags a merchant whose trailing-24h invoice count or value is both above
+	// a floor (so a brand-new merchant's first few invoices don't trip it) and
+	// a multiple of their own trailing 7-day daily average (so an
+	// already-high-volume merchant isn't flagged just for staying busy).
+	FindVelocitySpikes(ctx context.Context) ([]FindVelocitySpikesRow, error)
 	GetDeliveryOption(ctx context.Context, id pgtype.UUID) (DeliveryOption, error)
 	GetDispute(ctx context.Context, id pgtype.UUID) (Dispute, error)
 	GetFeeRuleByMerchant(ctx context.Context, merchantID pgtype.UUID) (FeeRule, error)
@@ -55,6 +67,7 @@ type Querier interface {
 	GetPayment(ctx context.Context, id pgtype.UUID) (Payment, error)
 	GetPaymentByPSPReference(ctx context.Context, pspReference string) (Payment, error)
 	GetPermissionByKey(ctx context.Context, key string) (Permission, error)
+	GetRiskFlag(ctx context.Context, id pgtype.UUID) (RiskFlag, error)
 	GetRoleByName(ctx context.Context, name string) (Role, error)
 	GetSettlement(ctx context.Context, id pgtype.UUID) (Settlement, error)
 	GetStaffByPhone(ctx context.Context, phone string) (Staff, error)
@@ -87,6 +100,7 @@ type Querier interface {
 	ListPendingOrderRequestsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]OrderRequest, error)
 	ListPermissions(ctx context.Context) ([]Permission, error)
 	ListPermissionsByRole(ctx context.Context, roleID pgtype.UUID) ([]Permission, error)
+	ListRiskFlagsAdmin(ctx context.Context, arg ListRiskFlagsAdminParams) ([]ListRiskFlagsAdminRow, error)
 	ListRoles(ctx context.Context) ([]Role, error)
 	// Cross-merchant view backing the Back Office 7.2 landing page — the
 	// per-merchant ListSettlementsByMerchant above stays as-is for the merchant
@@ -103,6 +117,7 @@ type Querier interface {
 	MarkPaymentsSettled(ctx context.Context, arg MarkPaymentsSettledParams) error
 	RemoveUserRole(ctx context.Context, arg RemoveUserRoleParams) error
 	ResolveDispute(ctx context.Context, arg ResolveDisputeParams) (Dispute, error)
+	ResolveRiskFlag(ctx context.Context, arg ResolveRiskFlagParams) (RiskFlag, error)
 	// Reuses the existing row after a more_info_requested response instead of
 	// inserting a second one — kyc_submissions_one_open_per_merchant would
 	// reject a second open row anyway, and this is the correct UX: the

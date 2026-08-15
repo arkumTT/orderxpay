@@ -101,6 +101,10 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	r.Get("/disputes/:id", perm("disputes.view"), h.GetDisputeDetail)
 	r.Patch("/disputes/:id/status", perm("disputes.manage"), h.ResolveDispute)
 
+	r.Get("/risk/flags", perm("risk.view"), h.ListRiskFlagsAdmin)
+	r.Post("/risk/scan", perm("risk.manage"), h.RunRiskScan)
+	r.Patch("/risk/flags/:id/status", perm("risk.manage"), h.ResolveRiskFlag)
+
 	r.Get("/settlements", perm("settlements.view"), h.ListAllSettlements)
 	r.Post("/settlements", perm("settlements.manage"), h.GenerateSettlement)
 	r.Patch("/settlements/:id/status", perm("settlements.manage"), h.UpdateSettlementStatus)
