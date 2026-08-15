@@ -165,6 +165,42 @@ export type FeatureFlag = {
   merchants: FeatureFlagMerchant[];
 };
 
+export type ReportingSummary = {
+  gmv_pesewas: number;
+  psp_fees_pesewas: number;
+  commission_pesewas: number;
+  net_margin_pesewas: number;
+  blended_take_rate_bps: number;
+  active_merchants: number;
+  dormant_merchants: number;
+  total_merchants: number;
+};
+
+export type DailyRevenue = {
+  day: string;
+  gmv_pesewas: number;
+  psp_fees_pesewas: number;
+  commission_pesewas: number;
+};
+
+export type MerchantRevenue = {
+  merchant_id: string;
+  business_name: string;
+  merchant_status: string;
+  gmv_pesewas: number;
+  psp_fees_pesewas: number;
+  commission_pesewas: number;
+  payment_count: number;
+};
+
+export type ReportingResponse = {
+  period_start: string;
+  period_end: string;
+  summary: ReportingSummary;
+  daily: DailyRevenue[];
+  merchants: MerchantRevenue[];
+};
+
 export type Merchant = {
   id: string;
   business_name: string;

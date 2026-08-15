@@ -53,6 +53,10 @@ type Querier interface {
 	// a multiple of their own trailing 7-day daily average (so an
 	// already-high-volume merchant isn't flagged just for staying busy).
 	FindVelocitySpikes(ctx context.Context) ([]FindVelocitySpikesRow, error)
+	// Daily time series for the same period — only days with at least one
+	// successful payment (a table doesn't need zero-filled gap rows the way a
+	// chart would).
+	GetDailyRevenue(ctx context.Context, arg GetDailyRevenueParams) ([]GetDailyRevenueRow, error)
 	GetDeliveryOption(ctx context.Context, id pgtype.UUID) (DeliveryOption, error)
 	GetDispute(ctx context.Context, id pgtype.UUID) (Dispute, error)
 	GetFeatureFlag(ctx context.Context, id pgtype.UUID) (FeatureFlag, error)
@@ -65,6 +69,13 @@ type Querier interface {
 	GetMenu(ctx context.Context, id pgtype.UUID) (Menu, error)
 	GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error)
 	GetMerchantByPhone(ctx context.Context, phone string) (Merchant, error)
+	// Section 7.5: one row per merchant for the selected period — LEFT JOINs
+	// so a merchant with zero activity in the period still appears (with all
+	// figures at 0), which is exactly what "active vs. dormant" needs to be
+	// computed from in Go rather than a second query. Commission is prorated
+	// by how much of each invoice was actually collected in the period, the
+	// same pattern as the settlement engine's ComputeSettlementAggregate.
+	GetMerchantRevenueBreakdown(ctx context.Context, arg GetMerchantRevenueBreakdownParams) ([]GetMerchantRevenueBreakdownRow, error)
 	GetOpenKYCSubmissionByMerchant(ctx context.Context, merchantID pgtype.UUID) (KycSubmission, error)
 	GetOrderRequest(ctx context.Context, id pgtype.UUID) (OrderRequest, error)
 	GetPayment(ctx context.Context, id pgtype.UUID) (Payment, error)

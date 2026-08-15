@@ -118,6 +118,8 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	r.Post("/feature-flags/:id/merchants", perm("pricing.manage"), h.AddFeatureFlagMerchant)
 	r.Delete("/feature-flags/:id/merchants/:merchantId", perm("pricing.manage"), h.RemoveFeatureFlagMerchant)
 
+	r.Get("/reporting", perm("reporting.view"), h.GetReporting)
+
 	r.Get("/audit-log/:targetId", perm("audit.view"), h.ListAuditLogForTarget)
 
 	// 7.8: managing Back Office users themselves.
