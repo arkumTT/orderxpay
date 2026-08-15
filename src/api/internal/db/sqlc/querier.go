@@ -96,7 +96,13 @@ type Querier interface {
 	// PASETO token payload at login time.
 	GetUserPermissionKeys(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	GrantUserPermission(ctx context.Context, arg GrantUserPermissionParams) error
+	// Section 7.9 compliance log view. Joins to users for a display name/email
+	// when actor_type = 'user' — 'system'-actor entries (webhook/reconciliation
+	// writes) have no row to join and are left as actor_name = NULL.
+	ListAuditLogEntriesAdmin(ctx context.Context, arg ListAuditLogEntriesAdminParams) ([]ListAuditLogEntriesAdminRow, error)
 	ListAuditLogEntriesByTarget(ctx context.Context, arg ListAuditLogEntriesByTargetParams) ([]AuditLogEntry, error)
+	// Distinct target_entity values seen so far, to populate the filter dropdown.
+	ListAuditLogTargetEntities(ctx context.Context) ([]string, error)
 	ListConversationsByMerchant(ctx context.Context, arg ListConversationsByMerchantParams) ([]Conversation, error)
 	ListDeliveryOptionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]DeliveryOption, error)
 	ListDeliveryProviders(ctx context.Context) ([]DeliveryProvider, error)

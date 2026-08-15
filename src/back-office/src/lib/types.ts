@@ -257,3 +257,24 @@ export type Merchant = {
   created_at: string;
   updated_at: string;
 };
+
+export type AuditLogEntry = {
+  id: string;
+  actor_id: string;
+  actor_type: "merchant" | "staff" | "user" | "system";
+  action: string;
+  target_entity: string;
+  target_id: string | null;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  created_at: string;
+  actor_name: string | null;
+  actor_email: string | null;
+};
+
+export type AuditLogResponse = {
+  period_start: string;
+  period_end: string;
+  entries: AuditLogEntry[];
+  target_entities: string[];
+};
