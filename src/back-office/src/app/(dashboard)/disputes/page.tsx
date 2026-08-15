@@ -5,6 +5,7 @@ import { formatPesewas } from "@/lib/money";
 import type { DisputeWithContext } from "@/lib/types";
 import { LogDisputeForm } from "./log-dispute-form";
 import { DisputeActions } from "./dispute-actions";
+import { CsvExportButton } from "./csv-export-button";
 
 const STATUS_STYLES: Record<string, string> = {
   open: "bg-amber-100 text-amber-800",
@@ -127,7 +128,10 @@ export default async function DisputesPage() {
         </p>
       </div>
 
-      <LogDisputeForm />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <LogDisputeForm />
+        <CsvExportButton disputes={disputes} />
+      </div>
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-neutral-700">
