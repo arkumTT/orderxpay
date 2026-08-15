@@ -112,6 +112,30 @@ export type RiskFlagWithMerchant = RiskFlag & {
   merchant_business_name: string;
 };
 
+export type AdminUser = {
+  id: string;
+  name: string;
+  email: string;
+  status: "active" | "suspended";
+  created_at: string;
+  updated_at: string;
+};
+
+export type Permission = {
+  id: string;
+  permission_group_id: string;
+  key: string;
+  name: string;
+  description: string | null;
+};
+
+export type Role = {
+  id: string;
+  name: string;
+  description: string | null;
+  permissions: Permission[];
+};
+
 export type Merchant = {
   id: string;
   business_name: string;
