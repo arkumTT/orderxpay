@@ -2,6 +2,7 @@ import { listAdminUsersWithRoles, listRoles } from "@/lib/users";
 import { ApiError } from "@/lib/session";
 import { CreateUserForm } from "./create-user-form";
 import { UserRow } from "./user-row";
+import { CsvExportButton } from "./csv-export-button";
 
 export default async function AdminUsersPage() {
   let users, roles;
@@ -39,7 +40,10 @@ export default async function AdminUsersPage() {
         </p>
       </div>
 
-      <CreateUserForm />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <CreateUserForm />
+        <CsvExportButton users={users} />
+      </div>
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-neutral-700">
