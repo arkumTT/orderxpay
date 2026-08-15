@@ -4,6 +4,7 @@ import { ApiError } from "@/lib/session";
 import { GlobalFeeForm } from "./global-fee-form";
 import { MerchantOverrides } from "./merchant-overrides";
 import { FeatureFlagCard } from "./feature-flag-card";
+import { CsvExportButton } from "./csv-export-button";
 
 export default async function PricingPage() {
   let globalRule, overrides, flags, merchants;
@@ -60,9 +61,12 @@ export default async function PricingPage() {
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-neutral-700">
-          Merchant-specific overrides
-        </h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            Merchant-specific overrides
+          </h2>
+          <CsvExportButton overrides={overrides} />
+        </div>
         <MerchantOverrides overrides={overrides} merchants={merchants} />
       </div>
 
