@@ -11,6 +11,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteMerchantFeeRule = `-- name: DeleteMerchantFeeRule :exec
+DELETE FROM fee_rules WHERE merchant_id = $1
+`
+
+func (q *Queries) DeleteMerchantFeeRule(ctx context.Context, merchantID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteMerchantFeeRule, merchantID)
+	return err
+}
+
 const getFeeRuleByMerchant = `-- name: GetFeeRuleByMerchant :one
 SELECT id, merchant_id, commission_bps, allocation_type, created_at, updated_at FROM fee_rules WHERE merchant_id = $1
 `
@@ -45,6 +54,52 @@ func (q *Queries) GetGlobalFeeRule(ctx context.Context) (FeeRule, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listMerchantFeeRuleOverrides = `-- name: ListMerchantFeeRuleOverrides :many
+SELECT f.id, f.merchant_id, f.commission_bps, f.allocation_type, f.created_at, f.updated_at, m.business_name AS merchant_business_name
+FROM fee_rules f
+JOIN merchants m ON m.id = f.merchant_id
+WHERE f.merchant_id IS NOT NULL
+ORDER BY m.business_name
+`
+
+type ListMerchantFeeRuleOverridesRow struct {
+	ID                   pgtype.UUID        `json:"id"`
+	MerchantID           pgtype.UUID        `json:"merchant_id"`
+	CommissionBps        int32              `json:"commission_bps"`
+	AllocationType       string             `json:"allocation_type"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	MerchantBusinessName string             `json:"merchant_business_name"`
+}
+
+func (q *Queries) ListMerchantFeeRuleOverrides(ctx context.Context) ([]ListMerchantFeeRuleOverridesRow, error) {
+	rows, err := q.db.Query(ctx, listMerchantFeeRuleOverrides)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMerchantFeeRuleOverridesRow{}
+	for rows.Next() {
+		var i ListMerchantFeeRuleOverridesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MerchantID,
+			&i.CommissionBps,
+			&i.AllocationType,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MerchantBusinessName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const upsertGlobalFeeRule = `-- name: UpsertGlobalFeeRule :one

@@ -62,6 +62,22 @@ type Dispute struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
+type FeatureFlag struct {
+	ID              pgtype.UUID        `json:"id"`
+	Key             string             `json:"key"`
+	Name            string             `json:"name"`
+	Description     pgtype.Text        `json:"description"`
+	EnabledGlobally bool               `json:"enabled_globally"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type FeatureFlagMerchant struct {
+	FeatureFlagID pgtype.UUID        `json:"feature_flag_id"`
+	MerchantID    pgtype.UUID        `json:"merchant_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type FeeRule struct {
 	ID             pgtype.UUID        `json:"id"`
 	MerchantID     pgtype.UUID        `json:"merchant_id"`

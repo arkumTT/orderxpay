@@ -136,6 +136,35 @@ export type Role = {
   permissions: Permission[];
 };
 
+export type FeeRule = {
+  id: string;
+  merchant_id: string | null;
+  commission_bps: number;
+  allocation_type: "customer_only" | "merchant_only" | "split";
+  created_at: string;
+  updated_at: string;
+};
+
+export type FeeRuleOverride = FeeRule & {
+  merchant_business_name: string;
+};
+
+export type FeatureFlagMerchant = {
+  merchant_id: string;
+  business_name: string;
+};
+
+export type FeatureFlag = {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  enabled_globally: boolean;
+  created_at: string;
+  updated_at: string;
+  merchants: FeatureFlagMerchant[];
+};
+
 export type Merchant = {
   id: string;
   business_name: string;

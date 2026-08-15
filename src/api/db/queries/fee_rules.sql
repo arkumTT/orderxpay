@@ -19,3 +19,13 @@ ON CONFLICT (merchant_id) WHERE merchant_id IS NOT NULL DO UPDATE
   SET commission_bps = EXCLUDED.commission_bps,
       allocation_type = EXCLUDED.allocation_type
 RETURNING *;
+
+-- name: ListMerchantFeeRuleOverrides :many
+SELECT f.*, m.business_name AS merchant_business_name
+FROM fee_rules f
+JOIN merchants m ON m.id = f.merchant_id
+WHERE f.merchant_id IS NOT NULL
+ORDER BY m.business_name;
+
+-- name: DeleteMerchantFeeRule :exec
+DELETE FROM fee_rules WHERE merchant_id = $1;

@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	AddFeatureFlagMerchant(ctx context.Context, arg AddFeatureFlagMerchantParams) error
 	AddPaymentRefund(ctx context.Context, arg AddPaymentRefundParams) (Payment, error)
 	ArchiveItem(ctx context.Context, id pgtype.UUID) error
 	AssignUserRole(ctx context.Context, arg AssignUserRoleParams) error
@@ -41,6 +42,7 @@ type Querier interface {
 	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteMenu(ctx context.Context, id pgtype.UUID) error
+	DeleteMerchantFeeRule(ctx context.Context, merchantID pgtype.UUID) error
 	DeleteStaff(ctx context.Context, id pgtype.UUID) error
 	// One row per merchant that shares a Ghana Card number with at least one
 	// other merchant's KYC submission (any status — even a rejected submission
@@ -53,6 +55,7 @@ type Querier interface {
 	FindVelocitySpikes(ctx context.Context) ([]FindVelocitySpikesRow, error)
 	GetDeliveryOption(ctx context.Context, id pgtype.UUID) (DeliveryOption, error)
 	GetDispute(ctx context.Context, id pgtype.UUID) (Dispute, error)
+	GetFeatureFlag(ctx context.Context, id pgtype.UUID) (FeatureFlag, error)
 	GetFeeRuleByMerchant(ctx context.Context, merchantID pgtype.UUID) (FeeRule, error)
 	GetGlobalFeeRule(ctx context.Context) (FeeRule, error)
 	GetInvoice(ctx context.Context, id pgtype.UUID) (Invoice, error)
@@ -82,6 +85,8 @@ type Querier interface {
 	ListConversationsByMerchant(ctx context.Context, arg ListConversationsByMerchantParams) ([]Conversation, error)
 	ListDeliveryOptionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]DeliveryOption, error)
 	ListDisputesAdmin(ctx context.Context, arg ListDisputesAdminParams) ([]ListDisputesAdminRow, error)
+	ListFeatureFlagMerchants(ctx context.Context, featureFlagID pgtype.UUID) ([]ListFeatureFlagMerchantsRow, error)
+	ListFeatureFlags(ctx context.Context) ([]FeatureFlag, error)
 	ListInvoiceLineItems(ctx context.Context, invoiceID pgtype.UUID) ([]InvoiceLineItem, error)
 	ListInvoicesByMerchant(ctx context.Context, arg ListInvoicesByMerchantParams) ([]Invoice, error)
 	ListItemsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Item, error)
@@ -95,6 +100,7 @@ type Querier interface {
 	// leaving it with no reachable parent in the assembled tree. This is what
 	// the Back Office sidebar calls.
 	ListMenusForUser(ctx context.Context, userID pgtype.UUID) ([]ListMenusForUserRow, error)
+	ListMerchantFeeRuleOverrides(ctx context.Context) ([]ListMerchantFeeRuleOverridesRow, error)
 	ListMerchants(ctx context.Context, arg ListMerchantsParams) ([]Merchant, error)
 	ListPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) ([]Payment, error)
 	ListPendingOrderRequestsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]OrderRequest, error)
@@ -115,6 +121,7 @@ type Querier interface {
 	// the resulting settlement's id — must run with the exact same filter, in
 	// the same transaction, or a payment could be double-counted by a later run.
 	MarkPaymentsSettled(ctx context.Context, arg MarkPaymentsSettledParams) error
+	RemoveFeatureFlagMerchant(ctx context.Context, arg RemoveFeatureFlagMerchantParams) error
 	RemoveUserRole(ctx context.Context, arg RemoveUserRoleParams) error
 	ResolveDispute(ctx context.Context, arg ResolveDisputeParams) (Dispute, error)
 	ResolveRiskFlag(ctx context.Context, arg ResolveRiskFlagParams) (RiskFlag, error)
@@ -129,6 +136,7 @@ type Querier interface {
 	// Non-terminal transition only (e.g. open -> investigating) — no
 	// resolution fields; see ResolveDispute for the terminal transitions.
 	SetDisputeStatus(ctx context.Context, arg SetDisputeStatusParams) (Dispute, error)
+	SetFeatureFlagGlobal(ctx context.Context, arg SetFeatureFlagGlobalParams) (FeatureFlag, error)
 	SetInvoiceStatus(ctx context.Context, arg SetInvoiceStatusParams) (Invoice, error)
 	SetOrderRequestStatus(ctx context.Context, arg SetOrderRequestStatusParams) (OrderRequest, error)
 	SetPaymentStatus(ctx context.Context, arg SetPaymentStatusParams) (Payment, error)

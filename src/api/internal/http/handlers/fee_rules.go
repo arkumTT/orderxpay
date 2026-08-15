@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
@@ -47,6 +48,8 @@ func (h *Handler) UpsertGlobalFeeRule(c *fiber.Ctx) error {
 		return badRequest(c, err.Error())
 	}
 
+	before, beforeErr := h.Queries.GetGlobalFeeRule(c.Context())
+
 	rule, err := h.Queries.UpsertGlobalFeeRule(c.Context(), db.UpsertGlobalFeeRuleParams{
 		CommissionBps:  req.CommissionBps,
 		AllocationType: req.AllocationType,
@@ -54,6 +57,16 @@ func (h *Handler) UpsertGlobalFeeRule(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to upsert global fee rule"})
 	}
+
+	var beforeJSON []byte
+	if beforeErr == nil {
+		beforeJSON, _ = json.Marshal(fiber.Map{"commission_bps": before.CommissionBps, "allocation_type": before.AllocationType})
+	}
+	after, _ := json.Marshal(fiber.Map{"commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType})
+	if err := writeAdminAuditLog(c, h, "fee_rule.global_update", "fee_rule", rule.ID, beforeJSON, after); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
+	}
+
 	return c.JSON(rule)
 }
 
@@ -95,6 +108,8 @@ func (h *Handler) UpsertMerchantFeeRule(c *fiber.Ctx) error {
 		return badRequest(c, err.Error())
 	}
 
+	before, beforeErr := h.Queries.GetFeeRuleByMerchant(c.Context(), merchantID)
+
 	rule, err := h.Queries.UpsertMerchantFeeRule(c.Context(), db.UpsertMerchantFeeRuleParams{
 		MerchantID:     merchantID,
 		CommissionBps:  req.CommissionBps,
@@ -103,5 +118,52 @@ func (h *Handler) UpsertMerchantFeeRule(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to upsert merchant fee rule"})
 	}
+
+	var beforeJSON []byte
+	if beforeErr == nil {
+		beforeJSON, _ = json.Marshal(fiber.Map{"commission_bps": before.CommissionBps, "allocation_type": before.AllocationType})
+	}
+	after, _ := json.Marshal(fiber.Map{"commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType})
+	if err := writeAdminAuditLog(c, h, "fee_rule.merchant_override", "merchant", merchantID, beforeJSON, after); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
+	}
+
 	return c.JSON(rule)
+}
+
+// ListFeeRuleOverrides backs the pricing page's override list (Section 7.4).
+func (h *Handler) ListFeeRuleOverrides(c *fiber.Ctx) error {
+	overrides, err := h.Queries.ListMerchantFeeRuleOverrides(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list fee rule overrides"})
+	}
+	return c.JSON(overrides)
+}
+
+// DeleteMerchantFeeRule reverts a merchant back to the platform default —
+// the counterpart to UpsertMerchantFeeRule, which had no way to undo an
+// override once set.
+func (h *Handler) DeleteMerchantFeeRule(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+
+	before, err := h.Queries.GetFeeRuleByMerchant(c.Context(), merchantID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load fee rule"})
+	}
+
+	if err := h.Queries.DeleteMerchantFeeRule(c.Context(), merchantID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove fee rule override"})
+	}
+
+	beforeJSON, _ := json.Marshal(fiber.Map{"commission_bps": before.CommissionBps, "allocation_type": before.AllocationType})
+	if err := writeAdminAuditLog(c, h, "fee_rule.merchant_override_removed", "merchant", merchantID, beforeJSON, nil); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
 }

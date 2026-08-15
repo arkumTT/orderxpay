@@ -92,6 +92,7 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	merchants.Patch("/:id/kyc-tier", perm("merchants.kyc_review"), h.UpdateMerchantKYCTier)
 	merchants.Get("/:id/settlements", perm("settlements.view"), h.ListSettlements)
 	merchants.Post("/:id/fee-rule", perm("pricing.manage"), h.UpsertMerchantFeeRule)
+	merchants.Delete("/:id/fee-rule", perm("pricing.manage"), h.DeleteMerchantFeeRule)
 
 	r.Get("/kyc-submissions", perm("merchants.kyc_review"), h.ListKYCSubmissionsAdmin)
 	r.Patch("/kyc-submissions/:id/status", perm("merchants.kyc_review"), h.ReviewKYCSubmission)
@@ -110,6 +111,12 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	r.Patch("/settlements/:id/status", perm("settlements.manage"), h.UpdateSettlementStatus)
 	r.Get("/fee-rules/global", perm("pricing.view"), h.GetGlobalFeeRule)
 	r.Post("/fee-rules/global", perm("pricing.manage"), h.UpsertGlobalFeeRule)
+	r.Get("/fee-rules/overrides", perm("pricing.view"), h.ListFeeRuleOverrides)
+
+	r.Get("/feature-flags", perm("pricing.view"), h.ListFeatureFlags)
+	r.Patch("/feature-flags/:id", perm("pricing.manage"), h.SetFeatureFlagGlobal)
+	r.Post("/feature-flags/:id/merchants", perm("pricing.manage"), h.AddFeatureFlagMerchant)
+	r.Delete("/feature-flags/:id/merchants/:merchantId", perm("pricing.manage"), h.RemoveFeatureFlagMerchant)
 
 	r.Get("/audit-log/:targetId", perm("audit.view"), h.ListAuditLogForTarget)
 
