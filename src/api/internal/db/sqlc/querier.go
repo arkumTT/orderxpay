@@ -26,6 +26,7 @@ type Querier interface {
 	CreateAuditLogEntry(ctx context.Context, arg CreateAuditLogEntryParams) (AuditLogEntry, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateDeliveryOption(ctx context.Context, arg CreateDeliveryOptionParams) (DeliveryOption, error)
+	CreateDeliveryProvider(ctx context.Context, arg CreateDeliveryProviderParams) (DeliveryProvider, error)
 	CreateDispute(ctx context.Context, arg CreateDisputeParams) (Dispute, error)
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLineItemParams) (InvoiceLineItem, error)
@@ -41,6 +42,8 @@ type Querier interface {
 	CreateSettlement(ctx context.Context, arg CreateSettlementParams) (Settlement, error)
 	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateWebhookDelivery(ctx context.Context, arg CreateWebhookDeliveryParams) error
+	DeleteDeliveryProvider(ctx context.Context, id pgtype.UUID) error
 	DeleteMenu(ctx context.Context, id pgtype.UUID) error
 	DeleteMerchantFeeRule(ctx context.Context, merchantID pgtype.UUID) error
 	DeleteStaff(ctx context.Context, id pgtype.UUID) error
@@ -62,6 +65,7 @@ type Querier interface {
 	GetFeatureFlag(ctx context.Context, id pgtype.UUID) (FeatureFlag, error)
 	GetFeeRuleByMerchant(ctx context.Context, merchantID pgtype.UUID) (FeeRule, error)
 	GetGlobalFeeRule(ctx context.Context) (FeeRule, error)
+	GetIntegration(ctx context.Context, providerKey string) (Integration, error)
 	GetInvoice(ctx context.Context, id pgtype.UUID) (Invoice, error)
 	GetInvoiceByReference(ctx context.Context, reference string) (Invoice, error)
 	GetItem(ctx context.Context, id pgtype.UUID) (Item, error)
@@ -95,9 +99,11 @@ type Querier interface {
 	ListAuditLogEntriesByTarget(ctx context.Context, arg ListAuditLogEntriesByTargetParams) ([]AuditLogEntry, error)
 	ListConversationsByMerchant(ctx context.Context, arg ListConversationsByMerchantParams) ([]Conversation, error)
 	ListDeliveryOptionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]DeliveryOption, error)
+	ListDeliveryProviders(ctx context.Context) ([]DeliveryProvider, error)
 	ListDisputesAdmin(ctx context.Context, arg ListDisputesAdminParams) ([]ListDisputesAdminRow, error)
 	ListFeatureFlagMerchants(ctx context.Context, featureFlagID pgtype.UUID) ([]ListFeatureFlagMerchantsRow, error)
 	ListFeatureFlags(ctx context.Context) ([]FeatureFlag, error)
+	ListIntegrations(ctx context.Context) ([]Integration, error)
 	ListInvoiceLineItems(ctx context.Context, invoiceID pgtype.UUID) ([]InvoiceLineItem, error)
 	ListInvoicesByMerchant(ctx context.Context, arg ListInvoicesByMerchantParams) ([]Invoice, error)
 	ListItemsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Item, error)
@@ -128,6 +134,7 @@ type Querier interface {
 	ListUserDirectPermissions(ctx context.Context, userID pgtype.UUID) ([]Permission, error)
 	ListUserRoles(ctx context.Context, userID pgtype.UUID) ([]Role, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]WebhookDelivery, error)
 	// Stamps every payment just aggregated into ComputeSettlementAggregate with
 	// the resulting settlement's id — must run with the exact same filter, in
 	// the same transaction, or a payment could be double-counted by a later run.
@@ -148,12 +155,15 @@ type Querier interface {
 	// resolution fields; see ResolveDispute for the terminal transitions.
 	SetDisputeStatus(ctx context.Context, arg SetDisputeStatusParams) (Dispute, error)
 	SetFeatureFlagGlobal(ctx context.Context, arg SetFeatureFlagGlobalParams) (FeatureFlag, error)
+	SetIntegrationSecret(ctx context.Context, arg SetIntegrationSecretParams) (Integration, error)
 	SetInvoiceStatus(ctx context.Context, arg SetInvoiceStatusParams) (Invoice, error)
 	SetOrderRequestStatus(ctx context.Context, arg SetOrderRequestStatusParams) (OrderRequest, error)
 	SetPaymentStatus(ctx context.Context, arg SetPaymentStatusParams) (Payment, error)
 	SetSettlementStatus(ctx context.Context, arg SetSettlementStatusParams) (Settlement, error)
 	SetUserStatus(ctx context.Context, arg SetUserStatusParams) (User, error)
 	SumSuccessfulPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) (int64, error)
+	UpdateDeliveryProvider(ctx context.Context, arg UpdateDeliveryProviderParams) (DeliveryProvider, error)
+	UpdateIntegrationNotes(ctx context.Context, arg UpdateIntegrationNotesParams) (Integration, error)
 	UpdateItem(ctx context.Context, arg UpdateItemParams) (Item, error)
 	UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error)
 	UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerchantFeeSettingsParams) (Merchant, error)

@@ -201,6 +201,46 @@ export type ReportingResponse = {
   merchants: MerchantRevenue[];
 };
 
+export type Integration = {
+  id: string;
+  provider_key:
+    | "paystack"
+    | "whatsapp_bsp"
+    | "sms_email"
+    | "ussd_aggregator"
+    | "gra_evat";
+  category: string;
+  built: boolean;
+  has_secret: boolean;
+  secret_updated_at: string | null;
+  secret_updated_by: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WebhookDelivery = {
+  id: string;
+  provider: string;
+  event_type: string | null;
+  reference: string | null;
+  signature_valid: boolean;
+  processed_ok: boolean;
+  error_message: string | null;
+  received_at: string;
+};
+
+export type DeliveryProvider = {
+  id: string;
+  key: string;
+  name: string;
+  deep_link_template: string;
+  status: "active" | "inactive";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Merchant = {
   id: string;
   business_name: string;

@@ -46,6 +46,17 @@ type DeliveryOption struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
+type DeliveryProvider struct {
+	ID               pgtype.UUID        `json:"id"`
+	Key              string             `json:"key"`
+	Name             string             `json:"name"`
+	DeepLinkTemplate string             `json:"deep_link_template"`
+	Status           string             `json:"status"`
+	Notes            pgtype.Text        `json:"notes"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Dispute struct {
 	ID                  pgtype.UUID        `json:"id"`
 	InvoiceID           pgtype.UUID        `json:"invoice_id"`
@@ -85,6 +96,19 @@ type FeeRule struct {
 	AllocationType string             `json:"allocation_type"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Integration struct {
+	ID              pgtype.UUID        `json:"id"`
+	ProviderKey     string             `json:"provider_key"`
+	Category        string             `json:"category"`
+	Built           bool               `json:"built"`
+	SecretValue     pgtype.Text        `json:"secret_value"`
+	SecretUpdatedAt pgtype.Timestamptz `json:"secret_updated_at"`
+	SecretUpdatedBy pgtype.UUID        `json:"secret_updated_by"`
+	Notes           pgtype.Text        `json:"notes"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Invoice struct {
@@ -290,4 +314,15 @@ type UserRole struct {
 	UserID    pgtype.UUID        `json:"user_id"`
 	RoleID    pgtype.UUID        `json:"role_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type WebhookDelivery struct {
+	ID             pgtype.UUID        `json:"id"`
+	Provider       string             `json:"provider"`
+	EventType      pgtype.Text        `json:"event_type"`
+	Reference      pgtype.Text        `json:"reference"`
+	SignatureValid bool               `json:"signature_valid"`
+	ProcessedOk    bool               `json:"processed_ok"`
+	ErrorMessage   pgtype.Text        `json:"error_message"`
+	ReceivedAt     pgtype.Timestamptz `json:"received_at"`
 }

@@ -48,7 +48,8 @@ type initiatePaymentRequest struct {
 // URL to redirect the customer to. Unauthenticated like the checkout page
 // itself — the reference in the URL is the bearer credential (Section 5.3).
 func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
-	if !h.PSP.Enabled() {
+	pspClient := h.paystackClient(c.Context())
+	if !pspClient.Enabled() {
 		return notImplemented(c, "payment collection is not configured — set PAYSTACK_SECRET_KEY")
 	}
 
@@ -84,7 +85,7 @@ func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate payment reference"})
 	}
 
-	result, err := h.PSP.InitializeTransaction(c.Context(), psp.InitializeParams{
+	result, err := pspClient.InitializeTransaction(c.Context(), psp.InitializeParams{
 		Email:         syntheticCustomerEmail(invoice.CustomerContact),
 		AmountPesewas: amountOwed,
 		Currency:      "GHS",
@@ -119,7 +120,8 @@ func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
 // paths share creditSuccessfulPayment so crediting stays idempotent either
 // way, keyed off the payments.psp_reference unique index.
 func (h *Handler) VerifyCheckoutPayment(c *fiber.Ctx) error {
-	if !h.PSP.Enabled() {
+	pspClient := h.paystackClient(c.Context())
+	if !pspClient.Enabled() {
 		return notImplemented(c, "payment collection is not configured — set PAYSTACK_SECRET_KEY")
 	}
 
@@ -147,7 +149,7 @@ func (h *Handler) VerifyCheckoutPayment(c *fiber.Ctx) error {
 	}
 
 	if payment.Status != "success" {
-		result, err := h.PSP.VerifyTransaction(c.Context(), trxReference)
+		result, err := pspClient.VerifyTransaction(c.Context(), trxReference)
 		if err != nil {
 			log.Printf("paystack: verify transaction failed: %v", err)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "failed to verify payment with provider"})
@@ -168,13 +170,16 @@ func (h *Handler) VerifyCheckoutPayment(c *fiber.Ctx) error {
 // invoice. Each PSP has its own signature scheme (Section 9.1) — this one is
 // Paystack-specific (HMAC-SHA512 over the raw body).
 func (h *Handler) HandlePSPWebhook(c *fiber.Ctx) error {
-	if !h.PSP.Enabled() {
+	pspClient := h.paystackClient(c.Context())
+	if !pspClient.Enabled() {
 		return notImplemented(c, "payment collection is not configured — set PAYSTACK_SECRET_KEY")
 	}
 
 	body := c.Body()
 	signature := c.Get("x-paystack-signature")
-	if !psp.VerifyWebhookSignature(h.PSP.SecretKey, body, signature) {
+	sigValid := psp.VerifyWebhookSignature(pspClient.SecretKey, body, signature)
+	if !sigValid {
+		h.logWebhookDelivery(c.Context(), "", "", false, false, "invalid signature")
 		return badRequest(c, "invalid webhook signature")
 	}
 
@@ -188,18 +193,39 @@ func (h *Handler) HandlePSPWebhook(c *fiber.Ctx) error {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &event); err != nil {
+		h.logWebhookDelivery(c.Context(), "", "", sigValid, false, "invalid JSON payload")
 		return badRequest(c, "invalid webhook payload")
 	}
 
 	if event.Event != "charge.success" {
+		h.logWebhookDelivery(c.Context(), event.Event, event.Data.Reference, sigValid, true, "")
 		return c.SendStatus(fiber.StatusOK)
 	}
 
 	if err := h.creditSuccessfulPayment(c.Context(), event.Data.Reference, event.Data.Channel, event.Data.Fees); err != nil {
 		log.Printf("paystack webhook: failed to credit payment %s: %v", event.Data.Reference, err)
+		h.logWebhookDelivery(c.Context(), event.Event, event.Data.Reference, sigValid, false, err.Error())
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to process webhook"})
 	}
+	h.logWebhookDelivery(c.Context(), event.Event, event.Data.Reference, sigValid, true, "")
 	return c.SendStatus(fiber.StatusOK)
+}
+
+// logWebhookDelivery records every inbound webhook call (Section 7.3's
+// "webhook delivery logs") regardless of outcome — a bad signature or a
+// processing failure previously only ever showed up in stdout. Best-effort:
+// a logging failure shouldn't turn into a 500 for the PSP's retry logic.
+func (h *Handler) logWebhookDelivery(ctx context.Context, eventType, reference string, sigValid, processedOK bool, errMsg string) {
+	if err := h.Queries.CreateWebhookDelivery(ctx, db.CreateWebhookDeliveryParams{
+		Provider:       "paystack",
+		EventType:      textOrNull(eventType),
+		Reference:      textOrNull(reference),
+		SignatureValid: sigValid,
+		ProcessedOk:    processedOK,
+		ErrorMessage:   textOrNull(errMsg),
+	}); err != nil {
+		log.Printf("webhook delivery log: failed to record: %v", err)
+	}
 }
 
 // creditSuccessfulPayment marks a payment successful and rolls the invoice

@@ -202,7 +202,8 @@ func (h *Handler) ResolveDispute(c *fiber.Ctx) error {
 
 	var refundPaymentID pgtype.UUID
 	if req.Status == "resolved_refunded" {
-		if !h.PSP.Enabled() {
+		pspClient := h.paystackClient(c.Context())
+		if !pspClient.Enabled() {
 			return notImplemented(c, "refunds are not configured — set PAYSTACK_SECRET_KEY")
 		}
 		if req.RefundAmountPesewas <= 0 {
@@ -230,7 +231,7 @@ func (h *Handler) ResolveDispute(c *fiber.Ctx) error {
 			return badRequest(c, "refund_amount_pesewas exceeds the refundable balance on that payment")
 		}
 
-		if _, err := h.PSP.RefundTransaction(c.Context(), pmt.PspReference, req.RefundAmountPesewas); err != nil {
+		if _, err := pspClient.RefundTransaction(c.Context(), pmt.PspReference, req.RefundAmountPesewas); err != nil {
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "failed to process refund with provider"})
 		}
 
