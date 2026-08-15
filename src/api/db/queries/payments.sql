@@ -3,6 +3,9 @@ INSERT INTO payments (invoice_id, psp_reference, method, amount_pesewas, status)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
+-- name: GetPayment :one
+SELECT * FROM payments WHERE id = $1;
+
 -- name: GetPaymentByPSPReference :one
 SELECT * FROM payments WHERE psp_reference = $1;
 

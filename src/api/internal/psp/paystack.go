@@ -106,6 +106,36 @@ func (c *Client) VerifyTransaction(ctx context.Context, reference string) (*Veri
 	return &env.Data, nil
 }
 
+type RefundResult struct {
+	Status               string `json:"status"` // "pending" | "processed" | "failed" | ...
+	Amount               int64  `json:"amount"`
+	Currency             string `json:"currency"`
+	TransactionReference string `json:"transaction_reference"`
+}
+
+// RefundTransaction issues a refund against a prior charge (Section 7.7).
+// AmountPesewas is required — dispute resolution always refunds a specific
+// payment for a specific amount the reviewer chose, never "whatever the
+// original charge was," so there's no implicit full-refund path here.
+func (c *Client) RefundTransaction(ctx context.Context, reference string, amountPesewas int64) (*RefundResult, error) {
+	body, err := json.Marshal(map[string]any{
+		"transaction": reference,
+		"amount":      amountPesewas,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var env paystackEnvelope[RefundResult]
+	if err := c.do(ctx, http.MethodPost, "/refund", body, &env); err != nil {
+		return nil, err
+	}
+	if !env.Status {
+		return nil, fmt.Errorf("paystack: refund failed: %s", env.Message)
+	}
+	return &env.Data, nil
+}
+
 func (c *Client) do(ctx context.Context, method, path string, body []byte, out any) error {
 	if !c.Enabled() {
 		return errors.New("paystack: secret key not configured")

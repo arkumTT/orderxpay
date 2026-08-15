@@ -42,6 +42,56 @@ export type KYCSubmissionWithMerchant = KYCSubmission & {
   merchant_business_name: string;
 };
 
+export type DisputeReason =
+  | "not_received"
+  | "wrong_item"
+  | "damaged"
+  | "duplicate_charge"
+  | "not_as_described"
+  | "other";
+
+export type Dispute = {
+  id: string;
+  invoice_id: string;
+  reason_category: DisputeReason;
+  description: string | null;
+  status: "open" | "investigating" | "resolved_refunded" | "resolved_denied";
+  resolution_notes: string | null;
+  refund_payment_id: string | null;
+  refund_amount_pesewas: number | null;
+  created_by: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// The cross-merchant admin list joins in invoice/merchant context — matches
+// ListDisputesAdminRow, not the plain Dispute shape above.
+export type DisputeWithContext = Dispute & {
+  invoice_reference: string;
+  customer_contact: string;
+  merchant_business_name: string;
+};
+
+export type RefundablePayment = {
+  id: string;
+  invoice_id: string;
+  psp_reference: string;
+  method: "momo" | "card" | "ussd";
+  amount_pesewas: number;
+  status: "pending" | "success" | "failed";
+  refunded_amount_pesewas: number;
+  refundable_pesewas: number;
+  paid_at: string | null;
+  created_at: string;
+};
+
+export type DisputeDetail = {
+  dispute: Dispute;
+  refundable_payments: RefundablePayment[];
+};
+
 export type Merchant = {
   id: string;
   business_name: string;

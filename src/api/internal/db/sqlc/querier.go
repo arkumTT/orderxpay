@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	AddPaymentRefund(ctx context.Context, arg AddPaymentRefundParams) (Payment, error)
 	ArchiveItem(ctx context.Context, id pgtype.UUID) error
 	AssignUserRole(ctx context.Context, arg AssignUserRoleParams) error
 	// Section 7.2 batch-run reconciliation: sums every not-yet-settled
@@ -24,6 +25,7 @@ type Querier interface {
 	CreateAuditLogEntry(ctx context.Context, arg CreateAuditLogEntryParams) (AuditLogEntry, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateDeliveryOption(ctx context.Context, arg CreateDeliveryOptionParams) (DeliveryOption, error)
+	CreateDispute(ctx context.Context, arg CreateDisputeParams) (Dispute, error)
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLineItemParams) (InvoiceLineItem, error)
 	CreateItem(ctx context.Context, arg CreateItemParams) (Item, error)
@@ -38,6 +40,7 @@ type Querier interface {
 	DeleteMenu(ctx context.Context, id pgtype.UUID) error
 	DeleteStaff(ctx context.Context, id pgtype.UUID) error
 	GetDeliveryOption(ctx context.Context, id pgtype.UUID) (DeliveryOption, error)
+	GetDispute(ctx context.Context, id pgtype.UUID) (Dispute, error)
 	GetFeeRuleByMerchant(ctx context.Context, merchantID pgtype.UUID) (FeeRule, error)
 	GetGlobalFeeRule(ctx context.Context) (FeeRule, error)
 	GetInvoice(ctx context.Context, id pgtype.UUID) (Invoice, error)
@@ -49,6 +52,7 @@ type Querier interface {
 	GetMerchantByPhone(ctx context.Context, phone string) (Merchant, error)
 	GetOpenKYCSubmissionByMerchant(ctx context.Context, merchantID pgtype.UUID) (KycSubmission, error)
 	GetOrderRequest(ctx context.Context, id pgtype.UUID) (OrderRequest, error)
+	GetPayment(ctx context.Context, id pgtype.UUID) (Payment, error)
 	GetPaymentByPSPReference(ctx context.Context, pspReference string) (Payment, error)
 	GetPermissionByKey(ctx context.Context, key string) (Permission, error)
 	GetRoleByName(ctx context.Context, name string) (Role, error)
@@ -64,6 +68,7 @@ type Querier interface {
 	ListAuditLogEntriesByTarget(ctx context.Context, arg ListAuditLogEntriesByTargetParams) ([]AuditLogEntry, error)
 	ListConversationsByMerchant(ctx context.Context, arg ListConversationsByMerchantParams) ([]Conversation, error)
 	ListDeliveryOptionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]DeliveryOption, error)
+	ListDisputesAdmin(ctx context.Context, arg ListDisputesAdminParams) ([]ListDisputesAdminRow, error)
 	ListInvoiceLineItems(ctx context.Context, invoiceID pgtype.UUID) ([]InvoiceLineItem, error)
 	ListInvoicesByMerchant(ctx context.Context, arg ListInvoicesByMerchantParams) ([]Invoice, error)
 	ListItemsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Item, error)
@@ -97,6 +102,7 @@ type Querier interface {
 	// the same transaction, or a payment could be double-counted by a later run.
 	MarkPaymentsSettled(ctx context.Context, arg MarkPaymentsSettledParams) error
 	RemoveUserRole(ctx context.Context, arg RemoveUserRoleParams) error
+	ResolveDispute(ctx context.Context, arg ResolveDisputeParams) (Dispute, error)
 	// Reuses the existing row after a more_info_requested response instead of
 	// inserting a second one — kyc_submissions_one_open_per_merchant would
 	// reject a second open row anyway, and this is the correct UX: the
@@ -105,6 +111,9 @@ type Querier interface {
 	ReviewKYCSubmission(ctx context.Context, arg ReviewKYCSubmissionParams) (KycSubmission, error)
 	RevokeUserPermission(ctx context.Context, arg RevokeUserPermissionParams) error
 	SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) error
+	// Non-terminal transition only (e.g. open -> investigating) — no
+	// resolution fields; see ResolveDispute for the terminal transitions.
+	SetDisputeStatus(ctx context.Context, arg SetDisputeStatusParams) (Dispute, error)
 	SetInvoiceStatus(ctx context.Context, arg SetInvoiceStatusParams) (Invoice, error)
 	SetOrderRequestStatus(ctx context.Context, arg SetOrderRequestStatusParams) (OrderRequest, error)
 	SetPaymentStatus(ctx context.Context, arg SetPaymentStatusParams) (Payment, error)

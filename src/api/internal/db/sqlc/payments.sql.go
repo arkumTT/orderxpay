@@ -14,7 +14,7 @@ import (
 const createPayment = `-- name: CreatePayment :one
 INSERT INTO payments (invoice_id, psp_reference, method, amount_pesewas, status)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id
+RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas
 `
 
 type CreatePaymentParams struct {
@@ -45,12 +45,36 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 		&i.CreatedAt,
 		&i.PspFeePesewas,
 		&i.SettlementID,
+		&i.RefundedAmountPesewas,
+	)
+	return i, err
+}
+
+const getPayment = `-- name: GetPayment :one
+SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas FROM payments WHERE id = $1
+`
+
+func (q *Queries) GetPayment(ctx context.Context, id pgtype.UUID) (Payment, error) {
+	row := q.db.QueryRow(ctx, getPayment, id)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.InvoiceID,
+		&i.PspReference,
+		&i.Method,
+		&i.AmountPesewas,
+		&i.Status,
+		&i.PaidAt,
+		&i.CreatedAt,
+		&i.PspFeePesewas,
+		&i.SettlementID,
+		&i.RefundedAmountPesewas,
 	)
 	return i, err
 }
 
 const getPaymentByPSPReference = `-- name: GetPaymentByPSPReference :one
-SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id FROM payments WHERE psp_reference = $1
+SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas FROM payments WHERE psp_reference = $1
 `
 
 func (q *Queries) GetPaymentByPSPReference(ctx context.Context, pspReference string) (Payment, error) {
@@ -67,12 +91,13 @@ func (q *Queries) GetPaymentByPSPReference(ctx context.Context, pspReference str
 		&i.CreatedAt,
 		&i.PspFeePesewas,
 		&i.SettlementID,
+		&i.RefundedAmountPesewas,
 	)
 	return i, err
 }
 
 const listPaymentsByInvoice = `-- name: ListPaymentsByInvoice :many
-SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id FROM payments WHERE invoice_id = $1 ORDER BY created_at
+SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas FROM payments WHERE invoice_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) ([]Payment, error) {
@@ -95,6 +120,7 @@ func (q *Queries) ListPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UU
 			&i.CreatedAt,
 			&i.PspFeePesewas,
 			&i.SettlementID,
+			&i.RefundedAmountPesewas,
 		); err != nil {
 			return nil, err
 		}
@@ -110,7 +136,7 @@ const setPaymentStatus = `-- name: SetPaymentStatus :one
 UPDATE payments
 SET status = $2, psp_fee_pesewas = $3, method = $4, paid_at = CASE WHEN $2 = 'success' THEN now() ELSE paid_at END
 WHERE id = $1
-RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id
+RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas
 `
 
 type SetPaymentStatusParams struct {
@@ -139,6 +165,7 @@ func (q *Queries) SetPaymentStatus(ctx context.Context, arg SetPaymentStatusPara
 		&i.CreatedAt,
 		&i.PspFeePesewas,
 		&i.SettlementID,
+		&i.RefundedAmountPesewas,
 	)
 	return i, err
 }

@@ -46,6 +46,22 @@ type DeliveryOption struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Dispute struct {
+	ID                  pgtype.UUID        `json:"id"`
+	InvoiceID           pgtype.UUID        `json:"invoice_id"`
+	ReasonCategory      string             `json:"reason_category"`
+	Description         pgtype.Text        `json:"description"`
+	Status              string             `json:"status"`
+	ResolutionNotes     pgtype.Text        `json:"resolution_notes"`
+	RefundPaymentID     pgtype.UUID        `json:"refund_payment_id"`
+	RefundAmountPesewas pgtype.Int8        `json:"refund_amount_pesewas"`
+	CreatedBy           pgtype.UUID        `json:"created_by"`
+	ResolvedBy          pgtype.UUID        `json:"resolved_by"`
+	ResolvedAt          pgtype.Timestamptz `json:"resolved_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type FeeRule struct {
 	ID             pgtype.UUID        `json:"id"`
 	MerchantID     pgtype.UUID        `json:"merchant_id"`
@@ -155,16 +171,17 @@ type OrderRequest struct {
 }
 
 type Payment struct {
-	ID            pgtype.UUID        `json:"id"`
-	InvoiceID     pgtype.UUID        `json:"invoice_id"`
-	PspReference  string             `json:"psp_reference"`
-	Method        string             `json:"method"`
-	AmountPesewas int64              `json:"amount_pesewas"`
-	Status        string             `json:"status"`
-	PaidAt        pgtype.Timestamptz `json:"paid_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	PspFeePesewas int64              `json:"psp_fee_pesewas"`
-	SettlementID  pgtype.UUID        `json:"settlement_id"`
+	ID                    pgtype.UUID        `json:"id"`
+	InvoiceID             pgtype.UUID        `json:"invoice_id"`
+	PspReference          string             `json:"psp_reference"`
+	Method                string             `json:"method"`
+	AmountPesewas         int64              `json:"amount_pesewas"`
+	Status                string             `json:"status"`
+	PaidAt                pgtype.Timestamptz `json:"paid_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	PspFeePesewas         int64              `json:"psp_fee_pesewas"`
+	SettlementID          pgtype.UUID        `json:"settlement_id"`
+	RefundedAmountPesewas int64              `json:"refunded_amount_pesewas"`
 }
 
 type Permission struct {
