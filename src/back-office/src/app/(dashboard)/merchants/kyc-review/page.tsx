@@ -3,6 +3,7 @@ import { listKYCSubmissions } from "@/lib/kyc";
 import { ApiError } from "@/lib/session";
 import type { KYCSubmissionWithMerchant } from "@/lib/types";
 import { KYCReviewActions } from "./review-actions";
+import { CsvExportButton } from "./csv-export-button";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -108,6 +109,10 @@ export default async function KycReviewPage() {
           merchant; document photo/selfie review isn&apos;t built yet, so
           decisions are based on the submitted details below.
         </p>
+      </div>
+
+      <div className="flex justify-end">
+        <CsvExportButton submissions={submissions} />
       </div>
 
       <div>
