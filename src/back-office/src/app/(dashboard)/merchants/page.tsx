@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listMerchants } from "@/lib/merchants";
 import { ApiError } from "@/lib/session";
+import { CsvExportButton } from "./csv-export-button";
 
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-green-100 text-green-800",
@@ -27,9 +28,12 @@ export default async function MerchantsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline gap-2">
-        <h1 className="text-2xl font-semibold text-neutral-900">Merchants</h1>
-        <span className="text-xs font-mono text-neutral-400">Section 7.1</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-2xl font-semibold text-neutral-900">Merchants</h1>
+          <span className="text-xs font-mono text-neutral-400">Section 7.1</span>
+        </div>
+        <CsvExportButton merchants={merchants} />
       </div>
 
       {merchants.length === 0 ? (
