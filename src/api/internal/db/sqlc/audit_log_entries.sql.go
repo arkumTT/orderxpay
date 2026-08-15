@@ -52,6 +52,88 @@ func (q *Queries) CreateAuditLogEntry(ctx context.Context, arg CreateAuditLogEnt
 	return i, err
 }
 
+const listAuditLogEntriesAdmin = `-- name: ListAuditLogEntriesAdmin :many
+SELECT ale.id, ale.actor_id, ale.actor_type, ale.action, ale.target_entity, ale.target_id,
+       ale.before_state, ale.after_state, ale.created_at,
+       u.name AS actor_name, u.email AS actor_email
+FROM audit_log_entries ale
+LEFT JOIN users u ON ale.actor_type = 'user' AND u.id = ale.actor_id
+WHERE ($1::text = '' OR ale.target_entity = $1::text)
+  AND ($2::text = '' OR ale.action ILIKE '%' || $2::text || '%')
+  AND ($3::text = '' OR ale.actor_type = $3::text)
+  AND ale.created_at >= $4::timestamptz
+  AND ale.created_at < $5::timestamptz
+ORDER BY ale.created_at DESC
+LIMIT $7 OFFSET $6
+`
+
+type ListAuditLogEntriesAdminParams struct {
+	TargetEntity    string             `json:"target_entity"`
+	ActionFilter    string             `json:"action_filter"`
+	ActorTypeFilter string             `json:"actor_type_filter"`
+	PeriodStart     pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd       pgtype.Timestamptz `json:"period_end"`
+	RowOffset       int32              `json:"row_offset"`
+	RowLimit        int32              `json:"row_limit"`
+}
+
+type ListAuditLogEntriesAdminRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	ActorID      pgtype.UUID        `json:"actor_id"`
+	ActorType    string             `json:"actor_type"`
+	Action       string             `json:"action"`
+	TargetEntity string             `json:"target_entity"`
+	TargetID     pgtype.UUID        `json:"target_id"`
+	BeforeState  []byte             `json:"before_state"`
+	AfterState   []byte             `json:"after_state"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ActorName    pgtype.Text        `json:"actor_name"`
+	ActorEmail   pgtype.Text        `json:"actor_email"`
+}
+
+// Section 7.9 compliance log view. Joins to users for a display name/email
+// when actor_type = 'user' — 'system'-actor entries (webhook/reconciliation
+// writes) have no row to join and are left as actor_name = NULL.
+func (q *Queries) ListAuditLogEntriesAdmin(ctx context.Context, arg ListAuditLogEntriesAdminParams) ([]ListAuditLogEntriesAdminRow, error) {
+	rows, err := q.db.Query(ctx, listAuditLogEntriesAdmin,
+		arg.TargetEntity,
+		arg.ActionFilter,
+		arg.ActorTypeFilter,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAuditLogEntriesAdminRow{}
+	for rows.Next() {
+		var i ListAuditLogEntriesAdminRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ActorID,
+			&i.ActorType,
+			&i.Action,
+			&i.TargetEntity,
+			&i.TargetID,
+			&i.BeforeState,
+			&i.AfterState,
+			&i.CreatedAt,
+			&i.ActorName,
+			&i.ActorEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAuditLogEntriesByTarget = `-- name: ListAuditLogEntriesByTarget :many
 SELECT id, actor_id, actor_type, action, target_entity, target_id, before_state, after_state, created_at FROM audit_log_entries
 WHERE target_entity = $1 AND target_id = $2
@@ -86,6 +168,31 @@ func (q *Queries) ListAuditLogEntriesByTarget(ctx context.Context, arg ListAudit
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAuditLogTargetEntities = `-- name: ListAuditLogTargetEntities :many
+SELECT DISTINCT target_entity FROM audit_log_entries ORDER BY target_entity
+`
+
+// Distinct target_entity values seen so far, to populate the filter dropdown.
+func (q *Queries) ListAuditLogTargetEntities(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listAuditLogTargetEntities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var target_entity string
+		if err := rows.Scan(&target_entity); err != nil {
+			return nil, err
+		}
+		items = append(items, target_entity)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
