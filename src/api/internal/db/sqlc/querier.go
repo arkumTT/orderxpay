@@ -89,6 +89,7 @@ type Querier interface {
 	GetRoleByName(ctx context.Context, name string) (Role, error)
 	GetSettlement(ctx context.Context, id pgtype.UUID) (Settlement, error)
 	GetStaffByPhone(ctx context.Context, phone string) (Staff, error)
+	GetSupportTransaction(ctx context.Context, reference string) (GetSupportTransactionRow, error)
 	GetUser(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	// GetUserPermissionKeys is the union of permissions granted via the user's
@@ -156,6 +157,10 @@ type Querier interface {
 	ResubmitKYCSubmission(ctx context.Context, arg ResubmitKYCSubmissionParams) (KycSubmission, error)
 	ReviewKYCSubmission(ctx context.Context, arg ReviewKYCSubmissionParams) (KycSubmission, error)
 	RevokeUserPermission(ctx context.Context, arg RevokeUserPermissionParams) error
+	// Matches on invoice reference or customer phone — the two things a support
+	// agent is handed on a call ("my order is ORD-1234" / "I paid with 024...").
+	SearchInvoicesForSupport(ctx context.Context, query string) ([]SearchInvoicesForSupportRow, error)
+	SearchMerchantsForSupport(ctx context.Context, query string) ([]Merchant, error)
 	SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) error
 	// Non-terminal transition only (e.g. open -> investigating) — no
 	// resolution fields; see ResolveDispute for the terminal transitions.
