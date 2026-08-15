@@ -93,6 +93,11 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	merchants.Get("/:id/settlements", perm("settlements.view"), h.ListSettlements)
 	merchants.Post("/:id/fee-rule", perm("pricing.manage"), h.UpsertMerchantFeeRule)
 	merchants.Delete("/:id/fee-rule", perm("pricing.manage"), h.DeleteMerchantFeeRule)
+	merchants.Get("/:id/items", perm("merchants.view"), h.ListItems)
+	merchants.Get("/:id/invoices", perm("merchants.view"), h.ListInvoicesByMerchant)
+	merchants.Get("/:id/risk-flags", perm("merchants.view"), h.ListMerchantRiskFlags)
+	merchants.Get("/:id/notes", perm("merchants.view"), h.ListMerchantNotes)
+	merchants.Post("/:id/notes", perm("merchants.view"), h.CreateMerchantNote)
 
 	r.Get("/kyc-submissions", perm("merchants.kyc_review"), h.ListKYCSubmissionsAdmin)
 	r.Patch("/kyc-submissions/:id/status", perm("merchants.kyc_review"), h.ReviewKYCSubmission)

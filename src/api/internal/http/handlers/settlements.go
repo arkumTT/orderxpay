@@ -86,10 +86,14 @@ func (h *Handler) GenerateSettlement(c *fiber.Ctx) error {
 	// upper bound for the timestamptz range is the start of the next day.
 	rangeEnd := periodEndDate.AddDate(0, 0, 1)
 
-	if _, err := h.Queries.GetMerchant(c.Context(), merchantID); errors.Is(err, pgx.ErrNoRows) {
+	merchant, err := h.Queries.GetMerchant(c.Context(), merchantID)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return notFound(c)
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load merchant"})
+	}
+	if merchant.Status == "suspended" {
+		return badRequest(c, "merchant is suspended and cannot receive new payouts")
 	}
 
 	tx, err := h.Pool.Begin(c.Context())

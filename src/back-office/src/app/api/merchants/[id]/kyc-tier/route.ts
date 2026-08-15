@@ -1,0 +1,37 @@
+import { getSessionToken } from "@/lib/session";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+
+export async function PATCH(
+  request: Request,
+  ctx: RouteContext<"/api/merchants/[id]/kyc-tier">,
+) {
+  const { id } = await ctx.params;
+  const token = await getSessionToken();
+  if (!token) {
+    return Response.json({ error: "no session" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => null);
+  if (body?.kyc_tier !== 0 && body?.kyc_tier !== 1) {
+    return Response.json({ error: "kyc_tier must be 0 or 1" }, { status: 400 });
+  }
+
+  const res = await fetch(`${API_URL}/api/v1/admin/merchants/${id}/kyc-tier`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return Response.json(
+      { error: data.error ?? "failed to update KYC tier" },
+      { status: res.status },
+    );
+  }
+  return Response.json(data, { status: res.status });
+}

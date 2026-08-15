@@ -56,6 +56,10 @@ ON CONFLICT (merchant_id, flag_type, dedupe_key) WHERE status = 'open' DO NOTHIN
 -- name: GetRiskFlag :one
 SELECT * FROM risk_flags WHERE id = $1;
 
+-- name: ListRiskFlagsByMerchant :many
+-- Backs the Section 7.1 merchant detail view's "flags" panel.
+SELECT * FROM risk_flags WHERE merchant_id = $1 ORDER BY created_at DESC;
+
 -- name: ListRiskFlagsAdmin :many
 SELECT r.*, m.business_name AS merchant_business_name
 FROM risk_flags r
