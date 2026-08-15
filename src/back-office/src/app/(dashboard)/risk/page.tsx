@@ -3,6 +3,7 @@ import { ApiError } from "@/lib/session";
 import type { RiskFlagWithMerchant } from "@/lib/types";
 import { RunScanButton } from "./run-scan-button";
 import { FlagActions } from "./flag-actions";
+import { CsvExportButton } from "./csv-export-button";
 
 const STATUS_STYLES: Record<string, string> = {
   open: "bg-amber-100 text-amber-800",
@@ -103,7 +104,10 @@ export default async function RiskPage() {
         </p>
       </div>
 
-      <RunScanButton />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <RunScanButton />
+        <CsvExportButton flags={flags} />
+      </div>
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-neutral-700">
