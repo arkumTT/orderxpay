@@ -1,5 +1,7 @@
 # OrderxPay
 
+<!-- test/branch-protection-check: verifying required status checks + PR review rule on main -->
+
 Mobile-first order-to-cash platform for Ghanaian retailers. See
 `OrderxPay_Product_Architecture_Framework.html` for the full product/architecture
 spec — module breakdowns below reference its section numbers.
