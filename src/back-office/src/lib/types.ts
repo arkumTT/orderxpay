@@ -258,6 +258,78 @@ export type Merchant = {
   updated_at: string;
 };
 
+export type Invoice = {
+  id: string;
+  merchant_id: string;
+  order_request_id: string | null;
+  reference: string;
+  customer_contact: string;
+  subtotal_pesewas: number;
+  service_charge_pesewas: number;
+  service_charge_allocation: "customer_only" | "merchant_only" | "split";
+  total_pesewas: number;
+  status:
+    | "draft"
+    | "sent"
+    | "viewed"
+    | "partially_paid"
+    | "paid"
+    | "expired"
+    | "cancelled"
+    | "refunded";
+  delivery_option_id: string | null;
+  delivery_address: string | null;
+  delivery_fee_handling: "bundled" | "external" | null;
+  delivery_fee_pesewas: number | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+  commission_pesewas: number;
+};
+
+export type InvoiceLineItem = {
+  id: string;
+  invoice_id: string;
+  item_id: string;
+  description: string;
+  unit_price_pesewas: number;
+  quantity: number;
+  line_total_pesewas: number;
+};
+
+export type Payment = {
+  id: string;
+  invoice_id: string;
+  psp_reference: string;
+  method: "momo" | "card" | "ussd";
+  amount_pesewas: number;
+  status: "pending" | "success" | "failed";
+  paid_at: string | null;
+  created_at: string;
+  psp_fee_pesewas: number;
+  settlement_id: string | null;
+  refunded_amount_pesewas: number;
+};
+
+// Matches SearchInvoicesForSupportRow — the invoice with merchant context
+// joined in, for the support console's search results.
+export type SupportTransactionSummary = Invoice & {
+  merchant_business_name: string;
+  merchant_phone: string;
+};
+
+export type SupportSearchResponse = {
+  invoices: SupportTransactionSummary[];
+  merchants: Merchant[];
+};
+
+export type SupportTransactionDetail = {
+  invoice: SupportTransactionSummary;
+  line_items: InvoiceLineItem[];
+  payments: Payment[];
+  checkout_url: string;
+};
+
 export type AuditLogEntry = {
   id: string;
   actor_id: string;

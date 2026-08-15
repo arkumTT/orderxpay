@@ -130,6 +130,9 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	r.Patch("/delivery-providers/:id", perm("integrations.manage"), h.UpdateDeliveryProvider)
 	r.Delete("/delivery-providers/:id", perm("integrations.manage"), h.DeleteDeliveryProvider)
 
+	r.Get("/support/search", perm("support.view"), h.SupportSearch)
+	r.Get("/support/transactions/:reference", perm("support.view"), h.GetSupportTransaction)
+
 	r.Get("/audit-log", perm("audit.view"), h.ListAuditLogAdmin)
 	r.Get("/audit-log/:targetId", perm("audit.view"), h.ListAuditLogForTarget)
 
