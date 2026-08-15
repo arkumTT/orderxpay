@@ -6,6 +6,7 @@ import {
 import { ApiError } from "@/lib/session";
 import { IntegrationCard } from "./integration-card";
 import { DeliveryProviderManager } from "./delivery-provider-manager";
+import { CsvExportButton } from "./csv-export-button";
 
 function formatDateTime(d: string) {
   return new Date(d).toLocaleString("en-GH", {
@@ -66,9 +67,12 @@ export default async function IntegrationsPage() {
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-neutral-700">
-          Webhook delivery log
-        </h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-neutral-700">
+            Webhook delivery log
+          </h2>
+          <CsvExportButton deliveries={deliveries} />
+        </div>
         {deliveries.length === 0 ? (
           <p className="text-sm text-neutral-500">
             No webhook deliveries recorded yet.
