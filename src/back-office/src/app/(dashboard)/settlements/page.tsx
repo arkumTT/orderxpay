@@ -4,6 +4,7 @@ import { ApiError } from "@/lib/session";
 import { formatPesewas } from "@/lib/money";
 import { GenerateSettlementForm } from "./generate-form";
 import { SettlementStatusActions } from "./status-actions";
+import { CsvExportButton } from "./csv-export-button";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -59,7 +60,10 @@ export default async function SettlementsPage() {
         </p>
       </div>
 
-      <GenerateSettlementForm merchants={merchants} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <GenerateSettlementForm merchants={merchants} />
+        <CsvExportButton settlements={settlements} />
+      </div>
 
       {settlements.length === 0 ? (
         <p className="text-sm text-neutral-500">No settlements yet.</p>
