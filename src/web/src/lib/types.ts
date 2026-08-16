@@ -42,6 +42,8 @@ export type InvoiceLineItem = {
 export type CheckoutResponse = {
   invoice: Invoice;
   line_items: InvoiceLineItem[];
+  amount_paid_pesewas: number;
+  amount_owed_pesewas: number;
 };
 
 export type InitiatePaymentResponse = {
