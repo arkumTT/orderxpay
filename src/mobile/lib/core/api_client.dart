@@ -345,4 +345,22 @@ class ApiClient {
     );
     return Merchant.fromJson(res as Map<String, dynamic>);
   }
+
+  /// Section 4.4/6.2 — real, persisted preferences; see the doc comment on
+  /// UpdateMerchantWhatsAppSettings (src/api) for what they don't do yet.
+  Future<Merchant> updateWhatsAppSettings(
+    String merchantId, {
+    required bool autoReplyEnabled,
+    String? greetingMessage,
+  }) async {
+    final res = await _send(
+      'PATCH',
+      '/api/v1/app/merchants/$merchantId/whatsapp-settings',
+      body: {
+        'auto_reply_enabled': autoReplyEnabled,
+        'greeting_message': greetingMessage,
+      },
+    );
+    return Merchant.fromJson(res as Map<String, dynamic>);
+  }
 }

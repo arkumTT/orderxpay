@@ -201,6 +201,7 @@ type Querier interface {
 	UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerchantFeeSettingsParams) (Merchant, error)
 	UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantKYCTierParams) (Merchant, error)
 	UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantStatusParams) (Merchant, error)
+	UpdateMerchantWhatsAppSettings(ctx context.Context, arg UpdateMerchantWhatsAppSettingsParams) (Merchant, error)
 	// commission_bps is derived server-side (sum of the three components) so it
 	// can never drift from what the components actually add up to — every other
 	// reader (invoice engine, checkout) still just reads the one blended number.

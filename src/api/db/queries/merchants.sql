@@ -30,3 +30,10 @@ SET service_charge_allocation = $2,
     payout_fee_absorption = $4
 WHERE id = $1
 RETURNING *;
+
+-- name: UpdateMerchantWhatsAppSettings :one
+UPDATE merchants
+SET whatsapp_auto_reply_enabled = $2,
+    whatsapp_greeting_message = $3
+WHERE id = $1
+RETURNING *;
