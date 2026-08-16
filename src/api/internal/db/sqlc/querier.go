@@ -112,6 +112,10 @@ type Querier interface {
 	// PASETO token payload at login time.
 	GetUserPermissionKeys(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	GrantUserPermission(ctx context.Context, arg GrantUserPermissionParams) error
+	// Merchant-app side of the admin-maintained catalog (Section 4.11/9.4) —
+	// only what's actually active, unlike the admin list above which needs to
+	// see inactive/retired entries too for management.
+	ListActiveDeliveryProviders(ctx context.Context) ([]DeliveryProvider, error)
 	// Section 7.9 compliance log view. Joins to users for a display name/email
 	// when actor_type = 'user' — 'system'-actor entries (webhook/reconciliation
 	// writes) have no row to join and are left as actor_name = NULL.

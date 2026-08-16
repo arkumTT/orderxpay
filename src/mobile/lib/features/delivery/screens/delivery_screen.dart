@@ -6,10 +6,12 @@ import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
 
-/// Section 4.11 / 7.3: the merchant's own delivery contacts (Tier 1 — can be
-/// more than one rider, each shown as its own card) + verified third-party
-/// providers (Tier 2). What gets configured here is what shows up in New
-/// Order's "Add Delivery" sheet.
+/// Section 4.11 / 7.3 / 9.4: the merchant's own delivery contacts (Tier 1 —
+/// can be more than one rider, each shown as its own card) + verified
+/// third-party providers (Tier 2 — Bolt/Uber/Yango etc. from the
+/// admin-maintained catalog, toggled on/off, plus room for one-off
+/// providers not in that catalog). What gets configured here is what shows
+/// up in New Order's "Add Delivery" sheet.
 class DeliveryScreen extends StatefulWidget {
   const DeliveryScreen({super.key});
 
@@ -17,19 +19,67 @@ class DeliveryScreen extends StatefulWidget {
   State<DeliveryScreen> createState() => _DeliveryScreenState();
 }
 
+class _DeliveryData {
+  _DeliveryData({required this.options, required this.catalog});
+  final List<DeliveryOption> options;
+  final List<DeliveryProvider> catalog;
+}
+
 class _DeliveryScreenState extends State<DeliveryScreen> {
   final _api = ApiClient();
-  late Future<List<DeliveryOption>> _future;
+  late Future<_DeliveryData> _future;
+  final Set<String> _pendingProviderKeys = {};
 
   @override
   void initState() {
     super.initState();
-    _future = _api.listDeliveryOptions(Session.instance.merchantId!);
+    _future = _load();
+  }
+
+  Future<_DeliveryData> _load() async {
+    final merchantId = Session.instance.merchantId!;
+    final results = await Future.wait([
+      _api.listDeliveryOptions(merchantId),
+      _api.listDeliveryProviders(merchantId),
+    ]);
+    return _DeliveryData(
+      options: results[0] as List<DeliveryOption>,
+      catalog: results[1] as List<DeliveryProvider>,
+    );
   }
 
   Future<void> _refresh() async {
-    setState(() => _future = _api.listDeliveryOptions(Session.instance.merchantId!));
+    setState(() => _future = _load());
     await _future;
+  }
+
+  Future<void> _toggleCatalogProvider(
+    DeliveryProvider provider, {
+    required bool enable,
+    DeliveryOption? existing,
+  }) async {
+    setState(() => _pendingProviderKeys.add(provider.key));
+    try {
+      if (enable) {
+        await _api.createDeliveryOption(
+          Session.instance.merchantId!,
+          type: 'verified_provider',
+          contactName: provider.name,
+          providerKey: provider.key,
+          deepLinkTemplate: provider.deepLinkTemplate,
+          feeHandlingDefault: 'external',
+        );
+      } else if (existing != null) {
+        await _api.setDeliveryOptionStatus(Session.instance.merchantId!, existing.id, 'inactive');
+      }
+      await _refresh();
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _pendingProviderKeys.remove(provider.key));
+    }
   }
 
   Future<void> _addOption(String type) async {
@@ -62,11 +112,18 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                 isContact ? 'Add Delivery Contact' : 'Add Delivery Provider',
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
+              if (!isContact) ...[
+                const SizedBox(height: 4),
+                const Text(
+                  "For a provider not already listed above.",
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+              ],
               const SizedBox(height: 16),
               OxpField(
                 label: isContact ? 'Contact name' : 'Provider name',
                 controller: nameController,
-                hintText: isContact ? 'Kojo — rider' : 'Bolt Send',
+                hintText: isContact ? 'Kojo — rider' : 'Glovo',
               ),
               const SizedBox(height: 12),
               OxpField(
@@ -129,15 +186,24 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
       appBar: AppBar(title: const Text('Delivery Settings')),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: FutureBuilder<List<DeliveryOption>>(
+        child: FutureBuilder<_DeliveryData>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const Center(child: CircularProgressIndicator());
             }
-            final options = snapshot.data ?? [];
-            final contacts = options.where((o) => o.type == 'own_contact').toList();
-            final providers = options.where((o) => o.type == 'verified_provider').toList();
+            final data = snapshot.data ?? _DeliveryData(options: const [], catalog: const []);
+            final contacts = data.options.where((o) => o.type == 'own_contact').toList();
+            final providerOptions = data.options.where((o) => o.type == 'verified_provider').toList();
+            final catalogKeys = data.catalog.map((p) => p.key).toSet();
+            final customProviders = providerOptions.where((o) => !catalogKeys.contains(o.providerKey)).toList();
+
+            DeliveryOption? enabledOptionFor(String providerKey) {
+              for (final opt in providerOptions) {
+                if (opt.providerKey == providerKey && opt.status == 'active') return opt;
+              }
+              return null;
+            }
 
             return ListView(
               padding: const EdgeInsets.all(AppSpace.xl),
@@ -181,16 +247,30 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 10),
-                if (providers.isEmpty)
+                if (data.catalog.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: Text(
-                      'No third-party providers added yet.',
+                      'No verified providers configured on the platform yet.',
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
                   )
                 else
-                  for (final opt in providers) _DeliveryOptionCard(opt),
+                  for (final provider in data.catalog)
+                    _CatalogProviderRow(
+                      provider: provider,
+                      enabled: enabledOptionFor(provider.key) != null,
+                      loading: _pendingProviderKeys.contains(provider.key),
+                      onChanged: (v) => _toggleCatalogProvider(
+                        provider,
+                        enable: v,
+                        existing: enabledOptionFor(provider.key),
+                      ),
+                    ),
+                if (customProviders.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  for (final opt in customProviders) _DeliveryOptionCard(opt),
+                ],
                 const SizedBox(height: 8),
                 OxpButton(
                   label: '+ Add Provider',
@@ -200,6 +280,58 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogProviderRow extends StatelessWidget {
+  const _CatalogProviderRow({
+    required this.provider,
+    required this.enabled,
+    required this.loading,
+    required this.onChanged,
+  });
+
+  final DeliveryProvider provider;
+  final bool enabled;
+  final bool loading;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: OxpCard(
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(provider.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Verified delivery provider',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            if (loading)
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Switch(
+                value: enabled,
+                activeTrackColor: AppColors.statusPaid,
+                onChanged: onChanged,
+              ),
+          ],
         ),
       ),
     );

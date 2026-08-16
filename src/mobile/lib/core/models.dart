@@ -288,6 +288,7 @@ class DeliveryOption {
     required this.type,
     required this.contactName,
     required this.contactPhone,
+    required this.providerKey,
     required this.feeHandlingDefault,
     required this.status,
   });
@@ -296,6 +297,7 @@ class DeliveryOption {
   final String type; // own_contact | verified_provider
   final String? contactName;
   final String? contactPhone;
+  final String? providerKey; // set when type == verified_provider and drawn from the catalog
   final String feeHandlingDefault; // bundled | external
   final String status;
 
@@ -304,7 +306,27 @@ class DeliveryOption {
     type: _str(j['type']),
     contactName: _strOrNull(j['contact_name']),
     contactPhone: _strOrNull(j['contact_phone']),
+    providerKey: _strOrNull(j['provider_key']),
     feeHandlingDefault: _str(j['fee_handling_default']),
     status: _str(j['status']),
+  );
+}
+
+/// Section 4.11/9.4: the admin-maintained catalog of verified delivery
+/// providers (Bolt, Uber, Yango, ...) — the merchant-app side just reads
+/// it to offer pre-populated toggles instead of merchants typing names in.
+class DeliveryProvider {
+  DeliveryProvider({required this.id, required this.key, required this.name, required this.deepLinkTemplate});
+
+  final String id;
+  final String key;
+  final String name;
+  final String deepLinkTemplate;
+
+  factory DeliveryProvider.fromJson(Map<String, dynamic> j) => DeliveryProvider(
+    id: _str(j['id']),
+    key: _str(j['key']),
+    name: _str(j['name']),
+    deepLinkTemplate: _str(j['deep_link_template']),
   );
 }
