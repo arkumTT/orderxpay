@@ -54,6 +54,42 @@ func (q *Queries) DeleteDeliveryProvider(ctx context.Context, id pgtype.UUID) er
 	return err
 }
 
+const listActiveDeliveryProviders = `-- name: ListActiveDeliveryProviders :many
+SELECT id, key, name, deep_link_template, status, notes, created_at, updated_at FROM delivery_providers WHERE status = 'active' ORDER BY name
+`
+
+// Merchant-app side of the admin-maintained catalog (Section 4.11/9.4) —
+// only what's actually active, unlike the admin list above which needs to
+// see inactive/retired entries too for management.
+func (q *Queries) ListActiveDeliveryProviders(ctx context.Context) ([]DeliveryProvider, error) {
+	rows, err := q.db.Query(ctx, listActiveDeliveryProviders)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeliveryProvider{}
+	for rows.Next() {
+		var i DeliveryProvider
+		if err := rows.Scan(
+			&i.ID,
+			&i.Key,
+			&i.Name,
+			&i.DeepLinkTemplate,
+			&i.Status,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDeliveryProviders = `-- name: ListDeliveryProviders :many
 SELECT id, key, name, deep_link_template, status, notes, created_at, updated_at FROM delivery_providers ORDER BY name
 `

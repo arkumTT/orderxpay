@@ -262,6 +262,8 @@ class ApiClient {
     required String type,
     String? contactName,
     String? contactPhone,
+    String? providerKey,
+    String? deepLinkTemplate,
     String feeHandlingDefault = 'external',
   }) async {
     final res = await _send(
@@ -271,10 +273,26 @@ class ApiClient {
         'type': type,
         'contact_name': contactName ?? '',
         'contact_phone': contactPhone ?? '',
+        if (providerKey != null) 'provider_key': providerKey,
+        if (deepLinkTemplate != null) 'deep_link_template': deepLinkTemplate,
         'fee_handling_default': feeHandlingDefault,
       },
     );
     return DeliveryOption.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<void> setDeliveryOptionStatus(String merchantId, String optionId, String status) => _send(
+    'PATCH',
+    '/api/v1/app/merchants/$merchantId/delivery-options/$optionId',
+    body: {'status': status},
+  );
+
+  /// Section 4.11/9.4: the admin-maintained catalog (Bolt, Uber, Yango,
+  /// ...) — what the Delivery Settings screen offers as pre-populated
+  /// toggles under "Third-Party Delivery Providers."
+  Future<List<DeliveryProvider>> listDeliveryProviders(String merchantId) async {
+    final res = await _send('GET', '/api/v1/app/merchants/$merchantId/delivery-providers');
+    return (res as List).map((e) => DeliveryProvider.fromJson(e)).toList();
   }
 
   Future<List<Map<String, dynamic>>> listStaff(String merchantId) async {

@@ -163,6 +163,18 @@ func (h *Handler) ListDeliveryProviders(c *fiber.Ctx) error {
 	return c.JSON(providers)
 }
 
+// ListActiveDeliveryProviders is the merchant-app side of the same catalog
+// (Section 4.11/9.4) — only active entries, so the Delivery Settings screen
+// can offer Bolt/Uber/Yango etc. as pre-populated toggles instead of
+// merchants typing provider names in by hand.
+func (h *Handler) ListActiveDeliveryProviders(c *fiber.Ctx) error {
+	providers, err := h.Queries.ListActiveDeliveryProviders(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list delivery providers"})
+	}
+	return c.JSON(providers)
+}
+
 type deliveryProviderRequest struct {
 	Key              string `json:"key"`
 	Name             string `json:"name"`
