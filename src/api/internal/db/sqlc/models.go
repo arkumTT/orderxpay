@@ -90,12 +90,15 @@ type FeatureFlagMerchant struct {
 }
 
 type FeeRule struct {
-	ID             pgtype.UUID        `json:"id"`
-	MerchantID     pgtype.UUID        `json:"merchant_id"`
-	CommissionBps  int32              `json:"commission_bps"`
-	AllocationType string             `json:"allocation_type"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID               pgtype.UUID        `json:"id"`
+	MerchantID       pgtype.UUID        `json:"merchant_id"`
+	CommissionBps    int32              `json:"commission_bps"`
+	AllocationType   string             `json:"allocation_type"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	CollectionFeeBps int32              `json:"collection_fee_bps"`
+	PayoutFeeBps     int32              `json:"payout_fee_bps"`
+	MarginBps        int32              `json:"margin_bps"`
 }
 
 type Integration struct {
@@ -197,6 +200,7 @@ type Merchant struct {
 	PayoutMinThresholdPesewas int64              `json:"payout_min_threshold_pesewas"`
 	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+	PayoutFeeAbsorption       string             `json:"payout_fee_absorption"`
 }
 
 type MerchantNote struct {
