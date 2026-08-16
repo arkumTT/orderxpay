@@ -41,6 +41,11 @@ type initiatePaymentRequest struct {
 	// page, and the real method is corrected from the channel Paystack
 	// reports back at settlement time (see paystackChannelToMethod).
 	PreferredMethod string `json:"preferred_method"`
+	// AmountPesewas lets the customer pay a deposit rather than the full
+	// remaining balance (Section 4.5: "partial payment support — deposit
+	// now, balance later"). Zero/omitted means "pay the full amount owed",
+	// preserving the old default for callers that don't send it.
+	AmountPesewas int64 `json:"amount_pesewas"`
 }
 
 // InitiateCheckoutPayment starts a Paystack transaction for the still-owed
@@ -80,6 +85,14 @@ func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
 		return badRequest(c, "invoice has no remaining balance")
 	}
 
+	chargeAmount := amountOwed
+	if req.AmountPesewas > 0 {
+		if req.AmountPesewas > amountOwed {
+			return badRequest(c, "amount_pesewas cannot exceed the remaining balance")
+		}
+		chargeAmount = req.AmountPesewas
+	}
+
 	pspReference, err := generatePaymentReference(invoice.Reference)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate payment reference"})
@@ -87,7 +100,7 @@ func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
 
 	result, err := pspClient.InitializeTransaction(c.Context(), psp.InitializeParams{
 		Email:         syntheticCustomerEmail(invoice.CustomerContact),
-		AmountPesewas: amountOwed,
+		AmountPesewas: chargeAmount,
 		Currency:      "GHS",
 		Reference:     pspReference,
 		CallbackURL:   fmt.Sprintf("%s/checkout/%s", h.WebBaseURL, invoice.Reference),
@@ -101,7 +114,7 @@ func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
 		InvoiceID:     invoice.ID,
 		PspReference:  pspReference,
 		Method:        method,
-		AmountPesewas: amountOwed,
+		AmountPesewas: chargeAmount,
 		Status:        "pending",
 	}); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record payment attempt"})
@@ -314,15 +327,25 @@ func (h *Handler) loadPayableInvoice(ctx context.Context, reference string) (db.
 }
 
 func (h *Handler) amountOwedPesewas(ctx context.Context, invoice db.Invoice) (int64, error) {
-	totalPaid, err := h.Queries.SumSuccessfulPaymentsByInvoice(ctx, invoice.ID)
+	_, owed, err := h.paymentProgress(ctx, invoice)
+	return owed, err
+}
+
+// paymentProgress is how much of an invoice has been collected across every
+// successful payment attempt so far, and how much is still owed — the same
+// running-sum logic creditSuccessfulPayment uses to decide partially_paid vs
+// paid, exposed here so the checkout page can show the customer the real
+// remaining balance rather than the invoice's full total_pesewas.
+func (h *Handler) paymentProgress(ctx context.Context, invoice db.Invoice) (paidPesewas, owedPesewas int64, err error) {
+	paidPesewas, err = h.Queries.SumSuccessfulPaymentsByInvoice(ctx, invoice.ID)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	owed := invoice.TotalPesewas - totalPaid
-	if owed < 0 {
-		owed = 0
+	owedPesewas = invoice.TotalPesewas - paidPesewas
+	if owedPesewas < 0 {
+		owedPesewas = 0
 	}
-	return owed, nil
+	return paidPesewas, owedPesewas, nil
 }
 
 // renderCheckout re-serves the same shape as GetInvoiceByReference so the
@@ -336,7 +359,16 @@ func (h *Handler) renderCheckout(c *fiber.Ctx, reference string) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice line items"})
 	}
-	return c.JSON(fiber.Map{"invoice": invoice, "line_items": lineItems})
+	paid, owed, err := h.paymentProgress(c.Context(), invoice)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to compute amount owed"})
+	}
+	return c.JSON(fiber.Map{
+		"invoice":             invoice,
+		"line_items":          lineItems,
+		"amount_paid_pesewas": paid,
+		"amount_owed_pesewas": owed,
+	})
 }
 
 const paymentReferenceAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"

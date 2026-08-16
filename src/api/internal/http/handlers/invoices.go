@@ -36,7 +36,17 @@ func (h *Handler) GetInvoiceByReference(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice line items"})
 	}
 
-	return c.JSON(fiber.Map{"invoice": invoice, "line_items": lineItems})
+	paid, owed, err := h.paymentProgress(c.Context(), invoice)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to compute amount owed"})
+	}
+
+	return c.JSON(fiber.Map{
+		"invoice":             invoice,
+		"line_items":          lineItems,
+		"amount_paid_pesewas": paid,
+		"amount_owed_pesewas": owed,
+	})
 }
 
 func (h *Handler) ListInvoicesByMerchant(c *fiber.Ctx) error {

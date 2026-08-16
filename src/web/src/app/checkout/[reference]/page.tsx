@@ -34,12 +34,7 @@ export default async function CheckoutPage(
     throw err;
   }
 
-  const { invoice, line_items } = data;
-  // The API always computes the exact amount still owed server-side when a
-  // payment is initiated (it accounts for prior partial payments) — this is
-  // only a display figure, so "full total" is the right default everywhere
-  // except the fully-paid state.
-  const amountOwedPesewas = invoice.status === "paid" ? 0 : invoice.total_pesewas;
+  const { invoice, line_items, amount_paid_pesewas, amount_owed_pesewas } = data;
   const canPay = !TERMINAL_STATUSES.has(invoice.status) && invoice.status !== "paid";
 
   return (
@@ -86,8 +81,8 @@ export default async function CheckoutPage(
 
         {invoice.status === "partially_paid" && (
           <p className="mt-6 text-center text-sm text-neutral-500">
-            A partial payment has been received. Pay the remaining balance
-            below.
+            {formatPesewas(amount_paid_pesewas)} received so far — pay the
+            remaining {formatPesewas(amount_owed_pesewas)} below.
           </p>
         )}
 
@@ -100,7 +95,7 @@ export default async function CheckoutPage(
         {canPay && (
           <PaymentPanel
             reference={reference}
-            amountOwedPesewas={amountOwedPesewas}
+            amountOwedPesewas={amount_owed_pesewas}
           />
         )}
       </div>
