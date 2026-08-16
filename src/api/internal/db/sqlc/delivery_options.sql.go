@@ -115,16 +115,23 @@ func (q *Queries) ListDeliveryOptionsByMerchant(ctx context.Context, merchantID 
 	return items, nil
 }
 
-const setDeliveryOptionStatus = `-- name: SetDeliveryOptionStatus :exec
-UPDATE delivery_options SET status = $2 WHERE id = $1
+const setDeliveryOptionStatus = `-- name: SetDeliveryOptionStatus :execrows
+UPDATE delivery_options SET status = $2 WHERE id = $1 AND merchant_id = $3
 `
 
 type SetDeliveryOptionStatusParams struct {
-	ID     pgtype.UUID `json:"id"`
-	Status string      `json:"status"`
+	ID         pgtype.UUID `json:"id"`
+	Status     string      `json:"status"`
+	MerchantID pgtype.UUID `json:"merchant_id"`
 }
 
-func (q *Queries) SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) error {
-	_, err := q.db.Exec(ctx, setDeliveryOptionStatus, arg.ID, arg.Status)
-	return err
+// merchant_id in the WHERE clause — the route path only carries the
+// delivery option's own id, not a merchant id, so ownership has to be
+// enforced here against the caller's token instead.
+func (q *Queries) SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setDeliveryOptionStatus, arg.ID, arg.Status, arg.MerchantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

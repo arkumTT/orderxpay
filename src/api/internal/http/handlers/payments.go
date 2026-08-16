@@ -18,10 +18,27 @@ import (
 	"github.com/orderxpay/api/internal/psp"
 )
 
+// ListPaymentsByInvoice is nested under /merchants/:id, so RequireOwnMerchant
+// already guarantees :id is the caller's own merchant — but that alone
+// doesn't prove :invoiceId belongs to that merchant, so it's checked here.
 func (h *Handler) ListPaymentsByInvoice(c *fiber.Ctx) error {
-	invoiceID, err := parseUUIDParam(c, "id")
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+	invoiceID, err := parseUUIDParam(c, "invoiceId")
 	if err != nil {
 		return badRequest(c, "invalid invoice id")
+	}
+
+	invoice, err := h.Queries.GetInvoice(c.Context(), invoiceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice"})
+	}
+	if invoice.MerchantID != merchantID {
+		return notFound(c)
 	}
 
 	payments, err := h.Queries.ListPaymentsByInvoice(c.Context(), invoiceID)

@@ -72,6 +72,10 @@ type setDeliveryOptionStatusRequest struct {
 }
 
 func (h *Handler) SetDeliveryOptionStatus(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
 	optionID, err := parseUUIDParam(c, "optionId")
 	if err != nil {
 		return badRequest(c, "invalid delivery option id")
@@ -85,11 +89,16 @@ func (h *Handler) SetDeliveryOptionStatus(c *fiber.Ctx) error {
 		return badRequest(c, "status must be active or inactive")
 	}
 
-	if err := h.Queries.SetDeliveryOptionStatus(c.Context(), db.SetDeliveryOptionStatusParams{
-		ID:     optionID,
-		Status: req.Status,
-	}); err != nil {
+	rows, err := h.Queries.SetDeliveryOptionStatus(c.Context(), db.SetDeliveryOptionStatusParams{
+		ID:         optionID,
+		Status:     req.Status,
+		MerchantID: merchantID,
+	})
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update delivery option"})
+	}
+	if rows == 0 {
+		return notFound(c)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }

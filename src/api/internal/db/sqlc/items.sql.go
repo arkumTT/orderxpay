@@ -11,13 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const archiveItem = `-- name: ArchiveItem :exec
-UPDATE items SET archived_at = now() WHERE id = $1
+const archiveItem = `-- name: ArchiveItem :execrows
+UPDATE items SET archived_at = now() WHERE id = $1 AND merchant_id = $2
 `
 
-func (q *Queries) ArchiveItem(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, archiveItem, id)
-	return err
+type ArchiveItemParams struct {
+	ID         pgtype.UUID `json:"id"`
+	MerchantID pgtype.UUID `json:"merchant_id"`
+}
+
+func (q *Queries) ArchiveItem(ctx context.Context, arg ArchiveItemParams) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveItem, arg.ID, arg.MerchantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createItem = `-- name: CreateItem :one
@@ -64,8 +72,39 @@ const getItem = `-- name: GetItem :one
 SELECT id, merchant_id, name, unit_price_pesewas, qty_unit, image_url, availability_status, archived_at, created_at, updated_at FROM items WHERE id = $1
 `
 
+// Single-param, unscoped by merchant — used internally by the invoice
+// engine (resolveLineItems), which does its own explicit ownership compare
+// against the item it fetches. Route handlers should use
+// GetItemOwnedByMerchant instead.
 func (q *Queries) GetItem(ctx context.Context, id pgtype.UUID) (Item, error) {
 	row := q.db.QueryRow(ctx, getItem, id)
+	var i Item
+	err := row.Scan(
+		&i.ID,
+		&i.MerchantID,
+		&i.Name,
+		&i.UnitPricePesewas,
+		&i.QtyUnit,
+		&i.ImageUrl,
+		&i.AvailabilityStatus,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getItemOwnedByMerchant = `-- name: GetItemOwnedByMerchant :one
+SELECT id, merchant_id, name, unit_price_pesewas, qty_unit, image_url, availability_status, archived_at, created_at, updated_at FROM items WHERE id = $1 AND merchant_id = $2
+`
+
+type GetItemOwnedByMerchantParams struct {
+	ID         pgtype.UUID `json:"id"`
+	MerchantID pgtype.UUID `json:"merchant_id"`
+}
+
+func (q *Queries) GetItemOwnedByMerchant(ctx context.Context, arg GetItemOwnedByMerchantParams) (Item, error) {
+	row := q.db.QueryRow(ctx, getItemOwnedByMerchant, arg.ID, arg.MerchantID)
 	var i Item
 	err := row.Scan(
 		&i.ID,
@@ -126,7 +165,7 @@ SET name = $2,
     qty_unit = $4,
     image_url = $5,
     availability_status = $6
-WHERE id = $1
+WHERE id = $1 AND merchant_id = $7
 RETURNING id, merchant_id, name, unit_price_pesewas, qty_unit, image_url, availability_status, archived_at, created_at, updated_at
 `
 
@@ -137,6 +176,7 @@ type UpdateItemParams struct {
 	QtyUnit            pgtype.Text `json:"qty_unit"`
 	ImageUrl           pgtype.Text `json:"image_url"`
 	AvailabilityStatus string      `json:"availability_status"`
+	MerchantID         pgtype.UUID `json:"merchant_id"`
 }
 
 func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (Item, error) {
@@ -147,6 +187,7 @@ func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (Item, e
 		arg.QtyUnit,
 		arg.ImageUrl,
 		arg.AvailabilityStatus,
+		arg.MerchantID,
 	)
 	var i Item
 	err := row.Scan(

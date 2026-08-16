@@ -67,12 +67,16 @@ func (h *Handler) CreateItem(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetItem(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
 	itemID, err := parseUUIDParam(c, "itemId")
 	if err != nil {
 		return badRequest(c, "invalid item id")
 	}
 
-	item, err := h.Queries.GetItem(c.Context(), itemID)
+	item, err := h.Queries.GetItemOwnedByMerchant(c.Context(), db.GetItemOwnedByMerchantParams{ID: itemID, MerchantID: merchantID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return notFound(c)
 	} else if err != nil {
@@ -95,6 +99,10 @@ func (h *Handler) ListItems(c *fiber.Ctx) error {
 }
 
 func (h *Handler) UpdateItem(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
 	itemID, err := parseUUIDParam(c, "itemId")
 	if err != nil {
 		return badRequest(c, "invalid item id")
@@ -119,6 +127,7 @@ func (h *Handler) UpdateItem(c *fiber.Ctx) error {
 		QtyUnit:            textOrNull(req.QtyUnit),
 		ImageUrl:           textOrNull(req.ImageURL),
 		AvailabilityStatus: availability,
+		MerchantID:         merchantID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return notFound(c)
@@ -130,12 +139,20 @@ func (h *Handler) UpdateItem(c *fiber.Ctx) error {
 
 // ArchiveItem is a soft-delete (Section 4.2: "archive vs. delete").
 func (h *Handler) ArchiveItem(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
 	itemID, err := parseUUIDParam(c, "itemId")
 	if err != nil {
 		return badRequest(c, "invalid item id")
 	}
-	if err := h.Queries.ArchiveItem(c.Context(), itemID); err != nil {
+	rows, err := h.Queries.ArchiveItem(c.Context(), db.ArchiveItemParams{ID: itemID, MerchantID: merchantID})
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to archive item"})
+	}
+	if rows == 0 {
+		return notFound(c)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
