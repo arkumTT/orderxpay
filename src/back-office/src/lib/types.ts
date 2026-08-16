@@ -136,10 +136,16 @@ export type Role = {
   permissions: Permission[];
 };
 
+// Section 4.8 (revised): commission_bps is the blended rate the invoice
+// engine and checkout actually read — always equal to the sum of the three
+// components below, enforced server-side, never posted directly by this app.
 export type FeeRule = {
   id: string;
   merchant_id: string | null;
   commission_bps: number;
+  collection_fee_bps: number;
+  payout_fee_bps: number;
+  margin_bps: number;
   allocation_type: "customer_only" | "merchant_only" | "split";
   created_at: string;
   updated_at: string;
@@ -250,6 +256,7 @@ export type Merchant = {
   status: "pending" | "active" | "restricted" | "suspended";
   service_charge_allocation: "customer_only" | "merchant_only" | "split";
   service_charge_split_bps: number | null;
+  payout_fee_absorption: "merchant_absorbed" | "blended_into_rate";
   payout_account_type: "momo" | "bank" | null;
   payout_account_ref: string | null;
   payout_schedule: "on_demand" | "scheduled";

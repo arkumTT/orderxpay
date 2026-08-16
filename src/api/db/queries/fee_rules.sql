@@ -5,18 +5,27 @@ SELECT * FROM fee_rules WHERE merchant_id IS NULL;
 SELECT * FROM fee_rules WHERE merchant_id = $1;
 
 -- name: UpsertGlobalFeeRule :one
-INSERT INTO fee_rules (merchant_id, commission_bps, allocation_type)
-VALUES (NULL, $1, $2)
+-- commission_bps is derived server-side (sum of the three components) so it
+-- can never drift from what the components actually add up to — every other
+-- reader (invoice engine, checkout) still just reads the one blended number.
+INSERT INTO fee_rules (merchant_id, collection_fee_bps, payout_fee_bps, margin_bps, commission_bps, allocation_type)
+VALUES (NULL, $1, $2, $3, $1::int + $2::int + $3::int, $4)
 ON CONFLICT ((1)) WHERE merchant_id IS NULL DO UPDATE
-  SET commission_bps = EXCLUDED.commission_bps,
+  SET collection_fee_bps = EXCLUDED.collection_fee_bps,
+      payout_fee_bps = EXCLUDED.payout_fee_bps,
+      margin_bps = EXCLUDED.margin_bps,
+      commission_bps = EXCLUDED.commission_bps,
       allocation_type = EXCLUDED.allocation_type
 RETURNING *;
 
 -- name: UpsertMerchantFeeRule :one
-INSERT INTO fee_rules (merchant_id, commission_bps, allocation_type)
-VALUES ($1, $2, $3)
+INSERT INTO fee_rules (merchant_id, collection_fee_bps, payout_fee_bps, margin_bps, commission_bps, allocation_type)
+VALUES ($1, $2, $3, $4, $2::int + $3::int + $4::int, $5)
 ON CONFLICT (merchant_id) WHERE merchant_id IS NOT NULL DO UPDATE
-  SET commission_bps = EXCLUDED.commission_bps,
+  SET collection_fee_bps = EXCLUDED.collection_fee_bps,
+      payout_fee_bps = EXCLUDED.payout_fee_bps,
+      margin_bps = EXCLUDED.margin_bps,
+      commission_bps = EXCLUDED.commission_bps,
       allocation_type = EXCLUDED.allocation_type
 RETURNING *;
 

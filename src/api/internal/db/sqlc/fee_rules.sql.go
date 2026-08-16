@@ -21,7 +21,7 @@ func (q *Queries) DeleteMerchantFeeRule(ctx context.Context, merchantID pgtype.U
 }
 
 const getFeeRuleByMerchant = `-- name: GetFeeRuleByMerchant :one
-SELECT id, merchant_id, commission_bps, allocation_type, created_at, updated_at FROM fee_rules WHERE merchant_id = $1
+SELECT id, merchant_id, commission_bps, allocation_type, created_at, updated_at, collection_fee_bps, payout_fee_bps, margin_bps FROM fee_rules WHERE merchant_id = $1
 `
 
 func (q *Queries) GetFeeRuleByMerchant(ctx context.Context, merchantID pgtype.UUID) (FeeRule, error) {
@@ -34,12 +34,15 @@ func (q *Queries) GetFeeRuleByMerchant(ctx context.Context, merchantID pgtype.UU
 		&i.AllocationType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CollectionFeeBps,
+		&i.PayoutFeeBps,
+		&i.MarginBps,
 	)
 	return i, err
 }
 
 const getGlobalFeeRule = `-- name: GetGlobalFeeRule :one
-SELECT id, merchant_id, commission_bps, allocation_type, created_at, updated_at FROM fee_rules WHERE merchant_id IS NULL
+SELECT id, merchant_id, commission_bps, allocation_type, created_at, updated_at, collection_fee_bps, payout_fee_bps, margin_bps FROM fee_rules WHERE merchant_id IS NULL
 `
 
 func (q *Queries) GetGlobalFeeRule(ctx context.Context) (FeeRule, error) {
@@ -52,12 +55,15 @@ func (q *Queries) GetGlobalFeeRule(ctx context.Context) (FeeRule, error) {
 		&i.AllocationType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CollectionFeeBps,
+		&i.PayoutFeeBps,
+		&i.MarginBps,
 	)
 	return i, err
 }
 
 const listMerchantFeeRuleOverrides = `-- name: ListMerchantFeeRuleOverrides :many
-SELECT f.id, f.merchant_id, f.commission_bps, f.allocation_type, f.created_at, f.updated_at, m.business_name AS merchant_business_name
+SELECT f.id, f.merchant_id, f.commission_bps, f.allocation_type, f.created_at, f.updated_at, f.collection_fee_bps, f.payout_fee_bps, f.margin_bps, m.business_name AS merchant_business_name
 FROM fee_rules f
 JOIN merchants m ON m.id = f.merchant_id
 WHERE f.merchant_id IS NOT NULL
@@ -71,6 +77,9 @@ type ListMerchantFeeRuleOverridesRow struct {
 	AllocationType       string             `json:"allocation_type"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	CollectionFeeBps     int32              `json:"collection_fee_bps"`
+	PayoutFeeBps         int32              `json:"payout_fee_bps"`
+	MarginBps            int32              `json:"margin_bps"`
 	MerchantBusinessName string             `json:"merchant_business_name"`
 }
 
@@ -90,6 +99,9 @@ func (q *Queries) ListMerchantFeeRuleOverrides(ctx context.Context) ([]ListMerch
 			&i.AllocationType,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CollectionFeeBps,
+			&i.PayoutFeeBps,
+			&i.MarginBps,
 			&i.MerchantBusinessName,
 		); err != nil {
 			return nil, err
@@ -103,21 +115,34 @@ func (q *Queries) ListMerchantFeeRuleOverrides(ctx context.Context) ([]ListMerch
 }
 
 const upsertGlobalFeeRule = `-- name: UpsertGlobalFeeRule :one
-INSERT INTO fee_rules (merchant_id, commission_bps, allocation_type)
-VALUES (NULL, $1, $2)
+INSERT INTO fee_rules (merchant_id, collection_fee_bps, payout_fee_bps, margin_bps, commission_bps, allocation_type)
+VALUES (NULL, $1, $2, $3, $1::int + $2::int + $3::int, $4)
 ON CONFLICT ((1)) WHERE merchant_id IS NULL DO UPDATE
-  SET commission_bps = EXCLUDED.commission_bps,
+  SET collection_fee_bps = EXCLUDED.collection_fee_bps,
+      payout_fee_bps = EXCLUDED.payout_fee_bps,
+      margin_bps = EXCLUDED.margin_bps,
+      commission_bps = EXCLUDED.commission_bps,
       allocation_type = EXCLUDED.allocation_type
-RETURNING id, merchant_id, commission_bps, allocation_type, created_at, updated_at
+RETURNING id, merchant_id, commission_bps, allocation_type, created_at, updated_at, collection_fee_bps, payout_fee_bps, margin_bps
 `
 
 type UpsertGlobalFeeRuleParams struct {
-	CommissionBps  int32  `json:"commission_bps"`
-	AllocationType string `json:"allocation_type"`
+	CollectionFeeBps int32  `json:"collection_fee_bps"`
+	PayoutFeeBps     int32  `json:"payout_fee_bps"`
+	MarginBps        int32  `json:"margin_bps"`
+	AllocationType   string `json:"allocation_type"`
 }
 
+// commission_bps is derived server-side (sum of the three components) so it
+// can never drift from what the components actually add up to — every other
+// reader (invoice engine, checkout) still just reads the one blended number.
 func (q *Queries) UpsertGlobalFeeRule(ctx context.Context, arg UpsertGlobalFeeRuleParams) (FeeRule, error) {
-	row := q.db.QueryRow(ctx, upsertGlobalFeeRule, arg.CommissionBps, arg.AllocationType)
+	row := q.db.QueryRow(ctx, upsertGlobalFeeRule,
+		arg.CollectionFeeBps,
+		arg.PayoutFeeBps,
+		arg.MarginBps,
+		arg.AllocationType,
+	)
 	var i FeeRule
 	err := row.Scan(
 		&i.ID,
@@ -126,27 +151,41 @@ func (q *Queries) UpsertGlobalFeeRule(ctx context.Context, arg UpsertGlobalFeeRu
 		&i.AllocationType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CollectionFeeBps,
+		&i.PayoutFeeBps,
+		&i.MarginBps,
 	)
 	return i, err
 }
 
 const upsertMerchantFeeRule = `-- name: UpsertMerchantFeeRule :one
-INSERT INTO fee_rules (merchant_id, commission_bps, allocation_type)
-VALUES ($1, $2, $3)
+INSERT INTO fee_rules (merchant_id, collection_fee_bps, payout_fee_bps, margin_bps, commission_bps, allocation_type)
+VALUES ($1, $2, $3, $4, $2::int + $3::int + $4::int, $5)
 ON CONFLICT (merchant_id) WHERE merchant_id IS NOT NULL DO UPDATE
-  SET commission_bps = EXCLUDED.commission_bps,
+  SET collection_fee_bps = EXCLUDED.collection_fee_bps,
+      payout_fee_bps = EXCLUDED.payout_fee_bps,
+      margin_bps = EXCLUDED.margin_bps,
+      commission_bps = EXCLUDED.commission_bps,
       allocation_type = EXCLUDED.allocation_type
-RETURNING id, merchant_id, commission_bps, allocation_type, created_at, updated_at
+RETURNING id, merchant_id, commission_bps, allocation_type, created_at, updated_at, collection_fee_bps, payout_fee_bps, margin_bps
 `
 
 type UpsertMerchantFeeRuleParams struct {
-	MerchantID     pgtype.UUID `json:"merchant_id"`
-	CommissionBps  int32       `json:"commission_bps"`
-	AllocationType string      `json:"allocation_type"`
+	MerchantID       pgtype.UUID `json:"merchant_id"`
+	CollectionFeeBps int32       `json:"collection_fee_bps"`
+	PayoutFeeBps     int32       `json:"payout_fee_bps"`
+	MarginBps        int32       `json:"margin_bps"`
+	AllocationType   string      `json:"allocation_type"`
 }
 
 func (q *Queries) UpsertMerchantFeeRule(ctx context.Context, arg UpsertMerchantFeeRuleParams) (FeeRule, error) {
-	row := q.db.QueryRow(ctx, upsertMerchantFeeRule, arg.MerchantID, arg.CommissionBps, arg.AllocationType)
+	row := q.db.QueryRow(ctx, upsertMerchantFeeRule,
+		arg.MerchantID,
+		arg.CollectionFeeBps,
+		arg.PayoutFeeBps,
+		arg.MarginBps,
+		arg.AllocationType,
+	)
 	var i FeeRule
 	err := row.Scan(
 		&i.ID,
@@ -155,6 +194,9 @@ func (q *Queries) UpsertMerchantFeeRule(ctx context.Context, arg UpsertMerchantF
 		&i.AllocationType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CollectionFeeBps,
+		&i.PayoutFeeBps,
+		&i.MarginBps,
 	)
 	return i, err
 }
