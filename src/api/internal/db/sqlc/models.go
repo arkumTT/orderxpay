@@ -201,6 +201,8 @@ type Merchant struct {
 	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
 	PayoutFeeAbsorption       string             `json:"payout_fee_absorption"`
+	WhatsappAutoReplyEnabled  bool               `json:"whatsapp_auto_reply_enabled"`
+	WhatsappGreetingMessage   pgtype.Text        `json:"whatsapp_greeting_message"`
 }
 
 type MerchantNote struct {

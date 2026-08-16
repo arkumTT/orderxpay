@@ -17,6 +17,8 @@ class Merchant {
     required this.serviceChargeAllocation,
     required this.serviceChargeSplitBps,
     required this.payoutFeeAbsorption,
+    required this.whatsappAutoReplyEnabled,
+    required this.whatsappGreetingMessage,
   });
 
   final String id;
@@ -28,6 +30,8 @@ class Merchant {
   final String serviceChargeAllocation;
   final int? serviceChargeSplitBps;
   final String payoutFeeAbsorption; // merchant_absorbed | blended_into_rate
+  final bool whatsappAutoReplyEnabled;
+  final String? whatsappGreetingMessage; // null = use the app's generated default
 
   factory Merchant.fromJson(Map<String, dynamic> j) => Merchant(
     id: _str(j['id']),
@@ -41,6 +45,8 @@ class Merchant {
     payoutFeeAbsorption: j['payout_fee_absorption'] == null
         ? 'merchant_absorbed'
         : _str(j['payout_fee_absorption']),
+    whatsappAutoReplyEnabled: j['whatsapp_auto_reply_enabled'] as bool? ?? true,
+    whatsappGreetingMessage: _strOrNull(j['whatsapp_greeting_message']),
   );
 }
 

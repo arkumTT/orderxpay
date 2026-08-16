@@ -14,7 +14,7 @@ import (
 const createMerchant = `-- name: CreateMerchant :one
 INSERT INTO merchants (business_name, category, phone)
 VALUES ($1, $2, $3)
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message
 `
 
 type CreateMerchantParams struct {
@@ -42,12 +42,14 @@ func (q *Queries) CreateMerchant(ctx context.Context, arg CreateMerchantParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PayoutFeeAbsorption,
+		&i.WhatsappAutoReplyEnabled,
+		&i.WhatsappGreetingMessage,
 	)
 	return i, err
 }
 
 const getMerchant = `-- name: GetMerchant :one
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption FROM merchants WHERE id = $1
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message FROM merchants WHERE id = $1
 `
 
 func (q *Queries) GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error) {
@@ -69,12 +71,14 @@ func (q *Queries) GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PayoutFeeAbsorption,
+		&i.WhatsappAutoReplyEnabled,
+		&i.WhatsappGreetingMessage,
 	)
 	return i, err
 }
 
 const getMerchantByPhone = `-- name: GetMerchantByPhone :one
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption FROM merchants WHERE phone = $1
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message FROM merchants WHERE phone = $1
 `
 
 func (q *Queries) GetMerchantByPhone(ctx context.Context, phone string) (Merchant, error) {
@@ -96,12 +100,14 @@ func (q *Queries) GetMerchantByPhone(ctx context.Context, phone string) (Merchan
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PayoutFeeAbsorption,
+		&i.WhatsappAutoReplyEnabled,
+		&i.WhatsappGreetingMessage,
 	)
 	return i, err
 }
 
 const listMerchants = `-- name: ListMerchants :many
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption FROM merchants
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message FROM merchants
 WHERE ($3::text = '' OR status = $3::text)
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -138,6 +144,8 @@ func (q *Queries) ListMerchants(ctx context.Context, arg ListMerchantsParams) ([
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PayoutFeeAbsorption,
+			&i.WhatsappAutoReplyEnabled,
+			&i.WhatsappGreetingMessage,
 		); err != nil {
 			return nil, err
 		}
@@ -155,7 +163,7 @@ SET service_charge_allocation = $2,
     service_charge_split_bps = $3,
     payout_fee_absorption = $4
 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message
 `
 
 type UpdateMerchantFeeSettingsParams struct {
@@ -189,13 +197,15 @@ func (q *Queries) UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerch
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PayoutFeeAbsorption,
+		&i.WhatsappAutoReplyEnabled,
+		&i.WhatsappGreetingMessage,
 	)
 	return i, err
 }
 
 const updateMerchantKYCTier = `-- name: UpdateMerchantKYCTier :one
 UPDATE merchants SET kyc_tier = $2 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message
 `
 
 type UpdateMerchantKYCTierParams struct {
@@ -222,13 +232,15 @@ func (q *Queries) UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantK
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PayoutFeeAbsorption,
+		&i.WhatsappAutoReplyEnabled,
+		&i.WhatsappGreetingMessage,
 	)
 	return i, err
 }
 
 const updateMerchantStatus = `-- name: UpdateMerchantStatus :one
 UPDATE merchants SET status = $2 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message
 `
 
 type UpdateMerchantStatusParams struct {
@@ -255,6 +267,47 @@ func (q *Queries) UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantSt
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PayoutFeeAbsorption,
+		&i.WhatsappAutoReplyEnabled,
+		&i.WhatsappGreetingMessage,
+	)
+	return i, err
+}
+
+const updateMerchantWhatsAppSettings = `-- name: UpdateMerchantWhatsAppSettings :one
+UPDATE merchants
+SET whatsapp_auto_reply_enabled = $2,
+    whatsapp_greeting_message = $3
+WHERE id = $1
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message
+`
+
+type UpdateMerchantWhatsAppSettingsParams struct {
+	ID                       pgtype.UUID `json:"id"`
+	WhatsappAutoReplyEnabled bool        `json:"whatsapp_auto_reply_enabled"`
+	WhatsappGreetingMessage  pgtype.Text `json:"whatsapp_greeting_message"`
+}
+
+func (q *Queries) UpdateMerchantWhatsAppSettings(ctx context.Context, arg UpdateMerchantWhatsAppSettingsParams) (Merchant, error) {
+	row := q.db.QueryRow(ctx, updateMerchantWhatsAppSettings, arg.ID, arg.WhatsappAutoReplyEnabled, arg.WhatsappGreetingMessage)
+	var i Merchant
+	err := row.Scan(
+		&i.ID,
+		&i.BusinessName,
+		&i.Category,
+		&i.Phone,
+		&i.KycTier,
+		&i.Status,
+		&i.ServiceChargeAllocation,
+		&i.ServiceChargeSplitBps,
+		&i.PayoutAccountType,
+		&i.PayoutAccountRef,
+		&i.PayoutSchedule,
+		&i.PayoutMinThresholdPesewas,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PayoutFeeAbsorption,
+		&i.WhatsappAutoReplyEnabled,
+		&i.WhatsappGreetingMessage,
 	)
 	return i, err
 }

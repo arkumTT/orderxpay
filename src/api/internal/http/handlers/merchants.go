@@ -250,3 +250,42 @@ func (h *Handler) UpdateMerchantFeeSettings(c *fiber.Ctx) error {
 	}
 	return c.JSON(merchant)
 }
+
+type updateMerchantWhatsAppSettingsRequest struct {
+	AutoReplyEnabled bool    `json:"auto_reply_enabled"`
+	GreetingMessage  *string `json:"greeting_message"` // null/omitted clears the override — app falls back to its generated default
+}
+
+// UpdateMerchantWhatsAppSettings is the merchant app's own WhatsApp
+// auto-reply preferences (Section 4.4/6.2). These are real, persisted
+// settings, but nothing actually fires on them yet — the WhatsApp Business
+// Solution Provider connection they'd drive isn't built (integrations.
+// provider_key = 'whatsapp_bsp', Section 7.3).
+func (h *Handler) UpdateMerchantWhatsAppSettings(c *fiber.Ctx) error {
+	id, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+
+	var req updateMerchantWhatsAppSettingsRequest
+	if err := c.BodyParser(&req); err != nil {
+		return badRequest(c, "invalid request body")
+	}
+
+	var greeting pgtype.Text
+	if req.GreetingMessage != nil && *req.GreetingMessage != "" {
+		greeting = pgtype.Text{String: *req.GreetingMessage, Valid: true}
+	}
+
+	merchant, err := h.Queries.UpdateMerchantWhatsAppSettings(c.Context(), db.UpdateMerchantWhatsAppSettingsParams{
+		ID:                       id,
+		WhatsappAutoReplyEnabled: req.AutoReplyEnabled,
+		WhatsappGreetingMessage:  greeting,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update whatsapp settings"})
+	}
+	return c.JSON(merchant)
+}
