@@ -6,6 +6,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import 'invoice_detail_screen.dart';
 
 const _filters = ['All', 'Paid', 'Pending', 'Partial', 'Declined'];
 
@@ -139,42 +140,57 @@ class _RecordsScreenState extends State<RecordsScreen> {
                     child: Column(
                       children: [
                         for (var i = 0; i < invoices.length; i++)
-                          Container(
-                            decoration: BoxDecoration(
-                              border: i == 0
-                                  ? null
-                                  : const Border(top: BorderSide(color: AppColors.border)),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                          GestureDetector(
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => InvoiceDetailScreen(invoiceId: invoices[i].id),
+                                ),
+                              );
+                              if (context.mounted) {
+                                setState(() => _future = _load());
+                              }
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: i == 0
+                                    ? null
+                                    : const Border(top: BorderSide(color: AppColors.border)),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          invoices[i].customerContact,
+                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                        ),
+                                        Text(
+                                          invoices[i].reference,
+                                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       Text(
-                                        invoices[i].customerContact,
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                        formatPesewas(invoices[i].totalPesewas),
+                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                                       ),
-                                      Text(
-                                        invoices[i].reference,
-                                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                                      ),
+                                      const SizedBox(height: 5),
+                                      StatusPill.forInvoiceStatus(invoices[i].status),
                                     ],
                                   ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      formatPesewas(invoices[i].totalPesewas),
-                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                                    ),
-                                    const SizedBox(height: 5),
-                                    StatusPill.forInvoiceStatus(invoices[i].status),
-                                  ],
-                                ),
-                              ],
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                                ],
+                              ),
                             ),
                           ),
                       ],

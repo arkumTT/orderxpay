@@ -145,6 +145,14 @@ class ApiClient {
     return (res as List).map((e) => Invoice.fromJson(e)).toList();
   }
 
+  Future<InvoiceDetail> getInvoiceDetail(String merchantId, String invoiceId) async {
+    final res = await _send(
+      'GET',
+      '/api/v1/app/merchants/$merchantId/invoices/$invoiceId',
+    );
+    return InvoiceDetail.fromJson(res as Map<String, dynamic>);
+  }
+
   Future<Invoice> createInvoice(
     String merchantId, {
     required String customerContact,

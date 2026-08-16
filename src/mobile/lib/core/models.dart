@@ -128,6 +128,67 @@ class Invoice {
   );
 }
 
+class PaymentAttempt {
+  PaymentAttempt({
+    required this.id,
+    required this.pspReference,
+    required this.method,
+    required this.amountPesewas,
+    required this.status,
+    required this.refundedAmountPesewas,
+    required this.paidAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String pspReference;
+  final String method; // momo | card | ussd
+  final int amountPesewas;
+  final String status; // pending | success | failed
+  final int refundedAmountPesewas;
+  final DateTime? paidAt;
+  final DateTime createdAt;
+
+  factory PaymentAttempt.fromJson(Map<String, dynamic> j) => PaymentAttempt(
+    id: _str(j['id']),
+    pspReference: _str(j['psp_reference']),
+    method: _str(j['method']),
+    amountPesewas: _int(j['amount_pesewas']),
+    status: _str(j['status']),
+    refundedAmountPesewas: _int(j['refunded_amount_pesewas']),
+    paidAt: j['paid_at'] == null ? null : DateTime.tryParse(_str(j['paid_at'])),
+    createdAt: DateTime.tryParse(_str(j['created_at'])) ?? DateTime.now(),
+  );
+}
+
+class InvoiceDetail {
+  InvoiceDetail({
+    required this.invoice,
+    required this.lineItems,
+    required this.payments,
+    required this.amountPaidPesewas,
+    required this.amountOwedPesewas,
+  });
+
+  final Invoice invoice;
+  final List<InvoiceLineItem> lineItems;
+  final List<PaymentAttempt> payments;
+  final int amountPaidPesewas;
+  final int amountOwedPesewas;
+
+  factory InvoiceDetail.fromJson(Map<String, dynamic> j) => InvoiceDetail(
+    invoice: Invoice.fromJson(j['invoice'] as Map<String, dynamic>),
+    lineItems: (j['line_items'] as List<dynamic>? ?? const [])
+        .map((e) => InvoiceLineItem.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    payments: (j['payments'] as List<dynamic>? ?? const [])
+        .map((e) => PaymentAttempt.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    amountPaidPesewas: _int(j['amount_paid_pesewas']),
+    amountOwedPesewas: _int(j['amount_owed_pesewas']),
+  );
+}
+
 class OrderRequest {
   OrderRequest({
     required this.id,

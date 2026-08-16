@@ -49,6 +49,54 @@ func (h *Handler) GetInvoiceByReference(c *fiber.Ctx) error {
 	})
 }
 
+// GetInvoiceDetail backs the merchant app's Records detail view — nested
+// under /merchants/:id, so RequireOwnMerchant already guarantees :id is the
+// caller's own merchant; this additionally checks :invoiceId actually
+// belongs to it. Includes payment progress (paid vs. owed) and every
+// payment attempt, so a partially-paid invoice shows real numbers rather
+// than just the original total.
+func (h *Handler) GetInvoiceDetail(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+	invoiceID, err := parseUUIDParam(c, "invoiceId")
+	if err != nil {
+		return badRequest(c, "invalid invoice id")
+	}
+
+	invoice, err := h.Queries.GetInvoice(c.Context(), invoiceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice"})
+	}
+	if invoice.MerchantID != merchantID {
+		return notFound(c)
+	}
+
+	lineItems, err := h.Queries.ListInvoiceLineItems(c.Context(), invoice.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice line items"})
+	}
+	payments, err := h.Queries.ListPaymentsByInvoice(c.Context(), invoice.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load payments"})
+	}
+	paid, owed, err := h.paymentProgress(c.Context(), invoice)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to compute amount owed"})
+	}
+
+	return c.JSON(fiber.Map{
+		"invoice":             invoice,
+		"line_items":          lineItems,
+		"payments":            payments,
+		"amount_paid_pesewas": paid,
+		"amount_owed_pesewas": owed,
+	})
+}
+
 func (h *Handler) ListInvoicesByMerchant(c *fiber.Ctx) error {
 	merchantID, err := parseUUIDParam(c, "id")
 	if err != nil {
