@@ -46,6 +46,34 @@ func (q *Queries) GetFeatureFlag(ctx context.Context, id pgtype.UUID) (FeatureFl
 	return i, err
 }
 
+const getFeatureFlagStatusForMerchant = `-- name: GetFeatureFlagStatusForMerchant :one
+SELECT COALESCE(
+  (SELECT ff.enabled_globally OR EXISTS (
+     SELECT 1 FROM feature_flag_merchants ffm
+     WHERE ffm.feature_flag_id = ff.id AND ffm.merchant_id = $1
+   )
+   FROM feature_flags ff
+   WHERE ff.key = $2),
+  false
+)::bool AS enabled
+`
+
+type GetFeatureFlagStatusForMerchantParams struct {
+	MerchantID pgtype.UUID `json:"merchant_id"`
+	Key        string      `json:"key"`
+}
+
+// Enabled if flipped on for everyone, or this merchant is specifically
+// opted in during a staged rollout (Section 7.4). Returns false (not an
+// error) when the key doesn't exist, so callers checking a not-yet-seeded
+// flag key just see "off" rather than needing separate not-found handling.
+func (q *Queries) GetFeatureFlagStatusForMerchant(ctx context.Context, arg GetFeatureFlagStatusForMerchantParams) (bool, error) {
+	row := q.db.QueryRow(ctx, getFeatureFlagStatusForMerchant, arg.MerchantID, arg.Key)
+	var enabled bool
+	err := row.Scan(&enabled)
+	return enabled, err
+}
+
 const listFeatureFlagMerchants = `-- name: ListFeatureFlagMerchants :many
 SELECT ffm.merchant_id, m.business_name
 FROM feature_flag_merchants ffm

@@ -17,6 +17,7 @@ const _items = [
   _MoreItem('Delivery Settings', '/delivery', Icons.local_shipping_outlined),
   _MoreItem('Service Charge', '/settings', Icons.percent_outlined),
   _MoreItem('WhatsApp Settings', '/messaging', Icons.chat_bubble_outline),
+  _MoreItem('Catalog Sync', '/catalog-sync', Icons.sync_outlined),
   _MoreItem('Notifications', '/notifications', Icons.notifications_none),
   _MoreItem('Verify & Withdraw', '/verify', Icons.verified_outlined),
 ];

@@ -82,6 +82,7 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Get("/settlements", h.ListSettlements)
 	own.Get("/fee-rule", h.GetMerchantFeeRuleOrGlobal)
 	own.Patch("/fee-settings", h.UpdateMerchantFeeSettings)
+	own.Get("/feature-flags/:key", h.GetFeatureFlagStatus)
 }
 
 // registerAdminRoutes covers the Back Office platform (Section 7). Every
