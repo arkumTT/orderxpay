@@ -13,7 +13,7 @@ import (
 type Querier interface {
 	AddFeatureFlagMerchant(ctx context.Context, arg AddFeatureFlagMerchantParams) error
 	AddPaymentRefund(ctx context.Context, arg AddPaymentRefundParams) (Payment, error)
-	ArchiveItem(ctx context.Context, id pgtype.UUID) error
+	ArchiveItem(ctx context.Context, arg ArchiveItemParams) (int64, error)
 	AssignUserRole(ctx context.Context, arg AssignUserRoleParams) error
 	// Section 7.2 batch-run reconciliation: sums every not-yet-settled
 	// successful payment for the merchant in [period_start, period_end), and
@@ -47,7 +47,11 @@ type Querier interface {
 	DeleteDeliveryProvider(ctx context.Context, id pgtype.UUID) error
 	DeleteMenu(ctx context.Context, id pgtype.UUID) error
 	DeleteMerchantFeeRule(ctx context.Context, merchantID pgtype.UUID) error
-	DeleteStaff(ctx context.Context, id pgtype.UUID) error
+	// merchant_id in the WHERE clause, not just id — a staff row belongs to
+	// exactly one merchant, and the caller must own it (RowsAffected() == 0
+	// means either it doesn't exist or belongs to someone else; either way
+	// the handler reports 404, not which).
+	DeleteStaff(ctx context.Context, arg DeleteStaffParams) (int64, error)
 	// One row per merchant that shares a Ghana Card number with at least one
 	// other merchant's KYC submission (any status — even a rejected submission
 	// reusing someone else's card number is a real signal).
@@ -69,7 +73,12 @@ type Querier interface {
 	GetIntegration(ctx context.Context, providerKey string) (Integration, error)
 	GetInvoice(ctx context.Context, id pgtype.UUID) (Invoice, error)
 	GetInvoiceByReference(ctx context.Context, reference string) (Invoice, error)
+	// Single-param, unscoped by merchant — used internally by the invoice
+	// engine (resolveLineItems), which does its own explicit ownership compare
+	// against the item it fetches. Route handlers should use
+	// GetItemOwnedByMerchant instead.
 	GetItem(ctx context.Context, id pgtype.UUID) (Item, error)
+	GetItemOwnedByMerchant(ctx context.Context, arg GetItemOwnedByMerchantParams) (Item, error)
 	GetKYCSubmission(ctx context.Context, id pgtype.UUID) (KycSubmission, error)
 	GetMenu(ctx context.Context, id pgtype.UUID) (Menu, error)
 	GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error)
@@ -165,7 +174,10 @@ type Querier interface {
 	// agent is handed on a call ("my order is ORD-1234" / "I paid with 024...").
 	SearchInvoicesForSupport(ctx context.Context, query string) ([]SearchInvoicesForSupportRow, error)
 	SearchMerchantsForSupport(ctx context.Context, query string) ([]Merchant, error)
-	SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) error
+	// merchant_id in the WHERE clause — the route path only carries the
+	// delivery option's own id, not a merchant id, so ownership has to be
+	// enforced here against the caller's token instead.
+	SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) (int64, error)
 	// Non-terminal transition only (e.g. open -> investigating) — no
 	// resolution fields; see ResolveDispute for the terminal transitions.
 	SetDisputeStatus(ctx context.Context, arg SetDisputeStatusParams) (Dispute, error)

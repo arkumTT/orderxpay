@@ -44,38 +44,43 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handler) {
 // conversations, order-request review.
 func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	merchants := r.Group("/merchants")
-	merchants.Get("/:id", h.GetMerchant)
 
-	merchants.Post("/:id/staff", h.CreateStaff)
-	merchants.Get("/:id/staff", h.ListStaff)
-	merchants.Delete("/:id/staff/:staffId", h.DeleteStaff)
+	// Everything below hangs off ":id" being the merchant's own id — gated
+	// by RequireOwnMerchant so a valid merchant/staff token can only ever
+	// act on its own merchant, not any merchant id in the URL.
+	own := merchants.Group("/:id", middleware.RequireOwnMerchant)
+	own.Get("", h.GetMerchant)
 
-	merchants.Post("/:id/items", h.CreateItem)
-	merchants.Get("/:id/items", h.ListItems)
-	merchants.Get("/:id/items/:itemId", h.GetItem)
-	merchants.Put("/:id/items/:itemId", h.UpdateItem)
-	merchants.Delete("/:id/items/:itemId", h.ArchiveItem)
+	own.Post("/staff", h.CreateStaff)
+	own.Get("/staff", h.ListStaff)
+	own.Delete("/staff/:staffId", h.DeleteStaff)
 
-	merchants.Get("/:id/order-requests", h.ListPendingOrderRequests)
-	merchants.Patch("/:id/order-requests/:requestId", h.SetOrderRequestStatus)
+	own.Post("/items", h.CreateItem)
+	own.Get("/items", h.ListItems)
+	own.Get("/items/:itemId", h.GetItem)
+	own.Put("/items/:itemId", h.UpdateItem)
+	own.Delete("/items/:itemId", h.ArchiveItem)
 
-	merchants.Post("/:id/invoices", h.CreateInvoice)
-	merchants.Get("/:id/invoices", h.ListInvoicesByMerchant)
-	merchants.Get("/invoices/:id/payments", h.ListPaymentsByInvoice)
+	own.Get("/order-requests", h.ListPendingOrderRequests)
+	own.Patch("/order-requests/:requestId", h.SetOrderRequestStatus)
 
-	merchants.Post("/:id/delivery-options", h.CreateDeliveryOption)
-	merchants.Get("/:id/delivery-options", h.ListDeliveryOptions)
-	merchants.Patch("/delivery-options/:optionId", h.SetDeliveryOptionStatus)
+	own.Post("/invoices", h.CreateInvoice)
+	own.Get("/invoices", h.ListInvoicesByMerchant)
+	own.Get("/invoices/:invoiceId/payments", h.ListPaymentsByInvoice)
 
-	merchants.Post("/:id/kyc-submissions", h.CreateKYCSubmission)
-	merchants.Get("/:id/kyc-submissions", h.ListKYCSubmissionsByMerchant)
+	own.Post("/delivery-options", h.CreateDeliveryOption)
+	own.Get("/delivery-options", h.ListDeliveryOptions)
+	own.Patch("/delivery-options/:optionId", h.SetDeliveryOptionStatus)
 
-	merchants.Post("/:id/conversations", h.LogConversation)
-	merchants.Get("/:id/conversations", h.ListConversations)
+	own.Post("/kyc-submissions", h.CreateKYCSubmission)
+	own.Get("/kyc-submissions", h.ListKYCSubmissionsByMerchant)
 
-	merchants.Get("/:id/settlements", h.ListSettlements)
-	merchants.Get("/:id/fee-rule", h.GetMerchantFeeRuleOrGlobal)
-	merchants.Patch("/:id/fee-settings", h.UpdateMerchantFeeSettings)
+	own.Post("/conversations", h.LogConversation)
+	own.Get("/conversations", h.ListConversations)
+
+	own.Get("/settlements", h.ListSettlements)
+	own.Get("/fee-rule", h.GetMerchantFeeRuleOrGlobal)
+	own.Patch("/fee-settings", h.UpdateMerchantFeeSettings)
 }
 
 // registerAdminRoutes covers the Back Office platform (Section 7). Every

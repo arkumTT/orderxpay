@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"github.com/orderxpay/api/internal/auth"
 )
@@ -51,6 +52,25 @@ func RequireActorType(types ...auth.ActorType) fiber.Handler {
 		}
 		return fiber.NewError(fiber.StatusForbidden, "actor type not permitted for this route")
 	}
+}
+
+// RequireOwnMerchant restricts a merchant-app route to the merchant it
+// actually belongs to: it compares the ":id" path param against the
+// authenticated token's MerchantID. Without this, RequireActorType alone
+// only proves the caller holds *some* valid merchant/staff token — any
+// merchant could read or modify any other merchant's data by editing the
+// id in the URL. Must run after RequireAuth, on routes where ":id" is the
+// merchant id itself (not some other resource's id).
+func RequireOwnMerchant(c *fiber.Ctx) error {
+	payload, ok := c.Locals(AuthPayloadKey).(*auth.Payload)
+	if !ok {
+		return fiber.NewError(fiber.StatusUnauthorized, "missing auth payload")
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil || id != payload.MerchantID {
+		return fiber.NewError(fiber.StatusForbidden, "not authorized for this merchant")
+	}
+	return c.Next()
 }
 
 // RequirePermission restricts a Back Office route to users whose token

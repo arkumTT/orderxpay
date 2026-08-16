@@ -11,5 +11,8 @@ ORDER BY created_at;
 -- name: GetDeliveryOption :one
 SELECT * FROM delivery_options WHERE id = $1;
 
--- name: SetDeliveryOptionStatus :exec
-UPDATE delivery_options SET status = $2 WHERE id = $1;
+-- name: SetDeliveryOptionStatus :execrows
+-- merchant_id in the WHERE clause — the route path only carries the
+-- delivery option's own id, not a merchant id, so ownership has to be
+-- enforced here against the caller's token instead.
+UPDATE delivery_options SET status = $2 WHERE id = $1 AND merchant_id = $3;

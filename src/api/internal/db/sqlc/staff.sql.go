@@ -44,13 +44,25 @@ func (q *Queries) CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff
 	return i, err
 }
 
-const deleteStaff = `-- name: DeleteStaff :exec
-DELETE FROM staff WHERE id = $1
+const deleteStaff = `-- name: DeleteStaff :execrows
+DELETE FROM staff WHERE id = $1 AND merchant_id = $2
 `
 
-func (q *Queries) DeleteStaff(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteStaff, id)
-	return err
+type DeleteStaffParams struct {
+	ID         pgtype.UUID `json:"id"`
+	MerchantID pgtype.UUID `json:"merchant_id"`
+}
+
+// merchant_id in the WHERE clause, not just id — a staff row belongs to
+// exactly one merchant, and the caller must own it (RowsAffected() == 0
+// means either it doesn't exist or belongs to someone else; either way
+// the handler reports 404, not which).
+func (q *Queries) DeleteStaff(ctx context.Context, arg DeleteStaffParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStaff, arg.ID, arg.MerchantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getStaffByPhone = `-- name: GetStaffByPhone :one

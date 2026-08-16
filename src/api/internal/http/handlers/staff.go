@@ -60,12 +60,20 @@ func (h *Handler) ListStaff(c *fiber.Ctx) error {
 }
 
 func (h *Handler) DeleteStaff(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
 	staffID, err := parseUUIDParam(c, "staffId")
 	if err != nil {
 		return badRequest(c, "invalid staff id")
 	}
-	if err := h.Queries.DeleteStaff(c.Context(), staffID); err != nil {
+	rows, err := h.Queries.DeleteStaff(c.Context(), db.DeleteStaffParams{ID: staffID, MerchantID: merchantID})
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete staff"})
+	}
+	if rows == 0 {
+		return notFound(c)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
