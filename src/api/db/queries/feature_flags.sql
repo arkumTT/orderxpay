@@ -1,6 +1,21 @@
 -- name: ListFeatureFlags :many
 SELECT * FROM feature_flags ORDER BY name;
 
+-- name: GetFeatureFlagStatusForMerchant :one
+-- Enabled if flipped on for everyone, or this merchant is specifically
+-- opted in during a staged rollout (Section 7.4). Returns false (not an
+-- error) when the key doesn't exist, so callers checking a not-yet-seeded
+-- flag key just see "off" rather than needing separate not-found handling.
+SELECT COALESCE(
+  (SELECT ff.enabled_globally OR EXISTS (
+     SELECT 1 FROM feature_flag_merchants ffm
+     WHERE ffm.feature_flag_id = ff.id AND ffm.merchant_id = sqlc.arg(merchant_id)
+   )
+   FROM feature_flags ff
+   WHERE ff.key = sqlc.arg(key)),
+  false
+)::bool AS enabled;
+
 -- name: GetFeatureFlag :one
 SELECT * FROM feature_flags WHERE id = $1;
 

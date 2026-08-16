@@ -4,6 +4,7 @@ import 'core/session.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/onboarding/screens/onboarding_screen.dart';
 import 'features/catalog/screens/catalog_screen.dart';
+import 'features/catalog/screens/catalog_sync_screen.dart';
 import 'features/invoices/screens/new_order_screen.dart';
 import 'features/messaging/screens/messaging_screen.dart';
 import 'features/order_requests/screens/order_requests_screen.dart';
@@ -36,6 +37,7 @@ class OrderxPayApp extends StatelessWidget {
         '/onboarding': (context) => const OnboardingScreen(),
         '/': (context) => const HomeScreen(),
         '/catalog': (context) => const CatalogScreen(),
+        '/catalog-sync': (context) => const CatalogSyncScreen(),
         '/new-order': (context) => const NewOrderScreen(),
         '/messaging': (context) => const MessagingScreen(),
         '/order-requests': (context) => const OrderRequestsScreen(),

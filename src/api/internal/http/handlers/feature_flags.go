@@ -36,6 +36,26 @@ func (h *Handler) ListFeatureFlags(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
+// GetFeatureFlagStatus is the merchant-app side of feature flags: "is this
+// on for me right now" — nested under /merchants/:id so RequireOwnMerchant
+// already guarantees :id is the caller's own merchant.
+func (h *Handler) GetFeatureFlagStatus(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+	key := c.Params("key")
+
+	enabled, err := h.Queries.GetFeatureFlagStatusForMerchant(c.Context(), db.GetFeatureFlagStatusForMerchantParams{
+		MerchantID: merchantID,
+		Key:        key,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to check feature flag"})
+	}
+	return c.JSON(fiber.Map{"key": key, "enabled": enabled})
+}
+
 type setFeatureFlagGlobalRequest struct {
 	EnabledGlobally bool `json:"enabled_globally"`
 }

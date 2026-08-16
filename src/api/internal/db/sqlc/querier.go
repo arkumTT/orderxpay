@@ -68,6 +68,11 @@ type Querier interface {
 	GetDeliveryOption(ctx context.Context, id pgtype.UUID) (DeliveryOption, error)
 	GetDispute(ctx context.Context, id pgtype.UUID) (Dispute, error)
 	GetFeatureFlag(ctx context.Context, id pgtype.UUID) (FeatureFlag, error)
+	// Enabled if flipped on for everyone, or this merchant is specifically
+	// opted in during a staged rollout (Section 7.4). Returns false (not an
+	// error) when the key doesn't exist, so callers checking a not-yet-seeded
+	// flag key just see "off" rather than needing separate not-found handling.
+	GetFeatureFlagStatusForMerchant(ctx context.Context, arg GetFeatureFlagStatusForMerchantParams) (bool, error)
 	GetFeeRuleByMerchant(ctx context.Context, merchantID pgtype.UUID) (FeeRule, error)
 	GetGlobalFeeRule(ctx context.Context) (FeeRule, error)
 	GetIntegration(ctx context.Context, providerKey string) (Integration, error)
