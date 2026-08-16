@@ -10,10 +10,20 @@ const ALLOCATIONS = [
   { value: "split", label: "Split" },
 ];
 
+// Section 4.8 (revised): the blended platform rate is composed of three
+// separately-tunable components — collection fee, payout fee, margin — so a
+// PSP pricing change doesn't require hand-deriving a new blended figure.
+// commission_bps itself is derived server-side and shown read-only here.
 export function GlobalFeeForm({ rule }: { rule: FeeRule | null }) {
   const router = useRouter();
-  const [percent, setPercent] = useState(
-    rule ? (rule.commission_bps / 100).toFixed(2) : "4.00",
+  const [collectionPct, setCollectionPct] = useState(
+    rule ? (rule.collection_fee_bps / 100).toFixed(2) : "2.00",
+  );
+  const [payoutPct, setPayoutPct] = useState(
+    rule ? (rule.payout_fee_bps / 100).toFixed(2) : "1.00",
+  );
+  const [marginPct, setMarginPct] = useState(
+    rule ? (rule.margin_bps / 100).toFixed(2) : "1.00",
   );
   const [allocation, setAllocation] = useState<string>(
     rule?.allocation_type ?? "customer_only",
@@ -22,18 +32,25 @@ export function GlobalFeeForm({ rule }: { rule: FeeRule | null }) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  const blendedPct = (
+    (parseFloat(collectionPct) || 0) +
+    (parseFloat(payoutPct) || 0) +
+    (parseFloat(marginPct) || 0)
+  ).toFixed(2);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setSaved(false);
     try {
-      const commissionBps = Math.round(parseFloat(percent) * 100);
       const res = await fetch("/api/pricing/global", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          commission_bps: commissionBps,
+          collection_fee_bps: Math.round(parseFloat(collectionPct) * 100),
+          payout_fee_bps: Math.round(parseFloat(payoutPct) * 100),
+          margin_bps: Math.round(parseFloat(marginPct) * 100),
           allocation_type: allocation,
         }),
       });
@@ -56,22 +73,64 @@ export function GlobalFeeForm({ rule }: { rule: FeeRule | null }) {
       className="flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 p-4"
     >
       <div className="space-y-1">
-        <label className="text-xs text-neutral-500" htmlFor="global-pct">
-          Global commission rate (%)
+        <label className="text-xs text-neutral-500" htmlFor="global-collection">
+          Collection fee (PSP) %
         </label>
         <input
-          id="global-pct"
+          id="global-collection"
           type="number"
           step="0.01"
           min="0"
           required
-          value={percent}
+          value={collectionPct}
           onChange={(e) => {
-            setPercent(e.target.value);
+            setCollectionPct(e.target.value);
             setSaved(false);
           }}
-          className="rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
         />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs text-neutral-500" htmlFor="global-payout">
+          Payout fee (PSP) %
+        </label>
+        <input
+          id="global-payout"
+          type="number"
+          step="0.01"
+          min="0"
+          required
+          value={payoutPct}
+          onChange={(e) => {
+            setPayoutPct(e.target.value);
+            setSaved(false);
+          }}
+          className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs text-neutral-500" htmlFor="global-margin">
+          Margin %
+        </label>
+        <input
+          id="global-margin"
+          type="number"
+          step="0.01"
+          min="0"
+          required
+          value={marginPct}
+          onChange={(e) => {
+            setMarginPct(e.target.value);
+            setSaved(false);
+          }}
+          className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="space-y-1">
+        <span className="text-xs text-neutral-500">Blended rate</span>
+        <p className="rounded-md border border-transparent px-3 py-2 text-sm font-semibold text-neutral-900">
+          {blendedPct}%
+        </p>
       </div>
       <div className="space-y-1">
         <label className="text-xs text-neutral-500" htmlFor="global-alloc">

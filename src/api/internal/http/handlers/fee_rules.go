@@ -21,14 +21,21 @@ func (h *Handler) GetGlobalFeeRule(c *fiber.Ctx) error {
 	return c.JSON(rule)
 }
 
+// Section 4.8 (revised): admins tune the three components that make up the
+// blended platform rate — collection fee, payout fee, margin — instead of
+// typing the blended commission_bps figure directly. commission_bps is
+// derived server-side (see fee_rules.sql) so it can never drift from the
+// sum of its parts.
 type upsertFeeRuleRequest struct {
-	CommissionBps  int32  `json:"commission_bps"`
-	AllocationType string `json:"allocation_type"`
+	CollectionFeeBps int32  `json:"collection_fee_bps"`
+	PayoutFeeBps     int32  `json:"payout_fee_bps"`
+	MarginBps        int32  `json:"margin_bps"`
+	AllocationType   string `json:"allocation_type"`
 }
 
 func (r upsertFeeRuleRequest) validate() error {
-	if r.CommissionBps < 0 {
-		return errors.New("commission_bps must not be negative")
+	if r.CollectionFeeBps < 0 || r.PayoutFeeBps < 0 || r.MarginBps < 0 {
+		return errors.New("collection_fee_bps, payout_fee_bps, and margin_bps must not be negative")
 	}
 	switch r.AllocationType {
 	case "customer_only", "merchant_only", "split":
@@ -51,8 +58,10 @@ func (h *Handler) UpsertGlobalFeeRule(c *fiber.Ctx) error {
 	before, beforeErr := h.Queries.GetGlobalFeeRule(c.Context())
 
 	rule, err := h.Queries.UpsertGlobalFeeRule(c.Context(), db.UpsertGlobalFeeRuleParams{
-		CommissionBps:  req.CommissionBps,
-		AllocationType: req.AllocationType,
+		CollectionFeeBps: req.CollectionFeeBps,
+		PayoutFeeBps:     req.PayoutFeeBps,
+		MarginBps:        req.MarginBps,
+		AllocationType:   req.AllocationType,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to upsert global fee rule"})
@@ -60,9 +69,15 @@ func (h *Handler) UpsertGlobalFeeRule(c *fiber.Ctx) error {
 
 	var beforeJSON []byte
 	if beforeErr == nil {
-		beforeJSON, _ = json.Marshal(fiber.Map{"commission_bps": before.CommissionBps, "allocation_type": before.AllocationType})
+		beforeJSON, _ = json.Marshal(fiber.Map{
+			"collection_fee_bps": before.CollectionFeeBps, "payout_fee_bps": before.PayoutFeeBps,
+			"margin_bps": before.MarginBps, "commission_bps": before.CommissionBps, "allocation_type": before.AllocationType,
+		})
 	}
-	after, _ := json.Marshal(fiber.Map{"commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType})
+	after, _ := json.Marshal(fiber.Map{
+		"collection_fee_bps": rule.CollectionFeeBps, "payout_fee_bps": rule.PayoutFeeBps,
+		"margin_bps": rule.MarginBps, "commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType,
+	})
 	if err := writeAdminAuditLog(c, h, "fee_rule.global_update", "fee_rule", rule.ID, beforeJSON, after); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
 	}
@@ -111,9 +126,11 @@ func (h *Handler) UpsertMerchantFeeRule(c *fiber.Ctx) error {
 	before, beforeErr := h.Queries.GetFeeRuleByMerchant(c.Context(), merchantID)
 
 	rule, err := h.Queries.UpsertMerchantFeeRule(c.Context(), db.UpsertMerchantFeeRuleParams{
-		MerchantID:     merchantID,
-		CommissionBps:  req.CommissionBps,
-		AllocationType: req.AllocationType,
+		MerchantID:       merchantID,
+		CollectionFeeBps: req.CollectionFeeBps,
+		PayoutFeeBps:     req.PayoutFeeBps,
+		MarginBps:        req.MarginBps,
+		AllocationType:   req.AllocationType,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to upsert merchant fee rule"})
@@ -121,9 +138,15 @@ func (h *Handler) UpsertMerchantFeeRule(c *fiber.Ctx) error {
 
 	var beforeJSON []byte
 	if beforeErr == nil {
-		beforeJSON, _ = json.Marshal(fiber.Map{"commission_bps": before.CommissionBps, "allocation_type": before.AllocationType})
+		beforeJSON, _ = json.Marshal(fiber.Map{
+			"collection_fee_bps": before.CollectionFeeBps, "payout_fee_bps": before.PayoutFeeBps,
+			"margin_bps": before.MarginBps, "commission_bps": before.CommissionBps, "allocation_type": before.AllocationType,
+		})
 	}
-	after, _ := json.Marshal(fiber.Map{"commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType})
+	after, _ := json.Marshal(fiber.Map{
+		"collection_fee_bps": rule.CollectionFeeBps, "payout_fee_bps": rule.PayoutFeeBps,
+		"margin_bps": rule.MarginBps, "commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType,
+	})
 	if err := writeAdminAuditLog(c, h, "fee_rule.merchant_override", "merchant", merchantID, beforeJSON, after); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
 	}

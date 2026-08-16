@@ -196,8 +196,9 @@ func (h *Handler) UpdateMerchantKYCTier(c *fiber.Ctx) error {
 }
 
 type updateMerchantFeeSettingsRequest struct {
-	ServiceChargeAllocation string `json:"service_charge_allocation"` // customer_only | merchant_only | split
-	ServiceChargeSplitBps   *int32 `json:"service_charge_split_bps"`  // required when allocation is split; % of the commission charged to the customer
+	ServiceChargeAllocation string  `json:"service_charge_allocation"` // customer_only | merchant_only | split
+	ServiceChargeSplitBps   *int32  `json:"service_charge_split_bps"`  // required when allocation is split; % of the commission charged to the customer
+	PayoutFeeAbsorption     *string `json:"payout_fee_absorption"`     // merchant_absorbed | blended_into_rate; defaults to merchant_absorbed if omitted
 }
 
 // UpdateMerchantFeeSettings is the merchant app's own fee-allocation control
@@ -226,10 +227,21 @@ func (h *Handler) UpdateMerchantFeeSettings(c *fiber.Ctx) error {
 		return badRequest(c, "service_charge_allocation must be one of customer_only, merchant_only, split")
 	}
 
+	payoutFeeAbsorption := "merchant_absorbed"
+	if req.PayoutFeeAbsorption != nil {
+		switch *req.PayoutFeeAbsorption {
+		case "merchant_absorbed", "blended_into_rate":
+			payoutFeeAbsorption = *req.PayoutFeeAbsorption
+		default:
+			return badRequest(c, "payout_fee_absorption must be one of merchant_absorbed, blended_into_rate")
+		}
+	}
+
 	merchant, err := h.Queries.UpdateMerchantFeeSettings(c.Context(), db.UpdateMerchantFeeSettingsParams{
 		ID:                      id,
 		ServiceChargeAllocation: req.ServiceChargeAllocation,
 		ServiceChargeSplitBps:   splitBps,
+		PayoutFeeAbsorption:     payoutFeeAbsorption,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return notFound(c)

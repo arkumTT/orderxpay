@@ -300,7 +300,13 @@
       <ul class="bullets">
         <li>Service charge allocation: Customer Only (default), Merchant Only, or Split — with a percentage-allocation input for the split option, shown transparently on the invoice before payment.</li>
         <li>Payout/settlement preferences (bank account or MoMo wallet), payout schedule (on-demand vs. scheduled), and minimum payout threshold.</li>
-        <li>Full visibility into how the platform's 3–5% commission is calculated on every transaction, so merchants trust the number.</li>
+        <li>OrderxPay's platform rate is a single blended figure — built from the PSP's collection fee (~1.5–2.5%), the PSP's payout fee (~1%), and OrderxPay's own margin — so merchants see one number, not a fee stack, when they check how the 3–5% commission is calculated.</li>
+      </ul>
+      <p>Collection and payout fees are not symmetric, and the product deliberately doesn't treat them as if they were. The collection fee is known and attributable the instant a specific customer pays a specific invoice. The payout fee is charged per withdrawal batch — a merchant might settle thirty orders in one payout — so at the moment any single customer is checking out, there is no way to know what share of that eventual batch fee belongs to their order. Only one of the two fees is genuinely meterable per transaction.</p>
+      <ul class="bullets">
+        <li>The merchant-facing Service Charge settings screen (not the customer-facing checkout) shows the full breakdown on request — collection fee, payout fee, and OrderxPay's margin — so merchants understand what the blended rate covers, without the checkout screen getting more complicated.</li>
+        <li>Payout fee handling defaults to merchant-absorbed, deducted at settlement (Section 7.2). A merchant who wants customers, or a Customer/Merchant split, to help cover it does so by raising their blended rate, not by adding a second live fee line at checkout — same economic effect, without asking a customer to fund an estimate of a cost that hasn't happened yet.</li>
+        <li>The customer-facing checkout page (Section 5.1) is unaffected by any of this: it always shows a single "Service charge" line, however the merchant's blended rate was built underneath it.</li>
       </ul>
 
       <h3 class="sub">4.9 Multi-User / Staff Roles — recommended addition</h3>
@@ -387,6 +393,7 @@
         <li>Global default commission rate (e.g. 3–5%) with the ability to set merchant-specific overrides.</li>
         <li>Default service-charge allocation setting and whether merchants may override it.</li>
         <li>Feature flags for rolling out new modules (e.g. USSD payments, WhatsApp catalog sync) to a subset of merchants first.</li>
+        <li>Because the platform rate is a blended figure (collection + payout + margin, Section 4.8), pricing configuration here tunes the payout-fee and collection-fee components and the margin as separate inputs, not one combined percentage — so a change in a PSP's payout pricing doesn't require manually re-deriving the new blended number.</li>
       </ul>
       <h3 class="sub">7.5 Revenue &amp; Commission Dashboard / Reporting</h3>
       <ul class="bullets">
@@ -482,7 +489,7 @@
           <tr><td class="b mono">DeliveryOption</td><td>merchant_id, type (own_contact / verified provider), contact_name/phone (own_contact only), deep_link_template (provider only), fee_handling default, status</td><td>Merchant's configured delivery choices; the Back Office maintains the verified-provider list (7.3 / 9.4).</td></tr>
           <tr><td class="b mono">Settlement</td><td>merchant_id, period, gross collections, fees, commission, net payout, status</td><td>Drives the Back Office reconciliation view (7.2).</td></tr>
           <tr><td class="b mono">Conversation</td><td>merchant_id, customer contact, channel, direction, template_id, consent flag</td><td>Backs the WhatsApp module and its compliance guardrails (6.4).</td></tr>
-          <tr><td class="b mono">FeeRule</td><td>merchant_id (nullable = global default), commission %, allocation type</td><td>Powers pricing configuration (7.4) and invoice calculation (4.8).</td></tr>
+          <tr><td class="b mono">FeeRule</td><td>merchant_id (nullable for global default), collection_fee_pct, payout_fee_pct, margin_pct, payout_fee_absorption (merchant_absorbed / blended_into_rate), allocation type</td><td>Powers pricing configuration (7.4) and invoice calculation (4.8); collection, payout and margin are stored as separate components so the blended rate stays one number at checkout while admins and merchants can each see what composes it.</td></tr>
           <tr><td class="b mono">AuditLogEntry</td><td>actor, action, target entity, before/after, timestamp</td><td>Backs Section 7.9.</td></tr>
         </tbody>
       </table>

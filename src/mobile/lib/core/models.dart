@@ -16,6 +16,7 @@ class Merchant {
     required this.status,
     required this.serviceChargeAllocation,
     required this.serviceChargeSplitBps,
+    required this.payoutFeeAbsorption,
   });
 
   final String id;
@@ -26,6 +27,7 @@ class Merchant {
   final String status;
   final String serviceChargeAllocation;
   final int? serviceChargeSplitBps;
+  final String payoutFeeAbsorption; // merchant_absorbed | blended_into_rate
 
   factory Merchant.fromJson(Map<String, dynamic> j) => Merchant(
     id: _str(j['id']),
@@ -36,6 +38,37 @@ class Merchant {
     status: _str(j['status']),
     serviceChargeAllocation: _str(j['service_charge_allocation']),
     serviceChargeSplitBps: _intOrNull(j['service_charge_split_bps']),
+    payoutFeeAbsorption: j['payout_fee_absorption'] == null
+        ? 'merchant_absorbed'
+        : _str(j['payout_fee_absorption']),
+  );
+}
+
+/// Section 4.8 (revised): the blended commission_bps the invoice engine and
+/// checkout read is always collectionFeeBps + payoutFeeBps + marginBps,
+/// enforced server-side — the breakdown here is what the merchant-facing
+/// "How this is calculated" card explains.
+class FeeRule {
+  FeeRule({
+    required this.commissionBps,
+    required this.collectionFeeBps,
+    required this.payoutFeeBps,
+    required this.marginBps,
+    required this.allocationType,
+  });
+
+  final int commissionBps;
+  final int collectionFeeBps;
+  final int payoutFeeBps;
+  final int marginBps;
+  final String allocationType;
+
+  factory FeeRule.fromJson(Map<String, dynamic> j) => FeeRule(
+    commissionBps: _int(j['commission_bps']),
+    collectionFeeBps: _int(j['collection_fee_bps']),
+    payoutFeeBps: _int(j['payout_fee_bps']),
+    marginBps: _int(j['margin_bps']),
+    allocationType: _str(j['allocation_type']),
   );
 }
 

@@ -14,7 +14,7 @@ import (
 const createMerchant = `-- name: CreateMerchant :one
 INSERT INTO merchants (business_name, category, phone)
 VALUES ($1, $2, $3)
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption
 `
 
 type CreateMerchantParams struct {
@@ -41,12 +41,13 @@ func (q *Queries) CreateMerchant(ctx context.Context, arg CreateMerchantParams) 
 		&i.PayoutMinThresholdPesewas,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PayoutFeeAbsorption,
 	)
 	return i, err
 }
 
 const getMerchant = `-- name: GetMerchant :one
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at FROM merchants WHERE id = $1
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption FROM merchants WHERE id = $1
 `
 
 func (q *Queries) GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error) {
@@ -67,12 +68,13 @@ func (q *Queries) GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, er
 		&i.PayoutMinThresholdPesewas,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PayoutFeeAbsorption,
 	)
 	return i, err
 }
 
 const getMerchantByPhone = `-- name: GetMerchantByPhone :one
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at FROM merchants WHERE phone = $1
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption FROM merchants WHERE phone = $1
 `
 
 func (q *Queries) GetMerchantByPhone(ctx context.Context, phone string) (Merchant, error) {
@@ -93,12 +95,13 @@ func (q *Queries) GetMerchantByPhone(ctx context.Context, phone string) (Merchan
 		&i.PayoutMinThresholdPesewas,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PayoutFeeAbsorption,
 	)
 	return i, err
 }
 
 const listMerchants = `-- name: ListMerchants :many
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at FROM merchants
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption FROM merchants
 WHERE ($3::text = '' OR status = $3::text)
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -134,6 +137,7 @@ func (q *Queries) ListMerchants(ctx context.Context, arg ListMerchantsParams) ([
 			&i.PayoutMinThresholdPesewas,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PayoutFeeAbsorption,
 		); err != nil {
 			return nil, err
 		}
@@ -148,19 +152,26 @@ func (q *Queries) ListMerchants(ctx context.Context, arg ListMerchantsParams) ([
 const updateMerchantFeeSettings = `-- name: UpdateMerchantFeeSettings :one
 UPDATE merchants
 SET service_charge_allocation = $2,
-    service_charge_split_bps = $3
+    service_charge_split_bps = $3,
+    payout_fee_absorption = $4
 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption
 `
 
 type UpdateMerchantFeeSettingsParams struct {
 	ID                      pgtype.UUID `json:"id"`
 	ServiceChargeAllocation string      `json:"service_charge_allocation"`
 	ServiceChargeSplitBps   pgtype.Int4 `json:"service_charge_split_bps"`
+	PayoutFeeAbsorption     string      `json:"payout_fee_absorption"`
 }
 
 func (q *Queries) UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerchantFeeSettingsParams) (Merchant, error) {
-	row := q.db.QueryRow(ctx, updateMerchantFeeSettings, arg.ID, arg.ServiceChargeAllocation, arg.ServiceChargeSplitBps)
+	row := q.db.QueryRow(ctx, updateMerchantFeeSettings,
+		arg.ID,
+		arg.ServiceChargeAllocation,
+		arg.ServiceChargeSplitBps,
+		arg.PayoutFeeAbsorption,
+	)
 	var i Merchant
 	err := row.Scan(
 		&i.ID,
@@ -177,13 +188,14 @@ func (q *Queries) UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerch
 		&i.PayoutMinThresholdPesewas,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PayoutFeeAbsorption,
 	)
 	return i, err
 }
 
 const updateMerchantKYCTier = `-- name: UpdateMerchantKYCTier :one
 UPDATE merchants SET kyc_tier = $2 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption
 `
 
 type UpdateMerchantKYCTierParams struct {
@@ -209,13 +221,14 @@ func (q *Queries) UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantK
 		&i.PayoutMinThresholdPesewas,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PayoutFeeAbsorption,
 	)
 	return i, err
 }
 
 const updateMerchantStatus = `-- name: UpdateMerchantStatus :one
 UPDATE merchants SET status = $2 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption
 `
 
 type UpdateMerchantStatusParams struct {
@@ -241,6 +254,7 @@ func (q *Queries) UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantSt
 		&i.PayoutMinThresholdPesewas,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PayoutFeeAbsorption,
 	)
 	return i, err
 }
