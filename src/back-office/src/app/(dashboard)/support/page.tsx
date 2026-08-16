@@ -3,6 +3,7 @@ import { searchSupport } from "@/lib/support";
 import { ApiError } from "@/lib/session";
 import { formatPesewas } from "@/lib/money";
 import { SupportSearchBox } from "./search-box";
+import { CsvExportButton } from "./csv-export-button";
 
 const MERCHANT_STATUS_STYLES: Record<string, string> = {
   active: "bg-green-100 text-green-800",
@@ -89,9 +90,12 @@ export default async function SupportPage(props: PageProps<"/support">) {
       {results && (
         <>
           <div>
-            <h2 className="mb-2 text-sm font-semibold text-neutral-700">
-              Transactions ({results.invoices.length})
-            </h2>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-neutral-700">
+                Transactions ({results.invoices.length})
+              </h2>
+              <CsvExportButton invoices={results.invoices} />
+            </div>
             {results.invoices.length === 0 ? (
               <p className="text-sm text-neutral-500">No matching transactions.</p>
             ) : (
