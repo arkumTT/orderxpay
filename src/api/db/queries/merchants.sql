@@ -37,3 +37,7 @@ SET whatsapp_auto_reply_enabled = $2,
     whatsapp_greeting_message = $3
 WHERE id = $1
 RETURNING *;
+
+-- name: UpdateMerchantDeliveryEnabled :one
+UPDATE merchants SET delivery_enabled = $2 WHERE id = $1
+RETURNING *;

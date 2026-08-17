@@ -44,6 +44,8 @@ type DeliveryOption struct {
 	Status             string             `json:"status"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	FlatFeePesewas     pgtype.Int8        `json:"flat_fee_pesewas"`
+	ServiceZone        pgtype.Text        `json:"service_zone"`
 }
 
 type DeliveryProvider struct {
@@ -203,6 +205,7 @@ type Merchant struct {
 	PayoutFeeAbsorption       string             `json:"payout_fee_absorption"`
 	WhatsappAutoReplyEnabled  bool               `json:"whatsapp_auto_reply_enabled"`
 	WhatsappGreetingMessage   pgtype.Text        `json:"whatsapp_greeting_message"`
+	DeliveryEnabled           bool               `json:"delivery_enabled"`
 }
 
 type MerchantNote struct {

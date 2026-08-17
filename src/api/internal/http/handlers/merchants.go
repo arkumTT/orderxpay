@@ -289,3 +289,33 @@ func (h *Handler) UpdateMerchantWhatsAppSettings(c *fiber.Ctx) error {
 	}
 	return c.JSON(merchant)
 }
+
+type updateMerchantDeliveryEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// UpdateMerchantDeliveryEnabled is the master "Offer delivery" switch
+// (Section 4.11, Prompt 9) — when off, the merchant app hides delivery
+// selection at invoice creation entirely rather than showing an empty list.
+func (h *Handler) UpdateMerchantDeliveryEnabled(c *fiber.Ctx) error {
+	id, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+
+	var req updateMerchantDeliveryEnabledRequest
+	if err := c.BodyParser(&req); err != nil {
+		return badRequest(c, "invalid request body")
+	}
+
+	merchant, err := h.Queries.UpdateMerchantDeliveryEnabled(c.Context(), db.UpdateMerchantDeliveryEnabledParams{
+		ID:              id,
+		DeliveryEnabled: req.Enabled,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update delivery settings"})
+	}
+	return c.JSON(merchant)
+}

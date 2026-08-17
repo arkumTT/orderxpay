@@ -305,15 +305,17 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          OxpButton(
-            label: _deliveryOptionId != null || _deliveryFeeHandling != null
-                ? 'Delivery: ${_deliveryLabel ?? 'arranged separately'}'
-                : '+ Add Delivery',
-            variant: OxpButtonVariant.secondary,
-            onPressed: _openDeliverySheet,
-            icon: const Icon(Icons.local_shipping_outlined, size: 18),
-          ),
+          if (_merchant?.deliveryEnabled ?? true) ...[
+            const SizedBox(height: 16),
+            OxpButton(
+              label: _deliveryOptionId != null || _deliveryFeeHandling != null
+                  ? 'Delivery: ${_deliveryLabel ?? 'arranged separately'}'
+                  : '+ Add Delivery',
+              variant: OxpButtonVariant.secondary,
+              onPressed: _openDeliverySheet,
+              icon: const Icon(Icons.local_shipping_outlined, size: 18),
+            ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!, style: const TextStyle(color: AppColors.statusDeclined)),

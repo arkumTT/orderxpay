@@ -372,20 +372,11 @@ func (h *Handler) renderCheckout(c *fiber.Ctx, reference string) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice"})
 	}
-	lineItems, err := h.Queries.ListInvoiceLineItems(c.Context(), invoice.ID)
+	body, err := h.buildCheckoutResponse(c, invoice)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice line items"})
+		return err
 	}
-	paid, owed, err := h.paymentProgress(c.Context(), invoice)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to compute amount owed"})
-	}
-	return c.JSON(fiber.Map{
-		"invoice":             invoice,
-		"line_items":          lineItems,
-		"amount_paid_pesewas": paid,
-		"amount_owed_pesewas": owed,
-	})
+	return c.JSON(body)
 }
 
 const paymentReferenceAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"

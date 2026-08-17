@@ -31,22 +31,60 @@ func (h *Handler) GetInvoiceByReference(c *fiber.Ctx) error {
 		return notFound(c)
 	}
 
+	body, err := h.buildCheckoutResponse(c, invoice)
+	if err != nil {
+		return err
+	}
+	return c.JSON(body)
+}
+
+// buildCheckoutResponse is shared by GetInvoiceByReference and
+// renderCheckout (payments.go) — both serve the identical public checkout
+// page shape. Resolves the invoice's delivery option (if any) into the
+// contact/provider details the post-payment "handoff" card needs (Section
+// 4.11/5.1, Prompt 6) — a real "Call rider" card or provider deep link,
+// rather than just the bare delivery_option_id the invoice itself carries.
+func (h *Handler) buildCheckoutResponse(c *fiber.Ctx, invoice db.Invoice) (fiber.Map, error) {
 	lineItems, err := h.Queries.ListInvoiceLineItems(c.Context(), invoice.ID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice line items"})
+		return nil, c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice line items"})
 	}
 
 	paid, owed, err := h.paymentProgress(c.Context(), invoice)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to compute amount owed"})
+		return nil, c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to compute amount owed"})
 	}
 
-	return c.JSON(fiber.Map{
+	body := fiber.Map{
 		"invoice":             invoice,
 		"line_items":          lineItems,
 		"amount_paid_pesewas": paid,
 		"amount_owed_pesewas": owed,
-	})
+	}
+
+	if invoice.DeliveryOptionID.Valid {
+		option, err := h.Queries.GetDeliveryOption(c.Context(), invoice.DeliveryOptionID)
+		if err == nil {
+			merchant, merr := h.Queries.GetMerchant(c.Context(), invoice.MerchantID)
+			delivery := fiber.Map{
+				"type":                 option.Type,
+				"contact_name":         option.ContactName,
+				"contact_phone":        option.ContactPhone,
+				"provider_key":         option.ProviderKey,
+				"deep_link_template":   option.DeepLinkTemplate,
+				"flat_fee_pesewas":     option.FlatFeePesewas,
+				"service_zone":         option.ServiceZone,
+				"fee_handling_default": option.FeeHandlingDefault,
+				"delivery_address":     invoice.DeliveryAddress,
+			}
+			if merr == nil {
+				delivery["merchant_business_name"] = merchant.BusinessName
+			}
+			body["delivery"] = delivery
+		}
+	}
+
+	return body, nil
 }
 
 // GetInvoiceDetail backs the merchant app's Records detail view — nested

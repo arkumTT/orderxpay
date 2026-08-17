@@ -39,11 +39,27 @@ export type InvoiceLineItem = {
   line_total_pesewas: number;
 };
 
+// Resolved from invoice.delivery_option_id (Section 4.11/5.1, Prompt 6) —
+// present only when the invoice has a delivery option attached.
+export type DeliveryHandoff = {
+  type: "own_contact" | "verified_provider";
+  contact_name: string | null;
+  contact_phone: string | null;
+  provider_key: string | null;
+  deep_link_template: string | null;
+  flat_fee_pesewas: number | null;
+  service_zone: string | null;
+  fee_handling_default: "bundled" | "external";
+  delivery_address: string | null;
+  merchant_business_name?: string;
+};
+
 export type CheckoutResponse = {
   invoice: Invoice;
   line_items: InvoiceLineItem[];
   amount_paid_pesewas: number;
   amount_owed_pesewas: number;
+  delivery?: DeliveryHandoff;
 };
 
 export type InitiatePaymentResponse = {

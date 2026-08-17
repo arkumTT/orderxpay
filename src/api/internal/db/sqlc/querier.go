@@ -198,10 +198,16 @@ type Querier interface {
 	SetSettlementStatus(ctx context.Context, arg SetSettlementStatusParams) (Settlement, error)
 	SetUserStatus(ctx context.Context, arg SetUserStatusParams) (User, error)
 	SumSuccessfulPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) (int64, error)
+	// Full edit — contact/provider details, flat fee/zone, and fee handling —
+	// used by the Delivery Settings screen's edit sheet and by the inline
+	// fee-handling selector on already-enabled catalog providers. Same
+	// ownership-in-WHERE pattern as SetDeliveryOptionStatus above.
+	UpdateDeliveryOption(ctx context.Context, arg UpdateDeliveryOptionParams) (int64, error)
 	UpdateDeliveryProvider(ctx context.Context, arg UpdateDeliveryProviderParams) (DeliveryProvider, error)
 	UpdateIntegrationNotes(ctx context.Context, arg UpdateIntegrationNotesParams) (Integration, error)
 	UpdateItem(ctx context.Context, arg UpdateItemParams) (Item, error)
 	UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error)
+	UpdateMerchantDeliveryEnabled(ctx context.Context, arg UpdateMerchantDeliveryEnabledParams) (Merchant, error)
 	UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerchantFeeSettingsParams) (Merchant, error)
 	UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantKYCTierParams) (Merchant, error)
 	UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantStatusParams) (Merchant, error)
