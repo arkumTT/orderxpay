@@ -442,4 +442,24 @@ class ApiClient {
     'PATCH',
     '/api/v1/app/merchants/$merchantId/notifications/read-all',
   );
+
+  /// Section 4.7 — best-selling items, daily collections, average order
+  /// value, and repeat customers, all computed server-side over the
+  /// merchant's own paid/partially-paid invoices in the trailing 30 days.
+  Future<MerchantAnalytics> getMerchantAnalytics(String merchantId) async {
+    final res = await _send('GET', '/api/v1/app/merchants/$merchantId/analytics');
+    return MerchantAnalytics.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Section 4.7 CSV bookkeeping export — every invoice in the trailing 30
+  /// days regardless of status. Returns the raw CSV text; the caller shares
+  /// it via share_plus rather than this client writing to disk.
+  Future<String> exportRecordsCsv(String merchantId) async {
+    final uri = _base.resolve('/api/v1/app/merchants/$merchantId/records/export');
+    final res = await _client.get(uri, headers: _headers);
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, 'failed to export records');
+    }
+    return res.body;
+  }
 }

@@ -89,7 +89,20 @@ type Querier interface {
 	GetKYCSubmission(ctx context.Context, id pgtype.UUID) (KycSubmission, error)
 	GetMenu(ctx context.Context, id pgtype.UUID) (Menu, error)
 	GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error)
+	// Section 4.7: merchant-facing analytics + bookkeeping export. All queries
+	// are merchant-scoped (mounted under RequireOwnMerchant) and, unless noted,
+	// only count invoices that actually collected money (paid or
+	// partially_paid) within the requested period — a declined/expired invoice
+	// isn't a "sale".
+	GetMerchantBestSellingItems(ctx context.Context, arg GetMerchantBestSellingItemsParams) ([]GetMerchantBestSellingItemsRow, error)
 	GetMerchantByPhone(ctx context.Context, phone string) (Merchant, error)
+	// Grouped by actual payment date (not invoice date), matching the platform-
+	// wide GetDailyRevenue query in reporting.sql.
+	GetMerchantDailyCollections(ctx context.Context, arg GetMerchantDailyCollectionsParams) ([]GetMerchantDailyCollectionsRow, error)
+	GetMerchantOrderStats(ctx context.Context, arg GetMerchantOrderStatsParams) (GetMerchantOrderStatsRow, error)
+	// A "repeat" customer placed more than one paid/partially-paid order in the
+	// period, identified by customer_contact since there's no customers table.
+	GetMerchantRepeatCustomers(ctx context.Context, arg GetMerchantRepeatCustomersParams) ([]GetMerchantRepeatCustomersRow, error)
 	// Section 7.5: one row per merchant for the selected period — LEFT JOINs
 	// so a merchant with zero activity in the period still appears (with all
 	// figures at 0), which is exactly what "active vs. dormant" needs to be
@@ -146,6 +159,10 @@ type Querier interface {
 	// the Back Office sidebar calls.
 	ListMenusForUser(ctx context.Context, userID pgtype.UUID) ([]ListMenusForUserRow, error)
 	ListMerchantFeeRuleOverrides(ctx context.Context) ([]ListMerchantFeeRuleOverridesRow, error)
+	// Backs the CSV bookkeeping export — every invoice in the period regardless
+	// of status (an accountant needs to see declined/expired ones too), with
+	// items and the payment method(s) used summarized per row.
+	ListMerchantInvoicesForExport(ctx context.Context, arg ListMerchantInvoicesForExportParams) ([]ListMerchantInvoicesForExportRow, error)
 	ListMerchantNotes(ctx context.Context, merchantID pgtype.UUID) ([]ListMerchantNotesRow, error)
 	ListMerchants(ctx context.Context, arg ListMerchantsParams) ([]Merchant, error)
 	ListNotificationsByMerchant(ctx context.Context, arg ListNotificationsByMerchantParams) ([]Notification, error)
