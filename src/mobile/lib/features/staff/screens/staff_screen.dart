@@ -46,8 +46,11 @@ class _StaffScreenState extends State<StaffScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _future = _load());
-    await _future;
+    final next = _load();
+    setState(() {
+      _future = next;
+    });
+    await next;
   }
 
   Future<void> _addStaff() async {

@@ -57,8 +57,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
       appBar: AppBar(title: const Text('Records')),
       body: RefreshIndicator(
         onRefresh: () async {
-          setState(() => _future = _load());
-          await _future;
+          final next = _load();
+          setState(() {
+            _future = next;
+          });
+          await next;
         },
         child: FutureBuilder<List<Invoice>>(
           future: _future,
@@ -149,7 +152,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                 ),
                               );
                               if (context.mounted) {
-                                setState(() => _future = _load());
+                                setState(() {
+                                  _future = _load();
+                                });
                               }
                             },
                             child: Container(

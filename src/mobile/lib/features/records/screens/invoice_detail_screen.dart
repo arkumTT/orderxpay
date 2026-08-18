@@ -61,8 +61,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              setState(() => _future = _load());
-              await _future;
+              final next = _load();
+              setState(() {
+                _future = next;
+              });
+              await next;
             },
             child: ListView(
               padding: const EdgeInsets.all(AppSpace.xl),
