@@ -265,6 +265,8 @@ class ApiClient {
     String? providerKey,
     String? deepLinkTemplate,
     String feeHandlingDefault = 'external',
+    int? flatFeePesewas,
+    String? serviceZone,
   }) async {
     final res = await _send(
       'POST',
@@ -276,6 +278,8 @@ class ApiClient {
         if (providerKey != null) 'provider_key': providerKey,
         if (deepLinkTemplate != null) 'deep_link_template': deepLinkTemplate,
         'fee_handling_default': feeHandlingDefault,
+        'flat_fee_pesewas': flatFeePesewas,
+        'service_zone': serviceZone ?? '',
       },
     );
     return DeliveryOption.fromJson(res as Map<String, dynamic>);
@@ -286,6 +290,40 @@ class ApiClient {
     '/api/v1/app/merchants/$merchantId/delivery-options/$optionId',
     body: {'status': status},
   );
+
+  /// Full edit — backs the Delivery Settings screen's edit sheet and the
+  /// inline fee-handling selector on already-enabled catalog providers.
+  Future<void> updateDeliveryOption(
+    String merchantId,
+    String optionId, {
+    String? contactName,
+    String? contactPhone,
+    int? flatFeePesewas,
+    String? serviceZone,
+    required String feeHandlingDefault,
+    required String status,
+  }) => _send(
+    'PUT',
+    '/api/v1/app/merchants/$merchantId/delivery-options/$optionId',
+    body: {
+      'contact_name': contactName ?? '',
+      'contact_phone': contactPhone ?? '',
+      'flat_fee_pesewas': flatFeePesewas,
+      'service_zone': serviceZone ?? '',
+      'fee_handling_default': feeHandlingDefault,
+      'status': status,
+    },
+  );
+
+  /// Section 4.11, Prompt 9 — the master "Offer delivery" switch.
+  Future<Merchant> updateDeliverySettings(String merchantId, {required bool enabled}) async {
+    final res = await _send(
+      'PATCH',
+      '/api/v1/app/merchants/$merchantId/delivery-settings',
+      body: {'enabled': enabled},
+    );
+    return Merchant.fromJson(res as Map<String, dynamic>);
+  }
 
   /// Section 4.11/9.4: the admin-maintained catalog (Bolt, Uber, Yango,
   /// ...) — what the Delivery Settings screen offers as pre-populated

@@ -3,6 +3,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { formatPesewas } from "@/lib/money";
 import type { CheckoutResponse } from "@/lib/types";
 import { PaymentPanel } from "./payment-panel";
+import { DeliveryHandoff } from "./delivery-handoff";
 
 const TERMINAL_STATUSES = new Set(["expired", "cancelled", "refunded"]);
 
@@ -34,7 +35,7 @@ export default async function CheckoutPage(
     throw err;
   }
 
-  const { invoice, line_items, amount_paid_pesewas, amount_owed_pesewas } = data;
+  const { invoice, line_items, amount_paid_pesewas, amount_owed_pesewas, delivery } = data;
   const canPay = !TERMINAL_STATUSES.has(invoice.status) && invoice.status !== "paid";
 
   return (
@@ -77,6 +78,10 @@ export default async function CheckoutPage(
           <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-center text-sm font-medium text-green-800">
             Payment received — thank you.
           </div>
+        )}
+
+        {invoice.status === "paid" && delivery && (
+          <DeliveryHandoff delivery={delivery} />
         )}
 
         {invoice.status === "partially_paid" && (

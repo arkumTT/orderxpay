@@ -12,9 +12,9 @@ import (
 )
 
 const createDeliveryOption = `-- name: CreateDeliveryOption :one
-INSERT INTO delivery_options (merchant_id, type, contact_name, contact_phone, provider_key, deep_link_template, fee_handling_default)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, merchant_id, type, contact_name, contact_phone, provider_key, deep_link_template, fee_handling_default, status, created_at, updated_at
+INSERT INTO delivery_options (merchant_id, type, contact_name, contact_phone, provider_key, deep_link_template, fee_handling_default, flat_fee_pesewas, service_zone)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, merchant_id, type, contact_name, contact_phone, provider_key, deep_link_template, fee_handling_default, status, created_at, updated_at, flat_fee_pesewas, service_zone
 `
 
 type CreateDeliveryOptionParams struct {
@@ -25,6 +25,8 @@ type CreateDeliveryOptionParams struct {
 	ProviderKey        pgtype.Text `json:"provider_key"`
 	DeepLinkTemplate   pgtype.Text `json:"deep_link_template"`
 	FeeHandlingDefault string      `json:"fee_handling_default"`
+	FlatFeePesewas     pgtype.Int8 `json:"flat_fee_pesewas"`
+	ServiceZone        pgtype.Text `json:"service_zone"`
 }
 
 func (q *Queries) CreateDeliveryOption(ctx context.Context, arg CreateDeliveryOptionParams) (DeliveryOption, error) {
@@ -36,6 +38,8 @@ func (q *Queries) CreateDeliveryOption(ctx context.Context, arg CreateDeliveryOp
 		arg.ProviderKey,
 		arg.DeepLinkTemplate,
 		arg.FeeHandlingDefault,
+		arg.FlatFeePesewas,
+		arg.ServiceZone,
 	)
 	var i DeliveryOption
 	err := row.Scan(
@@ -50,12 +54,14 @@ func (q *Queries) CreateDeliveryOption(ctx context.Context, arg CreateDeliveryOp
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FlatFeePesewas,
+		&i.ServiceZone,
 	)
 	return i, err
 }
 
 const getDeliveryOption = `-- name: GetDeliveryOption :one
-SELECT id, merchant_id, type, contact_name, contact_phone, provider_key, deep_link_template, fee_handling_default, status, created_at, updated_at FROM delivery_options WHERE id = $1
+SELECT id, merchant_id, type, contact_name, contact_phone, provider_key, deep_link_template, fee_handling_default, status, created_at, updated_at, flat_fee_pesewas, service_zone FROM delivery_options WHERE id = $1
 `
 
 func (q *Queries) GetDeliveryOption(ctx context.Context, id pgtype.UUID) (DeliveryOption, error) {
@@ -73,12 +79,14 @@ func (q *Queries) GetDeliveryOption(ctx context.Context, id pgtype.UUID) (Delive
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FlatFeePesewas,
+		&i.ServiceZone,
 	)
 	return i, err
 }
 
 const listDeliveryOptionsByMerchant = `-- name: ListDeliveryOptionsByMerchant :many
-SELECT id, merchant_id, type, contact_name, contact_phone, provider_key, deep_link_template, fee_handling_default, status, created_at, updated_at FROM delivery_options
+SELECT id, merchant_id, type, contact_name, contact_phone, provider_key, deep_link_template, fee_handling_default, status, created_at, updated_at, flat_fee_pesewas, service_zone FROM delivery_options
 WHERE merchant_id = $1 AND status = 'active'
 ORDER BY created_at
 `
@@ -104,6 +112,8 @@ func (q *Queries) ListDeliveryOptionsByMerchant(ctx context.Context, merchantID 
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.FlatFeePesewas,
+			&i.ServiceZone,
 		); err != nil {
 			return nil, err
 		}
@@ -130,6 +140,49 @@ type SetDeliveryOptionStatusParams struct {
 // enforced here against the caller's token instead.
 func (q *Queries) SetDeliveryOptionStatus(ctx context.Context, arg SetDeliveryOptionStatusParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setDeliveryOptionStatus, arg.ID, arg.Status, arg.MerchantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateDeliveryOption = `-- name: UpdateDeliveryOption :execrows
+UPDATE delivery_options
+SET contact_name = $2,
+    contact_phone = $3,
+    flat_fee_pesewas = $4,
+    service_zone = $5,
+    fee_handling_default = $6,
+    status = $7
+WHERE id = $1 AND merchant_id = $8
+`
+
+type UpdateDeliveryOptionParams struct {
+	ID                 pgtype.UUID `json:"id"`
+	ContactName        pgtype.Text `json:"contact_name"`
+	ContactPhone       pgtype.Text `json:"contact_phone"`
+	FlatFeePesewas     pgtype.Int8 `json:"flat_fee_pesewas"`
+	ServiceZone        pgtype.Text `json:"service_zone"`
+	FeeHandlingDefault string      `json:"fee_handling_default"`
+	Status             string      `json:"status"`
+	MerchantID         pgtype.UUID `json:"merchant_id"`
+}
+
+// Full edit — contact/provider details, flat fee/zone, and fee handling —
+// used by the Delivery Settings screen's edit sheet and by the inline
+// fee-handling selector on already-enabled catalog providers. Same
+// ownership-in-WHERE pattern as SetDeliveryOptionStatus above.
+func (q *Queries) UpdateDeliveryOption(ctx context.Context, arg UpdateDeliveryOptionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateDeliveryOption,
+		arg.ID,
+		arg.ContactName,
+		arg.ContactPhone,
+		arg.FlatFeePesewas,
+		arg.ServiceZone,
+		arg.FeeHandlingDefault,
+		arg.Status,
+		arg.MerchantID,
+	)
 	if err != nil {
 		return 0, err
 	}

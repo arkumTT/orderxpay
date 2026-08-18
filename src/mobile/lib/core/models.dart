@@ -19,6 +19,7 @@ class Merchant {
     required this.payoutFeeAbsorption,
     required this.whatsappAutoReplyEnabled,
     required this.whatsappGreetingMessage,
+    required this.deliveryEnabled,
   });
 
   final String id;
@@ -32,6 +33,7 @@ class Merchant {
   final String payoutFeeAbsorption; // merchant_absorbed | blended_into_rate
   final bool whatsappAutoReplyEnabled;
   final String? whatsappGreetingMessage; // null = use the app's generated default
+  final bool deliveryEnabled;
 
   factory Merchant.fromJson(Map<String, dynamic> j) => Merchant(
     id: _str(j['id']),
@@ -47,6 +49,7 @@ class Merchant {
         : _str(j['payout_fee_absorption']),
     whatsappAutoReplyEnabled: j['whatsapp_auto_reply_enabled'] as bool? ?? true,
     whatsappGreetingMessage: _strOrNull(j['whatsapp_greeting_message']),
+    deliveryEnabled: j['delivery_enabled'] as bool? ?? true,
   );
 }
 
@@ -290,6 +293,8 @@ class DeliveryOption {
     required this.contactPhone,
     required this.providerKey,
     required this.feeHandlingDefault,
+    required this.flatFeePesewas,
+    required this.serviceZone,
     required this.status,
   });
 
@@ -299,6 +304,8 @@ class DeliveryOption {
   final String? contactPhone;
   final String? providerKey; // set when type == verified_provider and drawn from the catalog
   final String feeHandlingDefault; // bundled | external
+  final int? flatFeePesewas;
+  final String? serviceZone;
   final String status;
 
   factory DeliveryOption.fromJson(Map<String, dynamic> j) => DeliveryOption(
@@ -308,6 +315,8 @@ class DeliveryOption {
     contactPhone: _strOrNull(j['contact_phone']),
     providerKey: _strOrNull(j['provider_key']),
     feeHandlingDefault: _str(j['fee_handling_default']),
+    flatFeePesewas: _intOrNull(j['flat_fee_pesewas']),
+    serviceZone: _strOrNull(j['service_zone']),
     status: _str(j['status']),
   );
 }
