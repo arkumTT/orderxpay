@@ -76,6 +76,10 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Get("/delivery-providers", h.ListActiveDeliveryProviders)
 	own.Patch("/delivery-settings", h.UpdateMerchantDeliveryEnabled)
 
+	own.Get("/notifications", h.ListNotifications)
+	own.Patch("/notifications/:notificationId/read", h.MarkNotificationRead)
+	own.Patch("/notifications/read-all", h.MarkAllNotificationsRead)
+
 	own.Post("/kyc-submissions", h.CreateKYCSubmission)
 	own.Get("/kyc-submissions", h.ListKYCSubmissionsByMerchant)
 

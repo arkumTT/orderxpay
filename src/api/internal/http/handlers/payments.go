@@ -323,6 +323,23 @@ func (h *Handler) creditSuccessfulPayment(ctx context.Context, pspReference, cha
 		log.Printf("paystack: failed to write audit log for payment %s: %v", pspReference, err)
 	}
 
+	// Best-effort, same as the audit log above — a notification failure
+	// must never fail a real payment credit (Section 4.10).
+	paidWord := "partially paid"
+	if updated.Status == "paid" {
+		paidWord = "fully paid"
+	}
+	if _, err := h.Queries.CreateNotification(ctx, db.CreateNotificationParams{
+		MerchantID:   invoice.MerchantID,
+		Type:         "payment_received",
+		Title:        "Payment received",
+		Body:         fmt.Sprintf("%s received — invoice %s is now %s.", formatPesewas(payment.AmountPesewas), invoice.Reference, paidWord),
+		TargetEntity: textOrNull("invoice"),
+		TargetID:     invoice.ID,
+	}); err != nil {
+		log.Printf("paystack: failed to create notification for payment %s: %v", pspReference, err)
+	}
+
 	return nil
 }
 

@@ -23,6 +23,7 @@ type Querier interface {
 	// without ever needing to touch a payment already claimed by an earlier
 	// settlement (p.settlement_id IS NULL).
 	ComputeSettlementAggregate(ctx context.Context, arg ComputeSettlementAggregateParams) (ComputeSettlementAggregateRow, error)
+	CountUnreadNotifications(ctx context.Context, merchantID pgtype.UUID) (int64, error)
 	CreateAuditLogEntry(ctx context.Context, arg CreateAuditLogEntryParams) (AuditLogEntry, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateDeliveryOption(ctx context.Context, arg CreateDeliveryOptionParams) (DeliveryOption, error)
@@ -35,6 +36,7 @@ type Querier interface {
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
 	CreateMerchant(ctx context.Context, arg CreateMerchantParams) (Merchant, error)
 	CreateMerchantNote(ctx context.Context, arg CreateMerchantNoteParams) (MerchantNote, error)
+	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	// Silently skipped when an identical open flag already exists
@@ -146,6 +148,7 @@ type Querier interface {
 	ListMerchantFeeRuleOverrides(ctx context.Context) ([]ListMerchantFeeRuleOverridesRow, error)
 	ListMerchantNotes(ctx context.Context, merchantID pgtype.UUID) ([]ListMerchantNotesRow, error)
 	ListMerchants(ctx context.Context, arg ListMerchantsParams) ([]Merchant, error)
+	ListNotificationsByMerchant(ctx context.Context, arg ListNotificationsByMerchantParams) ([]Notification, error)
 	ListPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) ([]Payment, error)
 	ListPendingOrderRequestsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]OrderRequest, error)
 	ListPermissions(ctx context.Context) ([]Permission, error)
@@ -164,6 +167,8 @@ type Querier interface {
 	ListUserRoles(ctx context.Context, userID pgtype.UUID) ([]Role, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]WebhookDelivery, error)
+	MarkAllNotificationsRead(ctx context.Context, merchantID pgtype.UUID) error
+	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (int64, error)
 	// Stamps every payment just aggregated into ComputeSettlementAggregate with
 	// the resulting settlement's id — must run with the exact same filter, in
 	// the same transaction, or a payment could be double-counted by a later run.

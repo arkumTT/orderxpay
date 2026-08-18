@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -52,6 +53,20 @@ func (h *Handler) CreateOrderRequest(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create order request"})
 	}
+
+	// Best-effort (Section 4.10) — never fail the customer's actual request
+	// submission over a notification write.
+	if _, err := h.Queries.CreateNotification(c.Context(), db.CreateNotificationParams{
+		MerchantID:   merchantID,
+		Type:         "order_request_pending",
+		Title:        "New order request",
+		Body:         req.CustomerContact + " wants to order — review and confirm.",
+		TargetEntity: textOrNull("order_request"),
+		TargetID:     orderRequest.ID,
+	}); err != nil {
+		log.Printf("order request: failed to create notification for %s: %v", orderRequest.ID, err)
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(toOrderRequestJSON(orderRequest))
 }
 
