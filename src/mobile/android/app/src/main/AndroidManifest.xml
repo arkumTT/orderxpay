@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Section 4.3: lets the merchant pick a customer from their phone
+         contacts on the New Order screen via flutter_contacts' native
+         picker. Only READ (not WRITE) — the app never edits contacts. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <application
         android:label="orderxpay_mobile"
         android:name="${applicationName}"

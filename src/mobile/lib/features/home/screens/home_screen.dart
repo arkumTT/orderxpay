@@ -150,9 +150,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: OxpButton(
-                          label: 'Send Invoice',
+                          label: '+ Add Item',
                           variant: OxpButtonVariant.secondary,
-                          onPressed: () => Navigator.pushNamed(context, '/new-order'),
+                          onPressed: () => Navigator.pushNamed(context, '/catalog'),
                         ),
                       ),
                     ],

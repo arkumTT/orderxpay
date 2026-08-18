@@ -1,4 +1,7 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter_contacts/flutter_contacts.dart';
 import '../../../core/api_client.dart';
 import '../../../core/format.dart';
 import '../../../core/invoice_calc.dart';
@@ -46,6 +49,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   Merchant? _merchant;
   int _commissionBps = 0;
   List<DeliveryOption> _deliveryOptions = [];
+  List<String> _recentCustomers = [];
 
   String? _deliveryOptionId;
   String? _deliveryLabel;
@@ -77,12 +81,14 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         _api.getMerchant(merchantId),
         _api.getCommissionBps(merchantId),
         _api.listDeliveryOptions(merchantId),
+        _api.listInvoices(merchantId),
       ]);
       setState(() {
         _items = results[0] as List<Item>;
         _merchant = results[1] as Merchant;
         _commissionBps = results[2] as int;
         _deliveryOptions = results[3] as List<DeliveryOption>;
+        _recentCustomers = _dedupeCustomers(results[4] as List<Invoice>);
         _loading = false;
       });
       _prefillFromRequest();
@@ -103,6 +109,57 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       final qty = (map['quantity'] as num?)?.toInt() ?? 1;
       if (itemId != null && _items.any((i) => i.id == itemId)) {
         setState(() => _catalogQty[itemId] = qty);
+      }
+    }
+  }
+
+  /// Most-recent-first, deduped customer contacts from past invoices — a
+  /// quick-pick substitute for "recent calls" (not accessible: iOS exposes
+  /// no call-history API to third-party apps, and Android's READ_CALL_LOG is
+  /// Play-Store-restricted to default phone/dialer apps).
+  List<String> _dedupeCustomers(List<Invoice> invoices) {
+    final seen = <String>{};
+    final recents = <String>[];
+    for (final inv in invoices) {
+      if (inv.customerContact.isNotEmpty && seen.add(inv.customerContact)) {
+        recents.add(inv.customerContact);
+      }
+      if (recents.length >= 6) break;
+    }
+    return recents;
+  }
+
+  /// Opens the native contact picker (Section 4.3). Permissionless on iOS;
+  /// on Android, requesting the phone-number property requires READ_CONTACTS,
+  /// so that's requested first — a normal, Play-Store-approved permission for
+  /// this "pick a contact" use case (unlike call-log access).
+  Future<void> _pickFromContacts() async {
+    if (Platform.isAndroid) {
+      final status = await FlutterContacts.permissions.request(PermissionType.read);
+      if (status != PermissionStatus.granted && status != PermissionStatus.limited) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Contacts permission is needed to pick a customer.')),
+          );
+        }
+        return;
+      }
+    }
+    try {
+      final contact = await FlutterContacts.native.showPicker(properties: {ContactProperty.phone});
+      if (contact == null) return;
+      final name = contact.displayName ?? '';
+      final phone = contact.phones.isNotEmpty ? contact.phones.first.number : '';
+      setState(() {
+        _customerController.text = name.isNotEmpty && phone.isNotEmpty
+            ? '$name · $phone'
+            : (name.isNotEmpty ? name : phone);
+      });
+    } on PlatformException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open contacts.')),
+        );
       }
     }
   }
@@ -272,7 +329,46 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           const SizedBox(height: 16),
           if (_fromCatalog) _buildCatalogList() else _buildCustomForm(),
           const SizedBox(height: 16),
-          OxpField(label: 'Customer', controller: _customerController, hintText: 'Name · phone'),
+          OxpField(
+            label: 'Customer',
+            controller: _customerController,
+            hintText: 'Name · phone',
+            suffix: IconButton(
+              icon: const Icon(Icons.contact_page_outlined, color: AppColors.textSecondary),
+              tooltip: 'Pick from contacts',
+              onPressed: _pickFromContacts,
+            ),
+          ),
+          if (_recentCustomers.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 30,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _recentCustomers.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) => GestureDetector(
+                  onTap: () => setState(() => _customerController.text = _recentCustomers[i]),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Text(
+                      _recentCustomers[i],
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryBlack,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           OxpCard(
             child: Column(

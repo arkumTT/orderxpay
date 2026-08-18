@@ -66,7 +66,7 @@ class OxpField extends StatelessWidget {
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppRadius.control),
-              borderSide: BorderSide.none,
+              borderSide: const BorderSide(color: AppColors.border),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppRadius.control),
