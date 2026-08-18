@@ -419,4 +419,27 @@ class ApiClient {
     );
     return Merchant.fromJson(res as Map<String, dynamic>);
   }
+
+  /// Section 4.10 — real, persisted in-app alerts (payment received, order
+  /// request pending, payout processed, KYC status change).
+  Future<NotificationFeed> listNotifications(String merchantId) async {
+    final res = await _send('GET', '/api/v1/app/merchants/$merchantId/notifications');
+    final map = res as Map<String, dynamic>;
+    return NotificationFeed(
+      notifications: (map['notifications'] as List)
+          .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      unreadCount: (map['unread_count'] as num).toInt(),
+    );
+  }
+
+  Future<void> markNotificationRead(String merchantId, String notificationId) => _send(
+    'PATCH',
+    '/api/v1/app/merchants/$merchantId/notifications/$notificationId/read',
+  );
+
+  Future<void> markAllNotificationsRead(String merchantId) => _send(
+    'PATCH',
+    '/api/v1/app/merchants/$merchantId/notifications/read-all',
+  );
 }

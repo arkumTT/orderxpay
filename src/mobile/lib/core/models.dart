@@ -339,3 +339,47 @@ class DeliveryProvider {
     deepLinkTemplate: _str(j['deep_link_template']),
   );
 }
+
+/// Section 4.10: real, persisted in-app alerts. Push/SMS/WhatsApp delivery
+/// isn't built — see the doc comment on the API's ListNotifications handler
+/// for why — this is the in-app feed only.
+class AppNotification {
+  AppNotification({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.targetEntity,
+    required this.targetId,
+    required this.readAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String type; // payment_received | order_request_pending | payout_processed | kyc_status_change
+  final String title;
+  final String body;
+  final String? targetEntity;
+  final String? targetId;
+  final DateTime? readAt;
+  final DateTime createdAt;
+
+  bool get isUnread => readAt == null;
+
+  factory AppNotification.fromJson(Map<String, dynamic> j) => AppNotification(
+    id: _str(j['id']),
+    type: _str(j['type']),
+    title: _str(j['title']),
+    body: _str(j['body']),
+    targetEntity: _strOrNull(j['target_entity']),
+    targetId: _strOrNull(j['target_id']),
+    readAt: j['read_at'] == null ? null : DateTime.tryParse(_str(j['read_at'])),
+    createdAt: DateTime.tryParse(_str(j['created_at'])) ?? DateTime.now(),
+  );
+}
+
+class NotificationFeed {
+  NotificationFeed({required this.notifications, required this.unreadCount});
+  final List<AppNotification> notifications;
+  final int unreadCount;
+}

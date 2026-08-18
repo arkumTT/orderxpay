@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -220,6 +221,27 @@ func (h *Handler) UpdateSettlementStatus(c *fiber.Ctx) error {
 	if err := writeAdminAuditLog(c, h, "settlement.status_change", "settlement", id, before, after); err != nil {
 		log.Printf("settlements: failed to write audit log for status change: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
+	}
+
+	if updated.Status == "paid" {
+		// Best-effort (Section 4.10) — never fail the status update itself
+		// over a notification write.
+		body := fmt.Sprintf(
+			"%s settled for %s – %s.",
+			formatPesewas(updated.NetPayoutPesewas),
+			updated.PeriodStart.Time.Format("2 Jan"),
+			updated.PeriodEnd.Time.Format("2 Jan"),
+		)
+		if _, err := h.Queries.CreateNotification(c.Context(), db.CreateNotificationParams{
+			MerchantID:   updated.MerchantID,
+			Type:         "payout_processed",
+			Title:        "Payout processed",
+			Body:         body,
+			TargetEntity: textOrNull("settlement"),
+			TargetID:     updated.ID,
+		}); err != nil {
+			log.Printf("settlements: failed to create notification for %s: %v", updated.ID, err)
+		}
 	}
 
 	return c.JSON(updated)

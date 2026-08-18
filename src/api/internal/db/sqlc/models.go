@@ -216,6 +216,18 @@ type MerchantNote struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
+type Notification struct {
+	ID           pgtype.UUID        `json:"id"`
+	MerchantID   pgtype.UUID        `json:"merchant_id"`
+	Type         string             `json:"type"`
+	Title        string             `json:"title"`
+	Body         string             `json:"body"`
+	TargetEntity pgtype.Text        `json:"target_entity"`
+	TargetID     pgtype.UUID        `json:"target_id"`
+	ReadAt       pgtype.Timestamptz `json:"read_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type OrderRequest struct {
 	ID              pgtype.UUID        `json:"id"`
 	MerchantID      pgtype.UUID        `json:"merchant_id"`

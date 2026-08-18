@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -204,6 +205,27 @@ func (h *Handler) ReviewKYCSubmission(c *fiber.Ctx) error {
 	after, _ := json.Marshal(fiber.Map{"status": updated.Status, "reviewer_notes": req.ReviewerNotes})
 	if err := writeAdminAuditLog(c, h, "kyc.review", "kyc_submission", id, before, after); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
+	}
+
+	// Atomic with the status change (Section 4.10) — unlike the payment/
+	// order-request/settlement trigger points, this handler already runs
+	// inside a transaction, so there's no reason to make this best-effort.
+	body := "Your verification submission was rejected: " + req.ReviewerNotes
+	switch updated.Status {
+	case "approved":
+		body = "Your verification was approved — you can now withdraw."
+	case "more_info_requested":
+		body = "More information is needed for your verification: " + req.ReviewerNotes
+	}
+	if _, err := qtx.CreateNotification(c.Context(), db.CreateNotificationParams{
+		MerchantID:   submission.MerchantID,
+		Type:         "kyc_status_change",
+		Title:        "Verification " + strings.ReplaceAll(updated.Status, "_", " "),
+		Body:         body,
+		TargetEntity: textOrNull("kyc_submission"),
+		TargetID:     updated.ID,
+	}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create notification"})
 	}
 
 	if err := tx.Commit(c.Context()); err != nil {

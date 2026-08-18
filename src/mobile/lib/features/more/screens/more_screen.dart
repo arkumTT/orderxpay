@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/api_client.dart';
 import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
@@ -22,8 +23,31 @@ const _items = [
   _MoreItem('Verify & Withdraw', '/verify', Icons.verified_outlined),
 ];
 
-class MoreScreen extends StatelessWidget {
+class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
+
+  @override
+  State<MoreScreen> createState() => _MoreScreenState();
+}
+
+class _MoreScreenState extends State<MoreScreen> {
+  final _api = ApiClient();
+  int _unreadNotifications = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnreadCount();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final feed = await _api.listNotifications(Session.instance.merchantId!);
+      if (mounted) setState(() => _unreadNotifications = feed.unreadCount);
+    } on ApiException {
+      // Non-fatal — the badge just stays at whatever it was.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +62,10 @@ class MoreScreen extends StatelessWidget {
               children: [
                 for (var i = 0; i < _items.length; i++)
                   InkWell(
-                    onTap: () => Navigator.pushNamed(context, _items[i].route),
+                    onTap: () async {
+                      await Navigator.pushNamed(context, _items[i].route);
+                      if (_items[i].route == '/notifications') _loadUnreadCount();
+                    },
                     child: Container(
                       decoration: BoxDecoration(
                         border: i == 0
@@ -56,6 +83,20 @@ class MoreScreen extends StatelessWidget {
                               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                             ),
                           ),
+                          if (_items[i].route == '/notifications' && _unreadNotifications > 0) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.accent,
+                                borderRadius: BorderRadius.circular(AppRadius.pill),
+                              ),
+                              child: Text(
+                                _unreadNotifications > 99 ? '99+' : '$_unreadNotifications',
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           const Icon(Icons.chevron_right, color: AppColors.textDisabled),
                         ],
                       ),
