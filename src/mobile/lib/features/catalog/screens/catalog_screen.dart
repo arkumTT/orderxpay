@@ -26,8 +26,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _future = _api.listItems(Session.instance.merchantId!));
-    await _future;
+    final next = _api.listItems(Session.instance.merchantId!);
+    setState(() {
+      _future = next;
+    });
+    await next;
   }
 
   Future<void> _openForm([Item? item]) async {

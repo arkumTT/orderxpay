@@ -28,8 +28,11 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _future = _api.listOrderRequests(Session.instance.merchantId!));
-    await _future;
+    final next = _api.listOrderRequests(Session.instance.merchantId!);
+    setState(() {
+      _future = next;
+    });
+    await next;
   }
 
   Future<void> _approve(OrderRequest request) async {
