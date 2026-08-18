@@ -383,3 +383,99 @@ class NotificationFeed {
   final List<AppNotification> notifications;
   final int unreadCount;
 }
+
+/// Section 4.7 — merchant-facing analytics, all computed server-side.
+class BestSellingItem {
+  BestSellingItem({
+    required this.description,
+    required this.totalQuantity,
+    required this.totalRevenuePesewas,
+  });
+  final String description;
+  final int totalQuantity;
+  final int totalRevenuePesewas;
+
+  factory BestSellingItem.fromJson(Map<String, dynamic> j) => BestSellingItem(
+    description: _str(j['description']),
+    totalQuantity: _int(j['total_quantity']),
+    totalRevenuePesewas: _int(j['total_revenue_pesewas']),
+  );
+}
+
+class DailyCollection {
+  DailyCollection({
+    required this.day,
+    required this.collectedPesewas,
+    required this.paymentCount,
+  });
+  final DateTime day;
+  final int collectedPesewas;
+  final int paymentCount;
+
+  factory DailyCollection.fromJson(Map<String, dynamic> j) => DailyCollection(
+    day: DateTime.tryParse(_str(j['day'])) ?? DateTime.now(),
+    collectedPesewas: _int(j['collected_pesewas']),
+    paymentCount: _int(j['payment_count']),
+  );
+}
+
+class RepeatCustomer {
+  RepeatCustomer({
+    required this.customerContact,
+    required this.orderCount,
+    required this.totalSpentPesewas,
+  });
+  final String customerContact;
+  final int orderCount;
+  final int totalSpentPesewas;
+
+  factory RepeatCustomer.fromJson(Map<String, dynamic> j) => RepeatCustomer(
+    customerContact: _str(j['customer_contact']),
+    orderCount: _int(j['order_count']),
+    totalSpentPesewas: _int(j['total_spent_pesewas']),
+  );
+}
+
+class MerchantAnalytics {
+  MerchantAnalytics({
+    required this.periodStart,
+    required this.periodEnd,
+    required this.bestSellingItems,
+    required this.dailyCollections,
+    required this.orderCount,
+    required this.averageOrderValuePesewas,
+    required this.totalCollectedPesewas,
+    required this.uniqueCustomerCount,
+    required this.repeatCustomers,
+  });
+  final String periodStart;
+  final String periodEnd;
+  final List<BestSellingItem> bestSellingItems;
+  final List<DailyCollection> dailyCollections;
+  final int orderCount;
+  final int averageOrderValuePesewas;
+  final int totalCollectedPesewas;
+  final int uniqueCustomerCount;
+  final List<RepeatCustomer> repeatCustomers;
+
+  factory MerchantAnalytics.fromJson(Map<String, dynamic> j) {
+    final stats = j['order_stats'] as Map<String, dynamic>? ?? {};
+    return MerchantAnalytics(
+      periodStart: _str(j['period_start']),
+      periodEnd: _str(j['period_end']),
+      bestSellingItems: (j['best_selling_items'] as List? ?? [])
+          .map((e) => BestSellingItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      dailyCollections: (j['daily_collections'] as List? ?? [])
+          .map((e) => DailyCollection.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      orderCount: _int(stats['order_count']),
+      averageOrderValuePesewas: _int(stats['average_order_value_pesewas']),
+      totalCollectedPesewas: _int(stats['total_collected_pesewas']),
+      uniqueCustomerCount: _int(stats['unique_customer_count']),
+      repeatCustomers: (j['repeat_customers'] as List? ?? [])
+          .map((e) => RepeatCustomer.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}

@@ -69,6 +69,9 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Get("/invoices/:invoiceId", h.GetInvoiceDetail)
 	own.Get("/invoices/:invoiceId/payments", h.ListPaymentsByInvoice)
 
+	own.Get("/analytics", h.GetMerchantAnalytics)
+	own.Get("/records/export", h.ExportMerchantRecords)
+
 	own.Post("/delivery-options", h.CreateDeliveryOption)
 	own.Get("/delivery-options", h.ListDeliveryOptions)
 	own.Patch("/delivery-options/:optionId", h.SetDeliveryOptionStatus)

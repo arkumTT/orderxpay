@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/api_client.dart';
 import '../../../core/format.dart';
 import '../../../core/models.dart';
@@ -7,6 +10,7 @@ import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
 import 'invoice_detail_screen.dart';
+import 'records_insights_screen.dart';
 
 const _filters = ['All', 'Paid', 'Pending', 'Partial', 'Declined'];
 
@@ -28,6 +32,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   final _api = ApiClient();
   String _filter = 'All';
   late Future<List<Invoice>> _future;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -51,10 +56,56 @@ class _RecordsScreenState extends State<RecordsScreen> {
     });
   }
 
+  /// Section 4.7 CSV bookkeeping export — fetches the merchant's records as
+  /// CSV text from the API, then hands it to the OS share sheet as a file
+  /// via share_plus, so the merchant can save it to Drive, email it to an
+  /// accountant, etc. No PDF export yet (see api_client.dart doc comment).
+  Future<void> _exportCsv() async {
+    setState(() => _exporting = true);
+    try {
+      final csv = await _api.exportRecordsCsv(Session.instance.merchantId!);
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+      final stamp = DateTime.now().toIso8601String().split('T').first;
+      final filename = 'orderxpay-records-$stamp.csv';
+      await Share.shareXFiles([
+        XFile.fromData(bytes, mimeType: 'text/csv', name: filename),
+      ], subject: 'OrderxPay records export', fileNameOverrides: [filename]);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Records')),
+      appBar: AppBar(
+        title: const Text('Records'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.insights_outlined),
+            tooltip: 'Insights',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RecordsInsightsScreen()),
+            ),
+          ),
+          IconButton(
+            icon: _exporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.ios_share_outlined),
+            tooltip: 'Export CSV',
+            onPressed: _exporting ? null : _exportCsv,
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           final next = _load();
