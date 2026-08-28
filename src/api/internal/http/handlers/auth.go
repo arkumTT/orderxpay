@@ -80,15 +80,96 @@ func (h *Handler) UserLogin(c *fiber.Ctx) error {
 	})
 }
 
-// RequestMerchantOTP / VerifyMerchantOTP back the merchant app's phone + OTP
-// sign-up (Section 4.1). Not yet implemented: OTP delivery depends on the
-// SMS provider integration (Section 9), which hasn't been selected.
-func (h *Handler) RequestMerchantOTP(c *fiber.Ctx) error {
-	return notImplemented(c, "OTP delivery not yet implemented — depends on SMS provider selection (Section 9)")
+type merchantLoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
-func (h *Handler) VerifyMerchantOTP(c *fiber.Ctx) error {
-	return notImplemented(c, "OTP verification not yet implemented — depends on SMS provider selection (Section 9)")
+// MerchantLogin authenticates a merchant owner or a staff member (Section
+// 4.1/4.9) by email+password, from one shared mobile login screen. It
+// checks the merchants table first, then staff — both are independent
+// email spaces (a merchant's email isn't guaranteed unique against a
+// different merchant's staff email), so collisions across the two tables
+// aren't prevented today. The generic "invalid credentials" error on every
+// failure path is deliberate — it never reveals whether an email exists in
+// either table.
+func (h *Handler) MerchantLogin(c *fiber.Ctx) error {
+	var req merchantLoginRequest
+	if err := c.BodyParser(&req); err != nil {
+		return badRequest(c, "invalid request body")
+	}
+	if req.Email == "" || req.Password == "" {
+		return badRequest(c, "email and password are required")
+	}
+
+	merchant, err := h.Queries.GetMerchantByEmail(c.Context(), req.Email)
+	if err == nil {
+		if !merchant.PasswordHash.Valid ||
+			bcrypt.CompareHashAndPassword([]byte(merchant.PasswordHash.String), []byte(req.Password)) != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid credentials"})
+		}
+		if merchant.Status == "suspended" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "merchant account is suspended"})
+		}
+
+		actorID := merchant.ID.Bytes
+		token, payload, err := h.TokenMaker.CreateToken(auth.CreateTokenParams{
+			ActorID:    actorID,
+			ActorType:  auth.ActorMerchant,
+			MerchantID: actorID,
+			Duration:   merchantTokenDuration,
+		})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create token"})
+		}
+		return c.JSON(fiber.Map{
+			"access_token":   token,
+			"expires_at":     payload.ExpiredAt,
+			"merchant_id":    merchant.ID,
+			"actor_type":     string(auth.ActorMerchant),
+			"business_name":  merchant.BusinessName,
+			"email_verified": merchant.EmailVerifiedAt.Valid,
+		})
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to look up account"})
+	}
+
+	staff, err := h.Queries.GetStaffByEmail(c.Context(), req.Email)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid credentials"})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to look up account"})
+	}
+	if !staff.PasswordHash.Valid ||
+		bcrypt.CompareHashAndPassword([]byte(staff.PasswordHash.String), []byte(req.Password)) != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid credentials"})
+	}
+
+	staffID := staff.ID.Bytes
+	merchantID := staff.MerchantID.Bytes
+	token, payload, err := h.TokenMaker.CreateToken(auth.CreateTokenParams{
+		ActorID:    staffID,
+		ActorType:  auth.ActorStaff,
+		MerchantID: merchantID,
+		Duration:   merchantTokenDuration,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create token"})
+	}
+
+	merchant, err = h.Queries.GetMerchant(c.Context(), staff.MerchantID)
+	businessName := ""
+	if err == nil {
+		businessName = merchant.BusinessName
+	}
+
+	return c.JSON(fiber.Map{
+		"access_token":  token,
+		"expires_at":    payload.ExpiredAt,
+		"merchant_id":   staff.MerchantID,
+		"actor_type":    string(auth.ActorStaff),
+		"business_name": businessName,
+	})
 }
 
 const merchantTokenDuration = 24 * time.Hour
@@ -97,12 +178,12 @@ type devIssueTokenRequest struct {
 	MerchantID string `json:"merchant_id"`
 }
 
-// DevIssueMerchantToken stands in for RequestMerchantOTP/VerifyMerchantOTP
-// until that's built — same idea as cmd/devtoken, exposed over HTTP so the
-// mobile app can get a session automatically right after onboarding instead
-// of a developer running a CLI command by hand. Registered under
-// /api/v1/public but refuses to do anything unless h.DevMode is true
-// (ENV=development) — see cmd/api/main.go.
+// DevIssueMerchantToken is a raw session bootstrap for a merchant that
+// already exists, bypassing login entirely — same idea as cmd/devtoken,
+// exposed over HTTP for quick backend/curl testing without going through
+// the real MerchantLogin flow. Registered under /api/v1/public but refuses
+// to do anything unless h.DevMode is true (ENV=development) — see
+// cmd/api/main.go.
 func (h *Handler) DevIssueMerchantToken(c *fiber.Ctx) error {
 	if !h.DevMode {
 		return notFound(c)

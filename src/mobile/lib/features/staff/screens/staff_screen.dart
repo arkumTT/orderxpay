@@ -56,43 +56,94 @@ class _StaffScreenState extends State<StaffScreen> {
   Future<void> _addStaff() async {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+    var obscure = true;
+    var saving = false;
+    String? error;
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Add Staff', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 16),
-            OxpField(label: 'Name', controller: nameController),
-            const SizedBox(height: 12),
-            OxpField(label: 'Phone', controller: phoneController, keyboardType: TextInputType.phone),
-            const SizedBox(height: 20),
-            OxpButton(
-              label: 'Save',
-              onPressed: () async {
-                try {
-                  await _api.post(
-                    '/api/v1/app/merchants/${Session.instance.merchantId}/staff',
-                    {'name': nameController.text, 'phone': phoneController.text, 'role': 'staff'},
-                  );
-                  if (context.mounted) Navigator.pop(context, true);
-                } on ApiException catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-                  }
-                }
-              },
-            ),
-          ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Add Staff', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 4),
+              const Text(
+                "Set their login email and a starting password, and tell them "
+                "both yourself — they'll log in with these on the app's Login screen.",
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              OxpField(label: 'Name', controller: nameController),
+              const SizedBox(height: 12),
+              OxpField(label: 'Phone', controller: phoneController, keyboardType: TextInputType.phone),
+              const SizedBox(height: 12),
+              OxpField(
+                label: 'Email',
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 12),
+              OxpField(
+                label: 'Password',
+                controller: passwordController,
+                hintText: 'At least 8 characters',
+                obscureText: obscure,
+                suffix: IconButton(
+                  icon: Icon(
+                    obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    color: AppColors.textSecondary,
+                  ),
+                  onPressed: () => setSheetState(() => obscure = !obscure),
+                ),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(error!, style: const TextStyle(color: AppColors.statusDeclined, fontSize: 13)),
+              ],
+              const SizedBox(height: 20),
+              OxpButton(
+                label: 'Save',
+                loading: saving,
+                onPressed: saving
+                    ? null
+                    : () async {
+                        setSheetState(() {
+                          saving = true;
+                          error = null;
+                        });
+                        try {
+                          await _api.post(
+                            '/api/v1/app/merchants/${Session.instance.merchantId}/staff',
+                            {
+                              'name': nameController.text,
+                              'phone': phoneController.text,
+                              'role': 'staff',
+                              'email': emailController.text,
+                              'password': passwordController.text,
+                            },
+                          );
+                          if (context.mounted) Navigator.pop(context, true);
+                        } on ApiException catch (e) {
+                          setSheetState(() {
+                            saving = false;
+                            error = e.message;
+                          });
+                        }
+                      },
+              ),
+            ],
+          ),
         ),
       ),
     );

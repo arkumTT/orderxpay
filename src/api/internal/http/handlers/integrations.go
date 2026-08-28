@@ -10,6 +10,7 @@ import (
 
 	db "github.com/orderxpay/api/internal/db/sqlc"
 	"github.com/orderxpay/api/internal/psp"
+	"github.com/orderxpay/api/internal/whatsapp"
 )
 
 // paystackClient resolves the effective Paystack client for this call — a
@@ -24,6 +25,17 @@ func (h *Handler) paystackClient(ctx context.Context) *psp.Client {
 		return psp.NewClient(row.SecretValue.String)
 	}
 	return h.PSP
+}
+
+// whatsappClient mirrors paystackClient exactly — a Meta access token set
+// through the Integrations page wins over WHATSAPP_ACCESS_TOKEN, rotatable
+// without a restart.
+func (h *Handler) whatsappClient(ctx context.Context) *whatsapp.Client {
+	row, err := h.Queries.GetIntegration(ctx, "whatsapp_bsp")
+	if err == nil && row.SecretValue.Valid && row.SecretValue.String != "" {
+		return whatsapp.NewClient(row.SecretValue.String)
+	}
+	return h.WhatsApp
 }
 
 // integrationView strips secret_value entirely — ListIntegrations must

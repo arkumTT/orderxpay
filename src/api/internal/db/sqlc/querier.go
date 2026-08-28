@@ -23,12 +23,16 @@ type Querier interface {
 	// without ever needing to touch a payment already claimed by an earlier
 	// settlement (p.settlement_id IS NULL).
 	ComputeSettlementAggregate(ctx context.Context, arg ComputeSettlementAggregateParams) (ComputeSettlementAggregateRow, error)
+	// Rate-limit for RequestPhoneOTP: how many codes have been requested for
+	// this phone since [since] (e.g. the last hour).
+	CountRecentPhoneOTPs(ctx context.Context, arg CountRecentPhoneOTPsParams) (int64, error)
 	CountUnreadNotifications(ctx context.Context, merchantID pgtype.UUID) (int64, error)
 	CreateAuditLogEntry(ctx context.Context, arg CreateAuditLogEntryParams) (AuditLogEntry, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateDeliveryOption(ctx context.Context, arg CreateDeliveryOptionParams) (DeliveryOption, error)
 	CreateDeliveryProvider(ctx context.Context, arg CreateDeliveryProviderParams) (DeliveryProvider, error)
 	CreateDispute(ctx context.Context, arg CreateDisputeParams) (Dispute, error)
+	CreateEmailVerification(ctx context.Context, arg CreateEmailVerificationParams) (EmailVerification, error)
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLineItemParams) (InvoiceLineItem, error)
 	CreateItem(ctx context.Context, arg CreateItemParams) (Item, error)
@@ -39,6 +43,7 @@ type Querier interface {
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
+	CreatePhoneOTP(ctx context.Context, arg CreatePhoneOTPParams) (PhoneOtp, error)
 	// Silently skipped when an identical open flag already exists
 	// (risk_flags_dedupe_open) — a scan re-run should never spam duplicates.
 	CreateRiskFlag(ctx context.Context, arg CreateRiskFlagParams) error
@@ -69,6 +74,7 @@ type Querier interface {
 	GetDailyRevenue(ctx context.Context, arg GetDailyRevenueParams) ([]GetDailyRevenueRow, error)
 	GetDeliveryOption(ctx context.Context, id pgtype.UUID) (DeliveryOption, error)
 	GetDispute(ctx context.Context, id pgtype.UUID) (Dispute, error)
+	GetEmailVerificationByToken(ctx context.Context, token string) (EmailVerification, error)
 	GetFeatureFlag(ctx context.Context, id pgtype.UUID) (FeatureFlag, error)
 	// Enabled if flipped on for everyone, or this merchant is specifically
 	// opted in during a staged rollout (Section 7.4). Returns false (not an
@@ -87,6 +93,7 @@ type Querier interface {
 	GetItem(ctx context.Context, id pgtype.UUID) (Item, error)
 	GetItemOwnedByMerchant(ctx context.Context, arg GetItemOwnedByMerchantParams) (Item, error)
 	GetKYCSubmission(ctx context.Context, id pgtype.UUID) (KycSubmission, error)
+	GetLatestPhoneOTP(ctx context.Context, phone string) (PhoneOtp, error)
 	GetMenu(ctx context.Context, id pgtype.UUID) (Menu, error)
 	GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error)
 	// Section 4.7: merchant-facing analytics + bookkeeping export. All queries
@@ -95,7 +102,11 @@ type Querier interface {
 	// partially_paid) within the requested period — a declined/expired invoice
 	// isn't a "sale".
 	GetMerchantBestSellingItems(ctx context.Context, arg GetMerchantBestSellingItemsParams) ([]GetMerchantBestSellingItemsRow, error)
+	GetMerchantByEmail(ctx context.Context, dollar_1 string) (Merchant, error)
 	GetMerchantByPhone(ctx context.Context, phone string) (Merchant, error)
+	// Attributes an inbound WhatsApp webhook to a merchant — see
+	// internal/whatsapp and handlers/whatsapp.go.
+	GetMerchantByWhatsAppPhoneNumberID(ctx context.Context, dollar_1 string) (Merchant, error)
 	// Grouped by actual payment date (not invoice date), matching the platform-
 	// wide GetDailyRevenue query in reporting.sql.
 	GetMerchantDailyCollections(ctx context.Context, arg GetMerchantDailyCollectionsParams) ([]GetMerchantDailyCollectionsRow, error)
@@ -115,9 +126,14 @@ type Querier interface {
 	GetPayment(ctx context.Context, id pgtype.UUID) (Payment, error)
 	GetPaymentByPSPReference(ctx context.Context, pspReference string) (Payment, error)
 	GetPermissionByKey(ctx context.Context, key string) (Permission, error)
+	// CreateMerchant checks this to confirm the phone was actually OTP-verified
+	// (within [since], e.g. the last 30 minutes) before letting registration
+	// through Page 2 proceed.
+	GetRecentVerifiedPhoneOTP(ctx context.Context, arg GetRecentVerifiedPhoneOTPParams) (PhoneOtp, error)
 	GetRiskFlag(ctx context.Context, id pgtype.UUID) (RiskFlag, error)
 	GetRoleByName(ctx context.Context, name string) (Role, error)
 	GetSettlement(ctx context.Context, id pgtype.UUID) (Settlement, error)
+	GetStaffByEmail(ctx context.Context, dollar_1 string) (Staff, error)
 	GetStaffByPhone(ctx context.Context, phone string) (Staff, error)
 	GetSupportTransaction(ctx context.Context, reference string) (GetSupportTransactionRow, error)
 	GetUser(ctx context.Context, id pgtype.UUID) (User, error)
@@ -127,6 +143,7 @@ type Querier interface {
 	// PASETO token payload at login time.
 	GetUserPermissionKeys(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	GrantUserPermission(ctx context.Context, arg GrantUserPermissionParams) error
+	IncrementPhoneOTPAttempts(ctx context.Context, id pgtype.UUID) error
 	// Merchant-app side of the admin-maintained catalog (Section 4.11/9.4) —
 	// only what's actually active, unlike the admin list above which needs to
 	// see inactive/retired entries too for management.
@@ -185,11 +202,14 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]User, error)
 	ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]WebhookDelivery, error)
 	MarkAllNotificationsRead(ctx context.Context, merchantID pgtype.UUID) error
+	MarkEmailVerificationUsed(ctx context.Context, id pgtype.UUID) error
+	MarkMerchantEmailVerified(ctx context.Context, id pgtype.UUID) (Merchant, error)
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (int64, error)
 	// Stamps every payment just aggregated into ComputeSettlementAggregate with
 	// the resulting settlement's id — must run with the exact same filter, in
 	// the same transaction, or a payment could be double-counted by a later run.
 	MarkPaymentsSettled(ctx context.Context, arg MarkPaymentsSettledParams) error
+	MarkPhoneOTPVerified(ctx context.Context, id pgtype.UUID) error
 	RemoveFeatureFlagMerchant(ctx context.Context, arg RemoveFeatureFlagMerchantParams) error
 	RemoveUserRole(ctx context.Context, arg RemoveUserRoleParams) error
 	ResolveDispute(ctx context.Context, arg ResolveDisputeParams) (Dispute, error)
@@ -233,6 +253,10 @@ type Querier interface {
 	UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerchantFeeSettingsParams) (Merchant, error)
 	UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantKYCTierParams) (Merchant, error)
 	UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantStatusParams) (Merchant, error)
+	// Admin-only provisioning step (Section 7.3): OrderxPay registers the
+	// merchant's number under the platform WABA in Meta's console, then
+	// records the resulting phone_number_id here.
+	UpdateMerchantWhatsAppPhoneNumberID(ctx context.Context, arg UpdateMerchantWhatsAppPhoneNumberIDParams) (Merchant, error)
 	UpdateMerchantWhatsAppSettings(ctx context.Context, arg UpdateMerchantWhatsAppSettingsParams) (Merchant, error)
 	// commission_bps is derived server-side (sum of the three components) so it
 	// can never drift from what the components actually add up to — every other

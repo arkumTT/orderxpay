@@ -12,16 +12,18 @@ import (
 )
 
 const createStaff = `-- name: CreateStaff :one
-INSERT INTO staff (merchant_id, name, phone, role)
-VALUES ($1, $2, $3, $4)
-RETURNING id, merchant_id, name, phone, role, created_at, updated_at
+INSERT INTO staff (merchant_id, name, phone, role, email, password_hash)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, merchant_id, name, phone, role, created_at, updated_at, email, password_hash
 `
 
 type CreateStaffParams struct {
-	MerchantID pgtype.UUID `json:"merchant_id"`
-	Name       string      `json:"name"`
-	Phone      string      `json:"phone"`
-	Role       string      `json:"role"`
+	MerchantID   pgtype.UUID `json:"merchant_id"`
+	Name         string      `json:"name"`
+	Phone        string      `json:"phone"`
+	Role         string      `json:"role"`
+	Email        pgtype.Text `json:"email"`
+	PasswordHash pgtype.Text `json:"password_hash"`
 }
 
 func (q *Queries) CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error) {
@@ -30,6 +32,8 @@ func (q *Queries) CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff
 		arg.Name,
 		arg.Phone,
 		arg.Role,
+		arg.Email,
+		arg.PasswordHash,
 	)
 	var i Staff
 	err := row.Scan(
@@ -40,6 +44,8 @@ func (q *Queries) CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Email,
+		&i.PasswordHash,
 	)
 	return i, err
 }
@@ -65,8 +71,29 @@ func (q *Queries) DeleteStaff(ctx context.Context, arg DeleteStaffParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const getStaffByEmail = `-- name: GetStaffByEmail :one
+SELECT id, merchant_id, name, phone, role, created_at, updated_at, email, password_hash FROM staff WHERE email = $1::text
+`
+
+func (q *Queries) GetStaffByEmail(ctx context.Context, dollar_1 string) (Staff, error) {
+	row := q.db.QueryRow(ctx, getStaffByEmail, dollar_1)
+	var i Staff
+	err := row.Scan(
+		&i.ID,
+		&i.MerchantID,
+		&i.Name,
+		&i.Phone,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.PasswordHash,
+	)
+	return i, err
+}
+
 const getStaffByPhone = `-- name: GetStaffByPhone :one
-SELECT id, merchant_id, name, phone, role, created_at, updated_at FROM staff WHERE phone = $1
+SELECT id, merchant_id, name, phone, role, created_at, updated_at, email, password_hash FROM staff WHERE phone = $1
 `
 
 func (q *Queries) GetStaffByPhone(ctx context.Context, phone string) (Staff, error) {
@@ -80,12 +107,14 @@ func (q *Queries) GetStaffByPhone(ctx context.Context, phone string) (Staff, err
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Email,
+		&i.PasswordHash,
 	)
 	return i, err
 }
 
 const listStaffByMerchant = `-- name: ListStaffByMerchant :many
-SELECT id, merchant_id, name, phone, role, created_at, updated_at FROM staff WHERE merchant_id = $1 ORDER BY created_at DESC
+SELECT id, merchant_id, name, phone, role, created_at, updated_at, email, password_hash FROM staff WHERE merchant_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListStaffByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Staff, error) {
@@ -105,6 +134,8 @@ func (q *Queries) ListStaffByMerchant(ctx context.Context, merchantID pgtype.UUI
 			&i.Role,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Email,
+			&i.PasswordHash,
 		); err != nil {
 			return nil, err
 		}

@@ -18,6 +18,10 @@ type Options struct {
 	DevMode           bool
 	PaystackSecretKey string
 	WebBaseURL        string
+
+	WhatsAppAccessToken        string
+	WhatsAppAppSecret          string
+	WhatsAppWebhookVerifyToken string
 }
 
 func New(opts Options) *fiber.App {
@@ -35,6 +39,10 @@ func New(opts Options) *fiber.App {
 		DevMode:           opts.DevMode,
 		PaystackSecretKey: opts.PaystackSecretKey,
 		WebBaseURL:        opts.WebBaseURL,
+
+		WhatsAppAccessToken:        opts.WhatsAppAccessToken,
+		WhatsAppAppSecret:          opts.WhatsAppAppSecret,
+		WhatsAppWebhookVerifyToken: opts.WhatsAppWebhookVerifyToken,
 	})
 	orderxpayhttp.RegisterRoutes(app, h)
 

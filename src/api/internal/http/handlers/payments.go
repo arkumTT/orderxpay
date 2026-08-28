@@ -209,7 +209,7 @@ func (h *Handler) HandlePSPWebhook(c *fiber.Ctx) error {
 	signature := c.Get("x-paystack-signature")
 	sigValid := psp.VerifyWebhookSignature(pspClient.SecretKey, body, signature)
 	if !sigValid {
-		h.logWebhookDelivery(c.Context(), "", "", false, false, "invalid signature")
+		h.logWebhookDelivery(c.Context(), "paystack", "", "", false, false, "invalid signature")
 		return badRequest(c, "invalid webhook signature")
 	}
 
@@ -223,31 +223,31 @@ func (h *Handler) HandlePSPWebhook(c *fiber.Ctx) error {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &event); err != nil {
-		h.logWebhookDelivery(c.Context(), "", "", sigValid, false, "invalid JSON payload")
+		h.logWebhookDelivery(c.Context(), "paystack", "", "", sigValid, false, "invalid JSON payload")
 		return badRequest(c, "invalid webhook payload")
 	}
 
 	if event.Event != "charge.success" {
-		h.logWebhookDelivery(c.Context(), event.Event, event.Data.Reference, sigValid, true, "")
+		h.logWebhookDelivery(c.Context(), "paystack", event.Event, event.Data.Reference, sigValid, true, "")
 		return c.SendStatus(fiber.StatusOK)
 	}
 
 	if err := h.creditSuccessfulPayment(c.Context(), event.Data.Reference, event.Data.Channel, event.Data.Fees); err != nil {
 		log.Printf("paystack webhook: failed to credit payment %s: %v", event.Data.Reference, err)
-		h.logWebhookDelivery(c.Context(), event.Event, event.Data.Reference, sigValid, false, err.Error())
+		h.logWebhookDelivery(c.Context(), "paystack", event.Event, event.Data.Reference, sigValid, false, err.Error())
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to process webhook"})
 	}
-	h.logWebhookDelivery(c.Context(), event.Event, event.Data.Reference, sigValid, true, "")
+	h.logWebhookDelivery(c.Context(), "paystack", event.Event, event.Data.Reference, sigValid, true, "")
 	return c.SendStatus(fiber.StatusOK)
 }
 
 // logWebhookDelivery records every inbound webhook call (Section 7.3's
 // "webhook delivery logs") regardless of outcome — a bad signature or a
 // processing failure previously only ever showed up in stdout. Best-effort:
-// a logging failure shouldn't turn into a 500 for the PSP's retry logic.
-func (h *Handler) logWebhookDelivery(ctx context.Context, eventType, reference string, sigValid, processedOK bool, errMsg string) {
+// a logging failure shouldn't turn into a 500 for the provider's retry logic.
+func (h *Handler) logWebhookDelivery(ctx context.Context, provider, eventType, reference string, sigValid, processedOK bool, errMsg string) {
 	if err := h.Queries.CreateWebhookDelivery(ctx, db.CreateWebhookDeliveryParams{
-		Provider:       "paystack",
+		Provider:       provider,
 		EventType:      textOrNull(eventType),
 		Reference:      textOrNull(reference),
 		SignatureValid: sigValid,

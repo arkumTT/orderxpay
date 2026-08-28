@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../../core/api_client.dart';
-import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import 'register_credentials_screen.dart';
 
-/// Self-serve sign-up (Section 4.1, Tier 0 KYC), styled per the OrderxPay
-/// Onboarding Design. Wired to the real CreateMerchant endpoint; "Send OTP"
-/// is a stand-in label — OTP delivery is stubbed server-side pending SMS
-/// provider selection (Section 9), so this calls the dev-token bootstrap
-/// (api_client.dart / cmd/devtoken's HTTP twin) to get a session instead.
+/// Registration Page 1 (Section 4.1, Tier 0 KYC): business name/category/
+/// phone, then a real phone-OTP verification loop. Only once VerifyPhoneOTP
+/// succeeds does Page 2 (username/email/password) become reachable — see
+/// RegisterCredentialsScreen.
+///
+/// No SMS provider is wired up server-side (Section 9 — not yet selected),
+/// so the API can't actually text the code to the merchant. In dev builds
+/// the request response includes dev_otp directly (see otp.go), shown here
+/// as a clearly-labeled dev hint so the whole loop is genuinely testable —
+/// this must be replaced by real SMS delivery before real users register.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -22,49 +27,77 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _businessNameController = TextEditingController();
   final _categoryController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _codeController = TextEditingController();
   final _api = ApiClient();
 
-  bool _submitting = false;
+  bool _otpRequested = false;
+  bool _requestingOtp = false;
+  bool _verifying = false;
   String? _error;
+  String? _devOtp;
+  int? _attemptsRemaining;
 
   @override
   void dispose() {
     _businessNameController.dispose();
     _categoryController.dispose();
     _phoneController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  String get _fullPhone => '+233${_phoneController.text.replaceAll(RegExp(r'\s'), '')}';
+
+  Future<void> _sendOtp() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
-      _submitting = true;
+      _requestingOtp = true;
       _error = null;
     });
     try {
-      final phone = '+233${_phoneController.text.replaceAll(RegExp(r'\s'), '')}';
-      final merchant = await _api.post('/api/v1/public/merchants', {
-        'business_name': _businessNameController.text,
-        'category': _categoryController.text,
-        'phone': phone,
+      final res = await _api.requestOtp(_fullPhone);
+      setState(() {
+        _otpRequested = true;
+        _devOtp = res['dev_otp'] as String?;
+        _attemptsRemaining = null;
+        _codeController.clear();
       });
-      final merchantId = merchant['id'] as String;
-
-      final tokenRes = await _api.post('/api/v1/public/dev/token', {
-        'merchant_id': merchantId,
-      });
-      await Session.instance.save(
-        token: tokenRes['access_token'] as String,
-        merchantId: merchantId,
-        businessName: _businessNameController.text,
-      );
-
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/');
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() => _requestingOtp = false);
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    if (_codeController.text.trim().isEmpty) {
+      setState(() => _error = 'Enter the code you received');
+      return;
+    }
+    setState(() {
+      _verifying = true;
+      _error = null;
+    });
+    try {
+      await _api.verifyOtp(_fullPhone, _codeController.text.trim());
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RegisterCredentialsScreen(
+            businessName: _businessNameController.text,
+            category: _categoryController.text,
+            phone: _fullPhone,
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      setState(() {
+        _error = e.message;
+        _attemptsRemaining = (e.body?['attempts_remaining'] as num?)?.toInt();
+      });
+    } finally {
+      if (mounted) setState(() => _verifying = false);
     }
   }
 
@@ -96,10 +129,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 const SizedBox(height: 36),
                 OxpCard(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 22,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -117,6 +147,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         label: 'Business name',
                         controller: _businessNameController,
                         hintText: 'Hand2Muff',
+                        readOnly: _otpRequested,
                         validator: (v) =>
                             (v == null || v.isEmpty) ? 'Required' : null,
                       ),
@@ -125,6 +156,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         label: 'Business category',
                         controller: _categoryController,
                         hintText: 'Restaurant — Food & Dining',
+                        readOnly: _otpRequested,
                       ),
                       const SizedBox(height: 16),
                       Row(
@@ -156,12 +188,40 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               controller: _phoneController,
                               hintText: '20 553 7712',
                               keyboardType: TextInputType.phone,
+                              readOnly: _otpRequested,
                               validator: (v) =>
                                   (v == null || v.isEmpty) ? 'Required' : null,
                             ),
                           ),
                         ],
                       ),
+                      if (_otpRequested) ...[
+                        const SizedBox(height: 16),
+                        OxpField(
+                          label: 'Enter code',
+                          controller: _codeController,
+                          hintText: '6-digit code',
+                          keyboardType: TextInputType.number,
+                        ),
+                        if (_devOtp != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'DEV: code is $_devOtp (no SMS provider wired up)',
+                            style: const TextStyle(
+                              color: AppColors.textDisabled,
+                              fontSize: 11,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                        if (_attemptsRemaining != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '$_attemptsRemaining attempt(s) remaining',
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          ),
+                        ],
+                      ],
                       if (_error != null) ...[
                         const SizedBox(height: 12),
                         Text(
@@ -173,16 +233,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       ],
                       const SizedBox(height: 20),
-                      OxpButton(
-                        label: _submitting ? 'Creating…' : 'Send OTP',
-                        loading: _submitting,
-                        icon: const Icon(
-                          Icons.arrow_forward,
-                          color: Colors.white,
-                          size: 16,
+                      if (!_otpRequested)
+                        OxpButton(
+                          label: _requestingOtp ? 'Sending…' : 'Send OTP',
+                          loading: _requestingOtp,
+                          icon: const Icon(
+                            Icons.arrow_forward,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          onPressed: _requestingOtp ? null : _sendOtp,
+                        )
+                      else ...[
+                        OxpButton(
+                          label: _verifying ? 'Verifying…' : 'Verify Code',
+                          loading: _verifying,
+                          onPressed: _verifying ? null : _verifyOtp,
                         ),
-                        onPressed: _submitting ? null : _submit,
-                      ),
+                        const SizedBox(height: 10),
+                        OxpButton(
+                          label: 'Resend Code',
+                          variant: OxpButtonVariant.secondary,
+                          onPressed: _requestingOtp ? null : _sendOtp,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -218,6 +292,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ],
                   ),
                   textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                GestureDetector(
+                  onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+                  child: const Text.rich(
+                    TextSpan(
+                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                      children: [
+                        TextSpan(text: 'Already have an account? '),
+                        TextSpan(
+                          text: 'Log in',
+                          style: TextStyle(
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

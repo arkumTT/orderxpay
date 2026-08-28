@@ -14,6 +14,7 @@ class OxpField extends StatelessWidget {
     this.validator,
     this.maxLines = 1,
     this.readOnly = false,
+    this.obscureText = false,
     this.onTap,
     this.suffix,
     this.prefix,
@@ -26,6 +27,7 @@ class OxpField extends StatelessWidget {
   final String? Function(String?)? validator;
   final int maxLines;
   final bool readOnly;
+  final bool obscureText;
   final VoidCallback? onTap;
   final Widget? suffix;
   final Widget? prefix;
@@ -51,6 +53,7 @@ class OxpField extends StatelessWidget {
           validator: validator,
           maxLines: maxLines,
           readOnly: readOnly,
+          obscureText: obscureText,
           onTap: onTap,
           style: const TextStyle(fontSize: 15, color: AppColors.primaryBlack),
           decoration: InputDecoration(

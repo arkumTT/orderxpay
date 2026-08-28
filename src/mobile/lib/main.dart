@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/design/app_theme.dart';
 import 'core/session.dart';
 import 'features/home/screens/home_screen.dart';
+import 'features/onboarding/screens/login_screen.dart';
 import 'features/onboarding/screens/onboarding_screen.dart';
 import 'features/catalog/screens/catalog_screen.dart';
 import 'features/catalog/screens/catalog_sync_screen.dart';
@@ -32,8 +33,9 @@ class OrderxPayApp extends StatelessWidget {
     return MaterialApp(
       title: 'OrderxPay',
       theme: appTheme,
-      initialRoute: startSignedIn ? '/' : '/onboarding',
+      initialRoute: startSignedIn ? '/' : '/login',
       routes: {
+        '/login': (context) => const LoginScreen(),
         '/onboarding': (context) => const OnboardingScreen(),
         '/': (context) => const HomeScreen(),
         '/catalog': (context) => const CatalogScreen(),
