@@ -16,6 +16,11 @@ import (
 func RegisterRoutes(app *fiber.App, h *handlers.Handler) {
 	app.Get("/healthz", h.Health)
 
+	// Section 4.2 — uploaded item photos, served publicly and
+	// unauthenticated (same posture as GetMerchantPublicProfile/hosted
+	// catalog: item photos are meant to be visible to any customer).
+	app.Static("/uploads", h.UploadDir)
+
 	v1 := app.Group("/api/v1")
 
 	public := v1.Group("/public")
@@ -64,6 +69,7 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Get("/items/:itemId", h.GetItem)
 	own.Put("/items/:itemId", h.UpdateItem)
 	own.Delete("/items/:itemId", h.ArchiveItem)
+	own.Post("/items/photo", h.UploadItemPhoto)
 
 	own.Get("/order-requests", h.ListPendingOrderRequests)
 	own.Patch("/order-requests/:requestId", h.SetOrderRequestStatus)

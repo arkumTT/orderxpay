@@ -44,6 +44,9 @@ func main() {
 		WhatsAppAccessToken:        cfg.WhatsAppAccessToken,
 		WhatsAppAppSecret:          cfg.WhatsAppAppSecret,
 		WhatsAppWebhookVerifyToken: cfg.WhatsAppWebhookVerifyToken,
+
+		UploadDir:        cfg.UploadDir,
+		APIPublicBaseURL: cfg.APIPublicBaseURL,
 	})
 
 	log.Printf("orderxpay-api listening on :%s (%s)", cfg.Port, cfg.Env)

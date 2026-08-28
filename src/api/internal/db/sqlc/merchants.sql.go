@@ -14,7 +14,7 @@ import (
 const createMerchant = `-- name: CreateMerchant :one
 INSERT INTO merchants (business_name, category, phone, username, email, password_hash)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes
 `
 
 type CreateMerchantParams struct {
@@ -60,12 +60,13 @@ func (q *Queries) CreateMerchant(ctx context.Context, arg CreateMerchantParams) 
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
 
 const getMerchant = `-- name: GetMerchant :one
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id FROM merchants WHERE id = $1
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes FROM merchants WHERE id = $1
 `
 
 func (q *Queries) GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error) {
@@ -95,12 +96,13 @@ func (q *Queries) GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, er
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
 
 const getMerchantByEmail = `-- name: GetMerchantByEmail :one
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id FROM merchants WHERE email = $1::text
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes FROM merchants WHERE email = $1::text
 `
 
 func (q *Queries) GetMerchantByEmail(ctx context.Context, dollar_1 string) (Merchant, error) {
@@ -130,12 +132,13 @@ func (q *Queries) GetMerchantByEmail(ctx context.Context, dollar_1 string) (Merc
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
 
 const getMerchantByPhone = `-- name: GetMerchantByPhone :one
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id FROM merchants WHERE phone = $1
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes FROM merchants WHERE phone = $1
 `
 
 func (q *Queries) GetMerchantByPhone(ctx context.Context, phone string) (Merchant, error) {
@@ -165,12 +168,13 @@ func (q *Queries) GetMerchantByPhone(ctx context.Context, phone string) (Merchan
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
 
 const getMerchantByWhatsAppPhoneNumberID = `-- name: GetMerchantByWhatsAppPhoneNumberID :one
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id FROM merchants WHERE whatsapp_phone_number_id = $1::text
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes FROM merchants WHERE whatsapp_phone_number_id = $1::text
 `
 
 // Attributes an inbound WhatsApp webhook to a merchant — see
@@ -202,12 +206,59 @@ func (q *Queries) GetMerchantByWhatsAppPhoneNumberID(ctx context.Context, dollar
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
+	)
+	return i, err
+}
+
+const incrementMerchantStorageUsed = `-- name: IncrementMerchantStorageUsed :one
+UPDATE merchants SET storage_used_bytes = storage_used_bytes + $2 WHERE id = $1
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes
+`
+
+type IncrementMerchantStorageUsedParams struct {
+	ID               pgtype.UUID `json:"id"`
+	StorageUsedBytes int64       `json:"storage_used_bytes"`
+}
+
+// Section 4.2: item photo uploads. delta is the file size in bytes — always
+// positive today (nothing decrements it yet; replacing/archiving an item's
+// photo leaves the old file's bytes counted, a known simplification for
+// this first pass).
+func (q *Queries) IncrementMerchantStorageUsed(ctx context.Context, arg IncrementMerchantStorageUsedParams) (Merchant, error) {
+	row := q.db.QueryRow(ctx, incrementMerchantStorageUsed, arg.ID, arg.StorageUsedBytes)
+	var i Merchant
+	err := row.Scan(
+		&i.ID,
+		&i.BusinessName,
+		&i.Category,
+		&i.Phone,
+		&i.KycTier,
+		&i.Status,
+		&i.ServiceChargeAllocation,
+		&i.ServiceChargeSplitBps,
+		&i.PayoutAccountType,
+		&i.PayoutAccountRef,
+		&i.PayoutSchedule,
+		&i.PayoutMinThresholdPesewas,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PayoutFeeAbsorption,
+		&i.WhatsappAutoReplyEnabled,
+		&i.WhatsappGreetingMessage,
+		&i.DeliveryEnabled,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Username,
+		&i.EmailVerifiedAt,
+		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
 
 const listMerchants = `-- name: ListMerchants :many
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id FROM merchants
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes FROM merchants
 WHERE ($3::text = '' OR status = $3::text)
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -252,6 +303,7 @@ func (q *Queries) ListMerchants(ctx context.Context, arg ListMerchantsParams) ([
 			&i.Username,
 			&i.EmailVerifiedAt,
 			&i.WhatsappPhoneNumberID,
+			&i.StorageUsedBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -265,7 +317,7 @@ func (q *Queries) ListMerchants(ctx context.Context, arg ListMerchantsParams) ([
 
 const updateMerchantDeliveryEnabled = `-- name: UpdateMerchantDeliveryEnabled :one
 UPDATE merchants SET delivery_enabled = $2 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes
 `
 
 type UpdateMerchantDeliveryEnabledParams struct {
@@ -300,6 +352,7 @@ func (q *Queries) UpdateMerchantDeliveryEnabled(ctx context.Context, arg UpdateM
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
@@ -310,7 +363,7 @@ SET service_charge_allocation = $2,
     service_charge_split_bps = $3,
     payout_fee_absorption = $4
 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes
 `
 
 type UpdateMerchantFeeSettingsParams struct {
@@ -352,13 +405,14 @@ func (q *Queries) UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerch
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
 
 const updateMerchantKYCTier = `-- name: UpdateMerchantKYCTier :one
 UPDATE merchants SET kyc_tier = $2 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes
 `
 
 type UpdateMerchantKYCTierParams struct {
@@ -393,13 +447,14 @@ func (q *Queries) UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantK
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
 
 const updateMerchantStatus = `-- name: UpdateMerchantStatus :one
 UPDATE merchants SET status = $2 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes
 `
 
 type UpdateMerchantStatusParams struct {
@@ -434,13 +489,14 @@ func (q *Queries) UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantSt
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
 
 const updateMerchantWhatsAppPhoneNumberID = `-- name: UpdateMerchantWhatsAppPhoneNumberID :one
 UPDATE merchants SET whatsapp_phone_number_id = $2 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes
 `
 
 type UpdateMerchantWhatsAppPhoneNumberIDParams struct {
@@ -478,6 +534,7 @@ func (q *Queries) UpdateMerchantWhatsAppPhoneNumberID(ctx context.Context, arg U
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }
@@ -487,7 +544,7 @@ UPDATE merchants
 SET whatsapp_auto_reply_enabled = $2,
     whatsapp_greeting_message = $3
 WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes
 `
 
 type UpdateMerchantWhatsAppSettingsParams struct {
@@ -523,6 +580,7 @@ func (q *Queries) UpdateMerchantWhatsAppSettings(ctx context.Context, arg Update
 		&i.Username,
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
 	)
 	return i, err
 }

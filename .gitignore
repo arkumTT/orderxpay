@@ -12,6 +12,7 @@ Thumbs.db
 # --- Go (src/api) ---
 src/api/bin/
 src/api/tmp/
+src/api/uploads/
 *.exe
 *.test
 *.out

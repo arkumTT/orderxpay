@@ -143,6 +143,11 @@ type Querier interface {
 	// PASETO token payload at login time.
 	GetUserPermissionKeys(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	GrantUserPermission(ctx context.Context, arg GrantUserPermissionParams) error
+	// Section 4.2: item photo uploads. delta is the file size in bytes — always
+	// positive today (nothing decrements it yet; replacing/archiving an item's
+	// photo leaves the old file's bytes counted, a known simplification for
+	// this first pass).
+	IncrementMerchantStorageUsed(ctx context.Context, arg IncrementMerchantStorageUsedParams) (Merchant, error)
 	IncrementPhoneOTPAttempts(ctx context.Context, id pgtype.UUID) error
 	// Merchant-app side of the admin-maintained catalog (Section 4.11/9.4) —
 	// only what's actually active, unlike the admin list above which needs to

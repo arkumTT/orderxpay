@@ -31,6 +31,11 @@ type Handler struct {
 	WhatsApp                   *whatsapp.Client
 	WhatsAppAppSecret          string
 	WhatsAppWebhookVerifyToken string
+	// Section 4.2 — item photo uploads. UploadDir is a local filesystem
+	// path (no cloud storage account exists); APIPublicBaseURL is this
+	// API's own public origin, for building an absolute image_url.
+	UploadDir        string
+	APIPublicBaseURL string
 }
 
 type Options struct {
@@ -43,6 +48,9 @@ type Options struct {
 	WhatsAppAccessToken        string
 	WhatsAppAppSecret          string
 	WhatsAppWebhookVerifyToken string
+
+	UploadDir        string
+	APIPublicBaseURL string
 }
 
 func New(opts Options) *Handler {
@@ -56,5 +64,7 @@ func New(opts Options) *Handler {
 		WhatsApp:                   whatsapp.NewClient(opts.WhatsAppAccessToken),
 		WhatsAppAppSecret:          opts.WhatsAppAppSecret,
 		WhatsAppWebhookVerifyToken: opts.WhatsAppWebhookVerifyToken,
+		UploadDir:                  opts.UploadDir,
+		APIPublicBaseURL:           opts.APIPublicBaseURL,
 	}
 }

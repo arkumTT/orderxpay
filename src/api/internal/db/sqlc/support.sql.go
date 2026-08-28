@@ -147,7 +147,7 @@ func (q *Queries) SearchInvoicesForSupport(ctx context.Context, query string) ([
 }
 
 const searchMerchantsForSupport = `-- name: SearchMerchantsForSupport :many
-SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id FROM merchants
+SELECT id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes FROM merchants
 WHERE business_name ILIKE '%' || $1::text || '%'
    OR phone ILIKE '%' || $1::text || '%'
 ORDER BY created_at DESC
@@ -187,6 +187,7 @@ func (q *Queries) SearchMerchantsForSupport(ctx context.Context, query string) (
 			&i.Username,
 			&i.EmailVerifiedAt,
 			&i.WhatsappPhoneNumberID,
+			&i.StorageUsedBytes,
 		); err != nil {
 			return nil, err
 		}

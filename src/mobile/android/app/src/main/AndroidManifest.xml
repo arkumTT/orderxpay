@@ -3,6 +3,11 @@
          contacts on the New Order screen via flutter_contacts' native
          picker. Only READ (not WRITE) — the app never edits contacts. -->
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <!-- Section 4.2: taking a photo for a catalog item (New/Edit Item
+         screen) via image_picker's camera source. Picking from the
+         gallery uses the system Photo Picker and needs no permission
+         declaration on modern Android. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <application
         android:label="orderxpay_mobile"
         android:name="${applicationName}"

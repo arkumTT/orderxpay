@@ -22,6 +22,9 @@ type Options struct {
 	WhatsAppAccessToken        string
 	WhatsAppAppSecret          string
 	WhatsAppWebhookVerifyToken string
+
+	UploadDir        string
+	APIPublicBaseURL string
 }
 
 func New(opts Options) *fiber.App {
@@ -43,6 +46,9 @@ func New(opts Options) *fiber.App {
 		WhatsAppAccessToken:        opts.WhatsAppAccessToken,
 		WhatsAppAppSecret:          opts.WhatsAppAppSecret,
 		WhatsAppWebhookVerifyToken: opts.WhatsAppWebhookVerifyToken,
+
+		UploadDir:        opts.UploadDir,
+		APIPublicBaseURL: opts.APIPublicBaseURL,
 	})
 	orderxpayhttp.RegisterRoutes(app, h)
 
