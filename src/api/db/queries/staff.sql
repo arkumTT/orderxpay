@@ -1,10 +1,13 @@
 -- name: CreateStaff :one
-INSERT INTO staff (merchant_id, name, phone, role)
-VALUES ($1, $2, $3, $4)
+INSERT INTO staff (merchant_id, name, phone, role, email, password_hash)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetStaffByPhone :one
 SELECT * FROM staff WHERE phone = $1;
+
+-- name: GetStaffByEmail :one
+SELECT * FROM staff WHERE email = $1::text;
 
 -- name: ListStaffByMerchant :many
 SELECT * FROM staff WHERE merchant_id = $1 ORDER BY created_at DESC;

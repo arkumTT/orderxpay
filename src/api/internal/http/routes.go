@@ -20,9 +20,11 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handler) {
 
 	public := v1.Group("/public")
 	public.Post("/admin/auth/login", h.UserLogin)
+	public.Post("/auth/login", h.MerchantLogin)
 	public.Post("/merchants", h.CreateMerchant)
-	public.Post("/merchants/:id/otp/request", h.RequestMerchantOTP)
-	public.Post("/merchants/:id/otp/verify", h.VerifyMerchantOTP)
+	public.Post("/otp/request", h.RequestPhoneOTP)
+	public.Post("/otp/verify", h.VerifyPhoneOTP)
+	public.Get("/email/verify", h.VerifyMerchantEmail)
 	public.Post("/dev/token", h.DevIssueMerchantToken) // ENV=development only — see auth.go
 	public.Get("/checkout/:reference", h.GetInvoiceByReference)
 	public.Post("/checkout/:reference/pay", h.InitiateCheckoutPayment)
@@ -31,6 +33,8 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handler) {
 	public.Get("/merchants/:id/items", h.ListItems)          // same — catalog data is meant to be public
 	public.Post("/merchants/:id/order-requests", h.CreateOrderRequest)
 	public.Post("/webhooks/psp", h.HandlePSPWebhook)
+	public.Get("/webhooks/whatsapp", h.VerifyWhatsAppWebhook)
+	public.Post("/webhooks/whatsapp", h.HandleWhatsAppWebhook)
 
 	app_ := v1.Group("/app", middleware.RequireAuth(h.TokenMaker), middleware.RequireActorType(auth.ActorMerchant, auth.ActorStaff))
 	registerMerchantScopedRoutes(app_, h)
@@ -116,6 +120,7 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	merchants.Get("/:id/risk-flags", perm("merchants.view"), h.ListMerchantRiskFlags)
 	merchants.Get("/:id/notes", perm("merchants.view"), h.ListMerchantNotes)
 	merchants.Post("/:id/notes", perm("merchants.view"), h.CreateMerchantNote)
+	merchants.Patch("/:id/whatsapp-phone-number", perm("integrations.manage"), h.SetMerchantWhatsAppPhoneNumberID)
 
 	r.Get("/kyc-submissions", perm("merchants.kyc_review"), h.ListKYCSubmissionsAdmin)
 	r.Patch("/kyc-submissions/:id/status", perm("merchants.kyc_review"), h.ReviewKYCSubmission)

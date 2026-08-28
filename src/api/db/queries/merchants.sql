@@ -1,6 +1,6 @@
 -- name: CreateMerchant :one
-INSERT INTO merchants (business_name, category, phone)
-VALUES ($1, $2, $3)
+INSERT INTO merchants (business_name, category, phone, username, email, password_hash)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetMerchant :one
@@ -8,6 +8,9 @@ SELECT * FROM merchants WHERE id = $1;
 
 -- name: GetMerchantByPhone :one
 SELECT * FROM merchants WHERE phone = $1;
+
+-- name: GetMerchantByEmail :one
+SELECT * FROM merchants WHERE email = $1::text;
 
 -- name: ListMerchants :many
 SELECT * FROM merchants
@@ -40,4 +43,16 @@ RETURNING *;
 
 -- name: UpdateMerchantDeliveryEnabled :one
 UPDATE merchants SET delivery_enabled = $2 WHERE id = $1
+RETURNING *;
+
+-- name: GetMerchantByWhatsAppPhoneNumberID :one
+-- Attributes an inbound WhatsApp webhook to a merchant — see
+-- internal/whatsapp and handlers/whatsapp.go.
+SELECT * FROM merchants WHERE whatsapp_phone_number_id = $1::text;
+
+-- name: UpdateMerchantWhatsAppPhoneNumberID :one
+-- Admin-only provisioning step (Section 7.3): OrderxPay registers the
+-- merchant's number under the platform WABA in Meta's console, then
+-- records the resulting phone_number_id here.
+UPDATE merchants SET whatsapp_phone_number_id = $2 WHERE id = $1
 RETURNING *;

@@ -40,6 +40,10 @@ func main() {
 		DevMode:           cfg.Env == "development",
 		PaystackSecretKey: cfg.PaystackSecretKey,
 		WebBaseURL:        cfg.WebBaseURL,
+
+		WhatsAppAccessToken:        cfg.WhatsAppAccessToken,
+		WhatsAppAppSecret:          cfg.WhatsAppAppSecret,
+		WhatsAppWebhookVerifyToken: cfg.WhatsAppWebhookVerifyToken,
 	})
 
 	log.Printf("orderxpay-api listening on :%s (%s)", cfg.Port, cfg.Env)

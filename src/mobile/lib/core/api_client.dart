@@ -5,9 +5,10 @@ import 'models.dart';
 import 'session.dart';
 
 class ApiException implements Exception {
-  ApiException(this.statusCode, this.message);
+  ApiException(this.statusCode, this.message, {this.body});
   final int statusCode;
   final String message;
+  final Map<String, dynamic>? body;
 
   @override
   String toString() => 'ApiException($statusCode): $message';
@@ -67,6 +68,7 @@ class ApiClient {
       throw ApiException(
         res.statusCode,
         body['error']?.toString() ?? res.reasonPhrase ?? 'request failed',
+        body: body,
       );
     }
     if (res.body.isEmpty) return null;
@@ -82,6 +84,47 @@ class ApiClient {
     String path,
     Map<String, dynamic> body,
   ) async => (await _send('POST', path, body: body)) as Map<String, dynamic>;
+
+  /// Section 4.1/4.9 — real email+password login, shared by merchant owners
+  /// and staff. Returns access_token/merchant_id/actor_type/business_name;
+  /// the caller (LoginScreen) is responsible for saving it into Session.
+  Future<Map<String, dynamic>> login(String email, String password) => post(
+    '/api/v1/public/auth/login',
+    {'email': email, 'password': password},
+  );
+
+  /// Section 4.1 registration Page 1 — sends a 6-digit code for [phone].
+  /// No SMS provider is wired up server-side, so in dev builds the response
+  /// includes dev_otp directly (see otp.go) instead of a real text message.
+  Future<Map<String, dynamic>> requestOtp(String phone) =>
+      post('/api/v1/public/otp/request', {'phone': phone});
+
+  /// Section 4.1 registration Page 1 — verifies [code] for [phone]. Throws
+  /// [ApiException] on a wrong/expired/exhausted code; its `body` carries
+  /// `attempts_remaining` when the server tracked one.
+  Future<Map<String, dynamic>> verifyOtp(String phone, String code) =>
+      post('/api/v1/public/otp/verify', {'phone': phone, 'code': code});
+
+  /// Section 4.1 registration Page 2 — creates the merchant. The backend
+  /// re-checks that [phone] was actually OTP-verified recently; this call
+  /// fails with a clear error if Page 1 wasn't genuinely completed. Returns
+  /// the merchant plus (dev builds only) dev_email_verify_token, since no
+  /// email provider is wired up server-side either (see CreateMerchant).
+  Future<Map<String, dynamic>> registerMerchant({
+    required String businessName,
+    required String category,
+    required String phone,
+    required String username,
+    required String email,
+    required String password,
+  }) => post('/api/v1/public/merchants', {
+    'business_name': businessName,
+    'category': category,
+    'phone': phone,
+    'username': username,
+    'email': email,
+    'password': password,
+  });
 
   // --- typed calls, all merchant-session-scoped ---
 

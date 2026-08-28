@@ -3,21 +3,52 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/crypto/bcrypt"
 
 	db "github.com/orderxpay/api/internal/db/sqlc"
 )
+
+const emailVerificationExpiry = 24 * time.Hour
+
+const minPasswordLength = 8
+
+// stripMerchantSecrets zeroes password_hash before a Merchant row is ever
+// serialized to a client — no handler should return a bcrypt hash, even to
+// an authenticated admin or the merchant themselves.
+func stripMerchantSecrets(m db.Merchant) db.Merchant {
+	m.PasswordHash = pgtype.Text{}
+	return m
+}
 
 type createMerchantRequest struct {
 	BusinessName string `json:"business_name"`
 	Category     string `json:"category"`
 	Phone        string `json:"phone"`
+	Username     string `json:"username"`
+	Email        string `json:"email"`
+	Password     string `json:"password"`
 }
 
-// CreateMerchant is the merchant self-serve sign-up (Section 4.1, Tier 0 KYC).
+// CreateMerchant is Page 2 of the real registration flow (Section 4.1):
+// Page 1 (business_name/category/phone) must already have a phone verified
+// via RequestPhoneOTP/VerifyPhoneOTP (otp.go) within the last 30 minutes —
+// this handler re-checks that server-side rather than trusting the client
+// to have done Page 1 honestly. Page 2 itself supplies username/email/
+// password.
+//
+// The merchant is created with email_verified_at unset; a real
+// verification token is generated and would be emailed, but no email
+// provider is wired up (Section 9), so — same honesty as the OTP side —
+// the token/link is only exposed in the response when running in
+// ENV=development. Email verification is advisory, not a login gate: see
+// MerchantLogin, which returns email_verified so the app can show that
+// state without blocking access.
 func (h *Handler) CreateMerchant(c *fiber.Ctx) error {
 	var req createMerchantRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -26,16 +57,72 @@ func (h *Handler) CreateMerchant(c *fiber.Ctx) error {
 	if req.BusinessName == "" || req.Phone == "" {
 		return badRequest(c, "business_name and phone are required")
 	}
+	if req.Username == "" {
+		return badRequest(c, "username is required")
+	}
+	if req.Email == "" || req.Password == "" {
+		return badRequest(c, "email and password are required")
+	}
+	if len(req.Password) < minPasswordLength {
+		return badRequest(c, "password must be at least 8 characters")
+	}
+
+	_, err := h.Queries.GetRecentVerifiedPhoneOTP(c.Context(), db.GetRecentVerifiedPhoneOTPParams{
+		Phone:      req.Phone,
+		VerifiedAt: pgtype.Timestamptz{Time: time.Now().Add(-otpVerifiedWindow), Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return badRequest(c, "phone not verified — please verify via OTP first")
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to check phone verification"})
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to process password"})
+	}
 
 	merchant, err := h.Queries.CreateMerchant(c.Context(), db.CreateMerchantParams{
 		BusinessName: req.BusinessName,
 		Category:     textOrNull(req.Category),
 		Phone:        req.Phone,
+		Username:     textOrNull(req.Username),
+		Email:        textOrNull(req.Email),
+		PasswordHash: textOrNull(string(hash)),
 	})
 	if err != nil {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "merchant with this phone may already exist"})
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "merchant with this phone, username, or email may already exist"})
 	}
-	return c.Status(fiber.StatusCreated).JSON(merchant)
+
+	var devToken string
+	token, err := generateVerificationToken()
+	if err != nil {
+		log.Printf("email verification: failed to generate token for merchant %s: %v", merchant.ID, err)
+	} else {
+		ev, err := h.Queries.CreateEmailVerification(c.Context(), db.CreateEmailVerificationParams{
+			MerchantID: merchant.ID,
+			Token:      token,
+			ExpiresAt:  pgtype.Timestamptz{Time: time.Now().Add(emailVerificationExpiry), Valid: true},
+		})
+		if err != nil {
+			log.Printf("email verification: failed to create record for merchant %s: %v", merchant.ID, err)
+		} else {
+			log.Printf("email verification: would email %s a link with token %s — no email provider wired up, dev-mode-only delivery", req.Email, token)
+			if h.DevMode {
+				devToken = ev.Token
+			}
+		}
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(createMerchantResponse{
+		Merchant:            stripMerchantSecrets(merchant),
+		DevEmailVerifyToken: devToken,
+	})
+}
+
+type createMerchantResponse struct {
+	db.Merchant
+	DevEmailVerifyToken string `json:"dev_email_verify_token,omitempty"`
 }
 
 type merchantPublicProfile struct {
@@ -81,7 +168,7 @@ func (h *Handler) GetMerchant(c *fiber.Ctx) error {
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load merchant"})
 	}
-	return c.JSON(merchant)
+	return c.JSON(stripMerchantSecrets(merchant))
 }
 
 // ListMerchants backs the Back Office merchant list (Section 7.1).
@@ -97,7 +184,11 @@ func (h *Handler) ListMerchants(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list merchants"})
 	}
-	return c.JSON(merchants)
+	sanitized := make([]db.Merchant, len(merchants))
+	for i, m := range merchants {
+		sanitized[i] = stripMerchantSecrets(m)
+	}
+	return c.JSON(sanitized)
 }
 
 type updateMerchantStatusRequest struct {
@@ -147,7 +238,7 @@ func (h *Handler) UpdateMerchantStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
 	}
 
-	return c.JSON(merchant)
+	return c.JSON(stripMerchantSecrets(merchant))
 }
 
 type updateMerchantKYCTierRequest struct {
@@ -192,7 +283,7 @@ func (h *Handler) UpdateMerchantKYCTier(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
 	}
 
-	return c.JSON(merchant)
+	return c.JSON(stripMerchantSecrets(merchant))
 }
 
 type updateMerchantFeeSettingsRequest struct {
@@ -248,7 +339,7 @@ func (h *Handler) UpdateMerchantFeeSettings(c *fiber.Ctx) error {
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update fee settings"})
 	}
-	return c.JSON(merchant)
+	return c.JSON(stripMerchantSecrets(merchant))
 }
 
 type updateMerchantWhatsAppSettingsRequest struct {
@@ -287,7 +378,7 @@ func (h *Handler) UpdateMerchantWhatsAppSettings(c *fiber.Ctx) error {
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update whatsapp settings"})
 	}
-	return c.JSON(merchant)
+	return c.JSON(stripMerchantSecrets(merchant))
 }
 
 type updateMerchantDeliveryEnabledRequest struct {
@@ -317,5 +408,5 @@ func (h *Handler) UpdateMerchantDeliveryEnabled(c *fiber.Ctx) error {
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update delivery settings"})
 	}
-	return c.JSON(merchant)
+	return c.JSON(stripMerchantSecrets(merchant))
 }

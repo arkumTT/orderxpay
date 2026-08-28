@@ -75,6 +75,15 @@ type Dispute struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
+type EmailVerification struct {
+	ID         pgtype.UUID        `json:"id"`
+	MerchantID pgtype.UUID        `json:"merchant_id"`
+	Token      string             `json:"token"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	UsedAt     pgtype.Timestamptz `json:"used_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type FeatureFlag struct {
 	ID              pgtype.UUID        `json:"id"`
 	Key             string             `json:"key"`
@@ -206,6 +215,11 @@ type Merchant struct {
 	WhatsappAutoReplyEnabled  bool               `json:"whatsapp_auto_reply_enabled"`
 	WhatsappGreetingMessage   pgtype.Text        `json:"whatsapp_greeting_message"`
 	DeliveryEnabled           bool               `json:"delivery_enabled"`
+	Email                     pgtype.Text        `json:"email"`
+	PasswordHash              pgtype.Text        `json:"password_hash"`
+	Username                  pgtype.Text        `json:"username"`
+	EmailVerifiedAt           pgtype.Timestamptz `json:"email_verified_at"`
+	WhatsappPhoneNumberID     pgtype.Text        `json:"whatsapp_phone_number_id"`
 }
 
 type MerchantNote struct {
@@ -271,6 +285,16 @@ type PermissionGroup struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type PhoneOtp struct {
+	ID           pgtype.UUID        `json:"id"`
+	Phone        string             `json:"phone"`
+	Code         string             `json:"code"`
+	AttemptCount int32              `json:"attempt_count"`
+	VerifiedAt   pgtype.Timestamptz `json:"verified_at"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type RiskFlag struct {
 	ID              pgtype.UUID        `json:"id"`
 	MerchantID      pgtype.UUID        `json:"merchant_id"`
@@ -314,13 +338,15 @@ type Settlement struct {
 }
 
 type Staff struct {
-	ID         pgtype.UUID        `json:"id"`
-	MerchantID pgtype.UUID        `json:"merchant_id"`
-	Name       string             `json:"name"`
-	Phone      string             `json:"phone"`
-	Role       string             `json:"role"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID           pgtype.UUID        `json:"id"`
+	MerchantID   pgtype.UUID        `json:"merchant_id"`
+	Name         string             `json:"name"`
+	Phone        string             `json:"phone"`
+	Role         string             `json:"role"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	Email        pgtype.Text        `json:"email"`
+	PasswordHash pgtype.Text        `json:"password_hash"`
 }
 
 type User struct {

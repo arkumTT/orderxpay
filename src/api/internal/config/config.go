@@ -13,6 +13,12 @@ type Config struct {
 	PasetoSymmetricKey string // must be exactly 32 bytes
 	PaystackSecretKey  string // Section 9.1 — empty disables payment initiation, not a startup error
 	WebBaseURL         string // customer-facing web app, for PSP callback_url construction
+
+	// WhatsApp Cloud API (Section 4.4/6.2/7.3) — all three empty just means
+	// the integration silently doesn't fire yet, same as PaystackSecretKey.
+	WhatsAppAccessToken        string // Meta System User token, account-level (works across every merchant's phone number)
+	WhatsAppAppSecret          string // Meta App's Basic Settings secret, for inbound webhook signature verification
+	WhatsAppWebhookVerifyToken string // arbitrary string we choose; Meta echoes it back during the webhook subscribe handshake
 }
 
 func Load() (Config, error) {
@@ -25,6 +31,10 @@ func Load() (Config, error) {
 		PasetoSymmetricKey: os.Getenv("PASETO_SYMMETRIC_KEY"),
 		PaystackSecretKey:  os.Getenv("PAYSTACK_SECRET_KEY"),
 		WebBaseURL:         getEnv("WEB_BASE_URL", "http://localhost:3000"),
+
+		WhatsAppAccessToken:        os.Getenv("WHATSAPP_ACCESS_TOKEN"),
+		WhatsAppAppSecret:          os.Getenv("WHATSAPP_APP_SECRET"),
+		WhatsAppWebhookVerifyToken: os.Getenv("WHATSAPP_WEBHOOK_VERIFY_TOKEN"),
 	}
 
 	if cfg.DatabaseURL == "" {

@@ -112,7 +112,7 @@ class _MoreScreenState extends State<MoreScreen> {
             onPressed: () async {
               await Session.instance.clear();
               if (context.mounted) {
-                Navigator.pushNamedAndRemoveUntil(context, '/onboarding', (_) => false);
+                Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
               }
             },
           ),
