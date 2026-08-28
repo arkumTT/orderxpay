@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/api_client.dart';
 import '../../../core/models.dart';
 import '../../../core/session.dart';
@@ -30,6 +32,16 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
   bool _saving = false;
   String? _error;
 
+  String? _imageUrl; // set below in initState from widget.item, or freshly uploaded
+  File? _localPreview; // shown instead of the network image right after a pick
+  bool _uploadingPhoto = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageUrl = widget.item?.imageUrl;
+  }
+
   bool get _isEdit => widget.item != null;
 
   @override
@@ -59,6 +71,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
           unitPricePesewas: pesewas,
           qtyUnit: _unitController.text,
           availabilityStatus: status,
+          imageUrl: _imageUrl,
         );
       } else {
         await _api.createItem(
@@ -67,6 +80,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
           unitPricePesewas: pesewas,
           qtyUnit: _unitController.text,
           availabilityStatus: status,
+          imageUrl: _imageUrl,
         );
       }
       if (!mounted) return;
@@ -75,6 +89,80 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
       setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// Section 4.2 — opens a bottom sheet to take a photo or pick one from
+  /// the gallery, uploads it immediately (rather than waiting for Save),
+  /// and stores the resulting image_url. imageQuality/maxWidth/maxHeight
+  /// do real client-side JPEG compression at pick time — no separate
+  /// compression package needed, image_picker already re-encodes.
+  Future<void> _pickPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            if (_imageUrl != null || _localPreview != null)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: AppColors.statusDeclined),
+                title: const Text('Remove Photo', style: TextStyle(color: AppColors.statusDeclined)),
+                onTap: () => Navigator.pop(context, null),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) {
+      if (_imageUrl != null || _localPreview != null) {
+        setState(() {
+          _imageUrl = null;
+          _localPreview = null;
+        });
+      }
+      return;
+    }
+
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 70,
+      maxWidth: 1280,
+      maxHeight: 1280,
+    );
+    if (picked == null) return;
+
+    setState(() {
+      _localPreview = File(picked.path);
+      _uploadingPhoto = true;
+      _error = null;
+    });
+    try {
+      final res = await _api.uploadItemPhoto(Session.instance.merchantId!, picked.path);
+      setState(() => _imageUrl = res['image_url'] as String);
+    } on ApiException catch (e) {
+      setState(() {
+        _localPreview = null;
+        _error = e.message;
+      });
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
     }
   }
 
@@ -116,37 +204,75 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
         child: ListView(
           padding: const EdgeInsets.all(AppSpace.xl),
           children: [
-            Container(
-              width: double.infinity,
-              height: 160,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAFAFA),
+            GestureDetector(
+              onTap: _uploadingPhoto ? null : _pickPhoto,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.card),
-                border: Border.all(
-                  color: AppColors.textDisabled,
-                  width: 1.5,
-                  style: BorderStyle.solid,
-                ),
-              ),
-              alignment: Alignment.center,
-              child: const Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.camera_alt_outlined,
-                    size: 28,
-                    color: AppColors.textDisabled,
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Add photo (coming soon)',
-                    style: TextStyle(
+                child: Container(
+                  width: double.infinity,
+                  height: 160,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFAFAFA),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    border: Border.all(
                       color: AppColors.textDisabled,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
+                      width: 1.5,
+                      style: BorderStyle.solid,
                     ),
                   ),
-                ],
+                  alignment: Alignment.center,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (_localPreview != null)
+                        Image.file(_localPreview!, fit: BoxFit.cover)
+                      else if (_imageUrl != null)
+                        Image.network(_imageUrl!, fit: BoxFit.cover)
+                      else
+                        const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.camera_alt_outlined,
+                              size: 28,
+                              color: AppColors.textDisabled,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Add photo',
+                              style: TextStyle(
+                                color: AppColors.textDisabled,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (_uploadingPhoto)
+                        Container(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          alignment: Alignment.center,
+                          child: const CircularProgressIndicator(color: Colors.white),
+                        ),
+                      if (!_uploadingPhoto && (_localPreview != null || _imageUrl != null))
+                        Positioned(
+                          right: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(AppRadius.pill),
+                            ),
+                            child: const Text(
+                              'Change photo',
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 16),

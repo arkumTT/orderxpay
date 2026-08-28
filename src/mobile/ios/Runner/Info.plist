@@ -28,6 +28,10 @@
 	<true/>
 	<key>NSContactsUsageDescription</key>
 	<string>Pick a customer from your contacts to fill in their name and phone number.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo of an item to add it to your catalog.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose a photo of an item to add it to your catalog.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -149,6 +149,7 @@ class ApiClient {
     required int unitPricePesewas,
     String? qtyUnit,
     String availabilityStatus = 'in_stock',
+    String? imageUrl,
   }) async {
     final res = await _send(
       'POST',
@@ -158,6 +159,7 @@ class ApiClient {
         'unit_price_pesewas': unitPricePesewas,
         'qty_unit': qtyUnit ?? '',
         'availability_status': availabilityStatus,
+        'image_url': imageUrl ?? '',
       },
     );
     return Item.fromJson(res as Map<String, dynamic>);
@@ -170,6 +172,7 @@ class ApiClient {
     required int unitPricePesewas,
     String? qtyUnit,
     required String availabilityStatus,
+    String? imageUrl,
   }) async {
     final res = await _send(
       'PUT',
@@ -179,9 +182,25 @@ class ApiClient {
         'unit_price_pesewas': unitPricePesewas,
         'qty_unit': qtyUnit ?? '',
         'availability_status': availabilityStatus,
+        'image_url': imageUrl ?? '',
       },
     );
     return Item.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Section 4.2 — uploads a catalog item photo (already picked + compressed
+  /// client-side, see item_form_screen.dart) as multipart/form-data. Returns
+  /// the resulting image_url plus the merchant's updated storage usage.
+  Future<Map<String, dynamic>> uploadItemPhoto(String merchantId, String filePath) async {
+    final uri = _base.resolve('/api/v1/app/merchants/$merchantId/items/photo');
+    final request = http.MultipartRequest('POST', uri);
+    if (Session.instance.token != null) {
+      request.headers['Authorization'] = 'Bearer ${Session.instance.token}';
+    }
+    request.files.add(await http.MultipartFile.fromPath('photo', filePath));
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    return _decode(response) as Map<String, dynamic>;
   }
 
   Future<void> archiveItem(String merchantId, String itemId) => _send(

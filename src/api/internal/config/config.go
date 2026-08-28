@@ -19,6 +19,14 @@ type Config struct {
 	WhatsAppAccessToken        string // Meta System User token, account-level (works across every merchant's phone number)
 	WhatsAppAppSecret          string // Meta App's Basic Settings secret, for inbound webhook signature verification
 	WhatsAppWebhookVerifyToken string // arbitrary string we choose; Meta echoes it back during the webhook subscribe handshake
+
+	// Section 4.2 — item photo uploads, stored on local disk (no cloud
+	// storage account exists). UploadDir is where files land on this
+	// server; APIPublicBaseURL is this API's own public origin, used to
+	// build the absolute image_url returned to clients (distinct from
+	// WebBaseURL, which is the customer-facing web app's origin).
+	UploadDir        string
+	APIPublicBaseURL string
 }
 
 func Load() (Config, error) {
@@ -35,6 +43,9 @@ func Load() (Config, error) {
 		WhatsAppAccessToken:        os.Getenv("WHATSAPP_ACCESS_TOKEN"),
 		WhatsAppAppSecret:          os.Getenv("WHATSAPP_APP_SECRET"),
 		WhatsAppWebhookVerifyToken: os.Getenv("WHATSAPP_WEBHOOK_VERIFY_TOKEN"),
+
+		UploadDir:        getEnv("UPLOAD_DIR", "./uploads"),
+		APIPublicBaseURL: getEnv("API_PUBLIC_BASE_URL", "http://localhost:8080"),
 	}
 
 	if cfg.DatabaseURL == "" {

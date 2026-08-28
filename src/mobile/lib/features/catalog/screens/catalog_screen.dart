@@ -99,6 +99,30 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   onTap: () => _openForm(item),
                   child: Row(
                     children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.control),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          color: AppColors.fieldFill,
+                          child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                              ? Image.network(
+                                  item.imageUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const Icon(
+                                    Icons.image_not_supported_outlined,
+                                    size: 18,
+                                    color: AppColors.textDisabled,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.image_outlined,
+                                  size: 18,
+                                  color: AppColors.textDisabled,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
