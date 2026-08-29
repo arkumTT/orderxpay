@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/config.dart';
 import '../../../core/format.dart';
 import '../../../core/models.dart';
@@ -8,9 +9,10 @@ import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
 
 /// What "Send Invoice" actually produces: a reference and a checkout link
-/// (src/web) — this stands in for the WhatsApp/SMS "Send via" step (Section
-/// 4.4), which isn't built yet, by just surfacing the link to copy/share
-/// through the OS share sheet manually.
+/// (src/web) — Section 4.4's "Send via" step. Copy Link covers pasting into
+/// any chat manually; Share Link hands the link to the OS share sheet,
+/// which already lists WhatsApp, SMS, email, Facebook, and every other app
+/// installed that can receive text — no per-channel deep-linking needed.
 class InvoiceSentScreen extends StatelessWidget {
   const InvoiceSentScreen({super.key, required this.invoice});
 
@@ -83,6 +85,17 @@ class InvoiceSentScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            OxpButton(
+              label: 'Share Link',
+              icon: const Icon(Icons.share_outlined, color: Colors.white, size: 16),
+              onPressed: () {
+                Share.share(
+                  'Pay ${invoice.reference} — ${formatPesewas(invoice.totalPesewas)}\n$_checkoutLink',
+                  subject: 'Invoice ${invoice.reference}',
+                );
+              },
+            ),
+            const SizedBox(height: 10),
             OxpButton(
               label: 'Copy Link',
               variant: OxpButtonVariant.secondary,

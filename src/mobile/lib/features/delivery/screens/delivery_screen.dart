@@ -10,11 +10,13 @@ import '../../../core/design/widgets.dart';
 /// Section 4.11 / 7.3 / 9.4: master "Offer delivery" switch, the merchant's
 /// own delivery contacts (Tier 1 — can be more than one rider, each with an
 /// optional flat fee per zone), and verified third-party providers (Tier 2 —
-/// Bolt/Uber/Yango etc. from the admin-maintained catalog, toggled on/off
-/// with an editable fee-handling choice, plus room for one-off providers not
-/// in that catalog). What gets configured here is what shows up in New
-/// Order's "Add Delivery" sheet — hidden there entirely when the master
-/// switch is off.
+/// Bolt/Uber/Yango etc. from the admin-maintained catalog, toggled on/off,
+/// plus room for one-off providers not in that catalog). What gets
+/// configured here is what shows up in New Order's "Add Delivery" sheet —
+/// hidden there entirely when the master switch is off. Fee handling
+/// ("Bundled into invoice" vs "Customer arranges") is intentionally NOT
+/// configured here — it's asked fresh every time delivery is added to an
+/// order, since who pays can vary order to order even for the same rider.
 class DeliveryScreen extends StatefulWidget {
   const DeliveryScreen({super.key});
 
@@ -106,24 +108,6 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     }
   }
 
-  Future<void> _setProviderFeeHandling(DeliveryOption option, String feeHandling) async {
-    try {
-      await _api.updateDeliveryOption(
-        Session.instance.merchantId!,
-        option.id,
-        contactName: option.contactName,
-        contactPhone: option.contactPhone,
-        feeHandlingDefault: feeHandling,
-        status: 'active',
-      );
-      await _refresh();
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    }
-  }
-
   /// One sheet for both add and edit — pass [existing] to pre-fill and
   /// reveal a Remove action; omit it to create a new one.
   Future<void> _openOptionSheet({required String type, DeliveryOption? existing}) async {
@@ -134,14 +118,13 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
       text: existing?.flatFeePesewas != null ? (existing!.flatFeePesewas! / 100).toStringAsFixed(2) : '',
     );
     final zoneController = TextEditingController(text: existing?.serviceZone);
-    String feeHandling = existing?.feeHandlingDefault ?? 'bundled';
 
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Container(
+      builder: (context) => Builder(
+        builder: (context) => Container(
           decoration: const BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -206,26 +189,6 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                     ],
                   ),
                 ],
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ChoiceChip(
-                        label: const Text('Bundled into invoice'),
-                        selected: feeHandling == 'bundled',
-                        onSelected: (_) => setSheetState(() => feeHandling = 'bundled'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ChoiceChip(
-                        label: const Text('Customer arranges'),
-                        selected: feeHandling == 'external',
-                        onSelected: (_) => setSheetState(() => feeHandling = 'external'),
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 20),
                 OxpButton(
                   label: 'Save',
@@ -242,7 +205,12 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                           contactPhone: phoneController.text,
                           flatFeePesewas: feePesewas,
                           serviceZone: zoneController.text,
-                          feeHandlingDefault: feeHandling,
+                          // Fee handling ("Bundled" vs "Customer arranges") is
+                          // no longer a preset configured here — it's asked
+                          // fresh each time delivery is added to an order.
+                          // This stored default is unused by the order flow
+                          // now; kept only because the column is NOT NULL.
+                          feeHandlingDefault: 'external',
                           status: 'active',
                         );
                       } else {
@@ -253,7 +221,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                           contactPhone: phoneController.text,
                           flatFeePesewas: feePesewas,
                           serviceZone: zoneController.text,
-                          feeHandlingDefault: feeHandling,
+                          feeHandlingDefault: 'external',
                         );
                       }
                       if (context.mounted) Navigator.pop(context, 'saved');
@@ -416,7 +384,6 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                         enable: v,
                         existing: enabledOptionFor(provider.key),
                       ),
-                      onFeeHandlingChanged: (option, feeHandling) => _setProviderFeeHandling(option, feeHandling),
                     ),
                 if (customProviders.isNotEmpty) ...[
                   const SizedBox(height: 4),
@@ -447,14 +414,12 @@ class _CatalogProviderRow extends StatelessWidget {
     required this.enabledOption,
     required this.loading,
     required this.onChanged,
-    required this.onFeeHandlingChanged,
   });
 
   final DeliveryProvider provider;
   final DeliveryOption? enabledOption;
   final bool loading;
   final ValueChanged<bool> onChanged;
-  final void Function(DeliveryOption option, String feeHandling) onFeeHandlingChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -462,65 +427,33 @@ class _CatalogProviderRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: OxpCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(provider.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Verified delivery provider',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                if (loading)
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  Switch(
-                    value: enabled,
-                    activeTrackColor: AppColors.statusPaid,
-                    onChanged: onChanged,
-                  ),
-              ],
-            ),
-            if (enabled) ...[
-              const SizedBox(height: 10),
-              const Text(
-                'Fee handling',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              Row(
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: ChoiceChip(
-                      label: const Text('Bundled', style: TextStyle(fontSize: 12)),
-                      selected: enabledOption!.feeHandlingDefault == 'bundled',
-                      onSelected: (_) => onFeeHandlingChanged(enabledOption!, 'bundled'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ChoiceChip(
-                      label: const Text('Customer arranges', style: TextStyle(fontSize: 12)),
-                      selected: enabledOption!.feeHandlingDefault == 'external',
-                      onSelected: (_) => onFeeHandlingChanged(enabledOption!, 'external'),
-                    ),
+                  Text(provider.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Verified delivery provider',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
-            ],
+            ),
+            if (loading)
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Switch(
+                value: enabled,
+                activeTrackColor: AppColors.statusPaid,
+                onChanged: onChanged,
+              ),
           ],
         ),
       ),
@@ -565,13 +498,6 @@ class _DeliveryOptionCard extends StatelessWidget {
                         style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                       ),
                     ],
-                    const SizedBox(height: 2),
-                    Text(
-                      option.feeHandlingDefault == 'bundled'
-                          ? 'Bundled into invoice by default'
-                          : 'Customer arranges & pays separately',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                    ),
                   ],
                 ),
               ),
