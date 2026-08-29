@@ -8,6 +8,8 @@ import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
 
+enum _PhotoSheetChoice { camera, gallery, remove }
+
 class ItemFormScreen extends StatefulWidget {
   const ItemFormScreen({super.key, this.item});
 
@@ -98,7 +100,11 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
   /// do real client-side JPEG compression at pick time — no separate
   /// compression package needed, image_picker already re-encodes.
   Future<void> _pickPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
+    // _PhotoSheetChoice, not ImageSource?, so "dismissed the sheet without
+    // choosing anything" (null) is distinguishable from "explicitly chose
+    // Remove Photo" — both used to collapse to null and wiping the photo
+    // on a stray tap-outside-to-dismiss, caught during live testing.
+    final choice = await showModalBottomSheet<_PhotoSheetChoice>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
@@ -113,35 +119,34 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
             ListTile(
               leading: const Icon(Icons.camera_alt_outlined),
               title: const Text('Take Photo'),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
+              onTap: () => Navigator.pop(context, _PhotoSheetChoice.camera),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
               title: const Text('Choose from Gallery'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
+              onTap: () => Navigator.pop(context, _PhotoSheetChoice.gallery),
             ),
             if (_imageUrl != null || _localPreview != null)
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: AppColors.statusDeclined),
                 title: const Text('Remove Photo', style: TextStyle(color: AppColors.statusDeclined)),
-                onTap: () => Navigator.pop(context, null),
+                onTap: () => Navigator.pop(context, _PhotoSheetChoice.remove),
               ),
           ],
         ),
       ),
     );
-    if (source == null) {
-      if (_imageUrl != null || _localPreview != null) {
-        setState(() {
-          _imageUrl = null;
-          _localPreview = null;
-        });
-      }
+    if (choice == null) return; // dismissed — leave the existing photo alone
+    if (choice == _PhotoSheetChoice.remove) {
+      setState(() {
+        _imageUrl = null;
+        _localPreview = null;
+      });
       return;
     }
 
     final picked = await ImagePicker().pickImage(
-      source: source,
+      source: choice == _PhotoSheetChoice.camera ? ImageSource.camera : ImageSource.gallery,
       imageQuality: 70,
       maxWidth: 1280,
       maxHeight: 1280,

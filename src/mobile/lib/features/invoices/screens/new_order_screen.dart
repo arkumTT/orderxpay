@@ -202,33 +202,33 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   }
 
   Future<void> _openDeliverySheet() async {
-    await showModalBottomSheet<void>(
+    final result = await showModalBottomSheet<_DeliverySelection>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _DeliverySheet(
         options: _deliveryOptions,
         selectedId: _deliveryOptionId,
-        onSelectOption: (opt) {
-          setState(() {
-            _deliveryOptionId = opt.id;
-            _deliveryLabel = opt.contactName ?? opt.type;
-            _deliveryFeeHandling = opt.feeHandlingDefault;
-            _deliveryFeePesewas = opt.feeHandlingDefault == 'bundled' ? 1500 : 0;
-          });
-        },
-        onSelectNone: () {
-          setState(() {
-            _deliveryOptionId = null;
-            _deliveryLabel = null;
-            _deliveryFeeHandling = null;
-            _deliveryFeePesewas = 0;
-          });
-        },
+        initialFeeHandling: _deliveryFeeHandling,
         addressController: _deliveryAddressController,
       ),
     );
-    setState(() {});
+    if (result == null) return; // dismissed without tapping "Add to Order"
+    setState(() {
+      final opt = result.option;
+      if (opt == null) {
+        _deliveryOptionId = null;
+        _deliveryLabel = null;
+        _deliveryFeeHandling = null;
+        _deliveryFeePesewas = 0;
+      } else {
+        _deliveryOptionId = opt.id;
+        _deliveryLabel = opt.contactName ?? opt.type;
+        _deliveryFeeHandling = result.feeHandling;
+        _deliveryFeePesewas =
+            result.feeHandling == 'bundled' ? (opt.flatFeePesewas ?? 1500) : 0;
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -606,23 +606,66 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-class _DeliverySheet extends StatelessWidget {
+/// Result of the "Add Delivery to This Order" sheet: [option] is null when
+/// the merchant chose "Let customer arrange after payment". [feeHandling]
+/// is only meaningful when [option] is set — it's asked fresh on every
+/// order (Section 4.11 decision: fee handling is no longer a preset tied
+/// to the delivery option in Settings, it's an order-time choice).
+class _DeliverySelection {
+  const _DeliverySelection({required this.option, required this.feeHandling});
+  final DeliveryOption? option;
+  final String? feeHandling; // bundled | external | null (no option chosen)
+}
+
+class _DeliverySheet extends StatefulWidget {
   const _DeliverySheet({
     required this.options,
     required this.selectedId,
-    required this.onSelectOption,
-    required this.onSelectNone,
+    required this.initialFeeHandling,
     required this.addressController,
   });
 
   final List<DeliveryOption> options;
   final String? selectedId;
-  final ValueChanged<DeliveryOption> onSelectOption;
-  final VoidCallback onSelectNone;
+  final String? initialFeeHandling;
   final TextEditingController addressController;
 
   @override
+  State<_DeliverySheet> createState() => _DeliverySheetState();
+}
+
+class _DeliverySheetState extends State<_DeliverySheet> {
+  String? _selectedId;
+  late String _feeHandling;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedId = widget.selectedId;
+    _feeHandling = widget.initialFeeHandling ?? 'bundled';
+  }
+
+  DeliveryOption? get _selectedOption {
+    for (final opt in widget.options) {
+      if (opt.id == _selectedId) return opt;
+    }
+    return null;
+  }
+
+  String _subtitleFor(DeliveryOption opt) {
+    final parts = <String>[];
+    if (opt.contactPhone?.isNotEmpty == true) parts.add(opt.contactPhone!);
+    if (opt.serviceZone?.isNotEmpty == true) parts.add(opt.serviceZone!);
+    if (opt.flatFeePesewas != null) parts.add('${formatPesewas(opt.flatFeePesewas!)} flat fee');
+    if (parts.isEmpty) {
+      return opt.type == 'own_contact' ? 'Own delivery contact' : 'Verified provider';
+    }
+    return parts.join(' · ');
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final option = _selectedOption;
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       minChildSize: 0.3,
@@ -671,7 +714,7 @@ class _DeliverySheet extends StatelessWidget {
                 child: ListView(
                   controller: scrollController,
                   children: [
-                    if (options.isEmpty)
+                    if (widget.options.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 12),
                         child: Text(
@@ -679,32 +722,70 @@ class _DeliverySheet extends StatelessWidget {
                           style: TextStyle(color: AppColors.textSecondary),
                         ),
                       ),
-                    for (final opt in options)
+                    for (final opt in widget.options)
                       _DeliveryOptionCard(
                         title: opt.contactName ?? (opt.type == 'own_contact' ? 'Own delivery contact' : 'Verified provider'),
-                        subtitle: opt.feeHandlingDefault == 'bundled'
-                            ? 'Bundled into this invoice'
-                            : 'Customer arranges & pays separately',
-                        selected: selectedId == opt.id,
-                        onTap: () => onSelectOption(opt),
+                        subtitle: _subtitleFor(opt),
+                        selected: _selectedId == opt.id,
+                        onTap: () => setState(() => _selectedId = opt.id),
                       ),
                     _DeliveryOptionCard(
                       title: 'Let customer arrange after payment',
                       subtitle: 'No delivery method attached',
-                      selected: selectedId == null,
-                      onTap: onSelectNone,
+                      selected: _selectedId == null,
+                      onTap: () => setState(() => _selectedId = null),
                     ),
+                    if (option != null) ...[
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Who pays the delivery fee?',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('Bundled into invoice'),
+                              selected: _feeHandling == 'bundled',
+                              onSelected: (_) => setState(() => _feeHandling = 'bundled'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('Customer arranges'),
+                              selected: _feeHandling == 'external',
+                              onSelected: (_) => setState(() => _feeHandling = 'external'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     OxpField(
                       label: 'Delivery address (optional)',
-                      controller: addressController,
+                      controller: widget.addressController,
                       hintText: '12 Volta Street, Osu',
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
-              OxpButton(label: 'Add to Order', onPressed: () => Navigator.pop(context)),
+              OxpButton(
+                label: 'Add to Order',
+                onPressed: () => Navigator.pop(
+                  context,
+                  _DeliverySelection(
+                    option: option,
+                    feeHandling: option == null ? null : _feeHandling,
+                  ),
+                ),
+              ),
             ],
           ),
         );
