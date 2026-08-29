@@ -15,6 +15,10 @@ type Querier interface {
 	AddPaymentRefund(ctx context.Context, arg AddPaymentRefundParams) (Payment, error)
 	ArchiveItem(ctx context.Context, arg ArchiveItemParams) (int64, error)
 	AssignUserRole(ctx context.Context, arg AssignUserRoleParams) error
+	// Step 1 of "set this location as default" — unset whatever the current
+	// default is first so the partial unique index (merchant_id) WHERE
+	// is_default never sees two defaults at once, even transiently.
+	ClearDefaultMerchantLocation(ctx context.Context, merchantID pgtype.UUID) error
 	// Section 7.2 batch-run reconciliation: sums every not-yet-settled
 	// successful payment for the merchant in [period_start, period_end), and
 	// prorates each invoice's commission/merchant-entitlement by how much of
@@ -39,6 +43,7 @@ type Querier interface {
 	CreateKYCSubmission(ctx context.Context, arg CreateKYCSubmissionParams) (KycSubmission, error)
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
 	CreateMerchant(ctx context.Context, arg CreateMerchantParams) (Merchant, error)
+	CreateMerchantLocation(ctx context.Context, arg CreateMerchantLocationParams) (MerchantLocation, error)
 	CreateMerchantNote(ctx context.Context, arg CreateMerchantNoteParams) (MerchantNote, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error)
@@ -110,6 +115,7 @@ type Querier interface {
 	// Grouped by actual payment date (not invoice date), matching the platform-
 	// wide GetDailyRevenue query in reporting.sql.
 	GetMerchantDailyCollections(ctx context.Context, arg GetMerchantDailyCollectionsParams) ([]GetMerchantDailyCollectionsRow, error)
+	GetMerchantLocation(ctx context.Context, id pgtype.UUID) (MerchantLocation, error)
 	GetMerchantOrderStats(ctx context.Context, arg GetMerchantOrderStatsParams) (GetMerchantOrderStatsRow, error)
 	// A "repeat" customer placed more than one paid/partially-paid order in the
 	// period, identified by customer_contact since there's no customers table.
@@ -185,6 +191,7 @@ type Querier interface {
 	// of status (an accountant needs to see declined/expired ones too), with
 	// items and the payment method(s) used summarized per row.
 	ListMerchantInvoicesForExport(ctx context.Context, arg ListMerchantInvoicesForExportParams) ([]ListMerchantInvoicesForExportRow, error)
+	ListMerchantLocationsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]MerchantLocation, error)
 	ListMerchantNotes(ctx context.Context, merchantID pgtype.UUID) ([]ListMerchantNotesRow, error)
 	ListMerchants(ctx context.Context, arg ListMerchantsParams) ([]Merchant, error)
 	ListNotificationsByMerchant(ctx context.Context, arg ListNotificationsByMerchantParams) ([]Notification, error)
@@ -230,6 +237,7 @@ type Querier interface {
 	// agent is handed on a call ("my order is ORD-1234" / "I paid with 024...").
 	SearchInvoicesForSupport(ctx context.Context, query string) ([]SearchInvoicesForSupportRow, error)
 	SearchMerchantsForSupport(ctx context.Context, query string) ([]Merchant, error)
+	SetDefaultMerchantLocation(ctx context.Context, arg SetDefaultMerchantLocationParams) (int64, error)
 	// merchant_id in the WHERE clause — the route path only carries the
 	// delivery option's own id, not a merchant id, so ownership has to be
 	// enforced here against the caller's token instead.
@@ -257,6 +265,10 @@ type Querier interface {
 	UpdateMerchantDeliveryEnabled(ctx context.Context, arg UpdateMerchantDeliveryEnabledParams) (Merchant, error)
 	UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerchantFeeSettingsParams) (Merchant, error)
 	UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantKYCTierParams) (Merchant, error)
+	// Ownership enforced in the WHERE clause, same pattern as
+	// UpdateDeliveryOption — the route path only carries the location's own
+	// id, not the merchant id.
+	UpdateMerchantLocation(ctx context.Context, arg UpdateMerchantLocationParams) (int64, error)
 	UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantStatusParams) (Merchant, error)
 	// Admin-only provisioning step (Section 7.3): OrderxPay registers the
 	// merchant's number under the platform WABA in Meta's console, then

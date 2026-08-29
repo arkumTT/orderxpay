@@ -16,10 +16,10 @@ INSERT INTO invoices (
   merchant_id, order_request_id, reference, customer_contact,
   subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas,
   delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at,
-  commission_pesewas
+  commission_pesewas, pickup_location_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+RETURNING id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas, pickup_location_id
 `
 
 type CreateInvoiceParams struct {
@@ -37,6 +37,7 @@ type CreateInvoiceParams struct {
 	DeliveryFeePesewas      pgtype.Int8        `json:"delivery_fee_pesewas"`
 	ExpiresAt               pgtype.Timestamptz `json:"expires_at"`
 	CommissionPesewas       int64              `json:"commission_pesewas"`
+	PickupLocationID        pgtype.UUID        `json:"pickup_location_id"`
 }
 
 func (q *Queries) CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error) {
@@ -55,6 +56,7 @@ func (q *Queries) CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (I
 		arg.DeliveryFeePesewas,
 		arg.ExpiresAt,
 		arg.CommissionPesewas,
+		arg.PickupLocationID,
 	)
 	var i Invoice
 	err := row.Scan(
@@ -76,6 +78,7 @@ func (q *Queries) CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (I
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CommissionPesewas,
+		&i.PickupLocationID,
 	)
 	return i, err
 }
@@ -118,7 +121,7 @@ func (q *Queries) CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLi
 }
 
 const getInvoice = `-- name: GetInvoice :one
-SELECT id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas FROM invoices WHERE id = $1
+SELECT id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas, pickup_location_id FROM invoices WHERE id = $1
 `
 
 func (q *Queries) GetInvoice(ctx context.Context, id pgtype.UUID) (Invoice, error) {
@@ -143,12 +146,13 @@ func (q *Queries) GetInvoice(ctx context.Context, id pgtype.UUID) (Invoice, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CommissionPesewas,
+		&i.PickupLocationID,
 	)
 	return i, err
 }
 
 const getInvoiceByReference = `-- name: GetInvoiceByReference :one
-SELECT id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas FROM invoices WHERE reference = $1
+SELECT id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas, pickup_location_id FROM invoices WHERE reference = $1
 `
 
 func (q *Queries) GetInvoiceByReference(ctx context.Context, reference string) (Invoice, error) {
@@ -173,6 +177,7 @@ func (q *Queries) GetInvoiceByReference(ctx context.Context, reference string) (
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CommissionPesewas,
+		&i.PickupLocationID,
 	)
 	return i, err
 }
@@ -210,7 +215,7 @@ func (q *Queries) ListInvoiceLineItems(ctx context.Context, invoiceID pgtype.UUI
 }
 
 const listInvoicesByMerchant = `-- name: ListInvoicesByMerchant :many
-SELECT id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas FROM invoices
+SELECT id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas, pickup_location_id FROM invoices
 WHERE merchant_id = $1
   AND ($4::text = '' OR status = $4::text)
 ORDER BY created_at DESC
@@ -257,6 +262,7 @@ func (q *Queries) ListInvoicesByMerchant(ctx context.Context, arg ListInvoicesBy
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CommissionPesewas,
+			&i.PickupLocationID,
 		); err != nil {
 			return nil, err
 		}
@@ -270,7 +276,7 @@ func (q *Queries) ListInvoicesByMerchant(ctx context.Context, arg ListInvoicesBy
 
 const setInvoiceStatus = `-- name: SetInvoiceStatus :one
 UPDATE invoices SET status = $2 WHERE id = $1
-RETURNING id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas
+RETURNING id, merchant_id, order_request_id, reference, customer_contact, subtotal_pesewas, service_charge_pesewas, service_charge_allocation, total_pesewas, status, delivery_option_id, delivery_address, delivery_fee_handling, delivery_fee_pesewas, expires_at, created_at, updated_at, commission_pesewas, pickup_location_id
 `
 
 type SetInvoiceStatusParams struct {
@@ -300,6 +306,7 @@ func (q *Queries) SetInvoiceStatus(ctx context.Context, arg SetInvoiceStatusPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CommissionPesewas,
+		&i.PickupLocationID,
 	)
 	return i, err
 }

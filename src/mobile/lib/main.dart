@@ -14,6 +14,7 @@ import 'features/settings/screens/fee_settings_screen.dart';
 import 'features/settings/screens/notifications_screen.dart';
 import 'features/staff/screens/staff_screen.dart';
 import 'features/delivery/screens/delivery_screen.dart';
+import 'features/locations/screens/locations_screen.dart';
 import 'features/verify/screens/verify_screen.dart';
 import 'features/more/screens/more_screen.dart';
 
@@ -48,6 +49,7 @@ class OrderxPayApp extends StatelessWidget {
         '/notifications': (context) => const NotificationsScreen(),
         '/staff': (context) => const StaffScreen(),
         '/delivery': (context) => const DeliveryScreen(),
+        '/locations': (context) => const LocationsScreen(),
         '/verify': (context) => const VerifyScreen(),
         '/more': (context) => const MoreScreen(),
       },

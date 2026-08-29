@@ -84,6 +84,17 @@ func (h *Handler) buildCheckoutResponse(c *fiber.Ctx, invoice db.Invoice) (fiber
 		}
 	}
 
+	if invoice.PickupLocationID.Valid {
+		location, err := h.Queries.GetMerchantLocation(c.Context(), invoice.PickupLocationID)
+		if err == nil {
+			body["pickup_location"] = fiber.Map{
+				"label":   location.Label,
+				"address": location.Address,
+				"phone":   location.Phone,
+			}
+		}
+	}
+
 	return body, nil
 }
 
@@ -162,6 +173,7 @@ type createInvoiceRequest struct {
 	DeliveryAddress     string            `json:"delivery_address"`
 	DeliveryFeeHandling string            `json:"delivery_fee_handling"` // "bundled" | "external"
 	DeliveryFeePesewas  int64             `json:"delivery_fee_pesewas"`
+	PickupLocationID    string            `json:"pickup_location_id"`
 }
 
 // CreateInvoice builds an order from the catalog or quick-add custom lines,
@@ -188,6 +200,10 @@ func (h *Handler) CreateInvoice(c *fiber.Ctx) error {
 	if req.DeliveryFeeHandling != "" && req.DeliveryFeeHandling != "bundled" && req.DeliveryFeeHandling != "external" {
 		return badRequest(c, "delivery_fee_handling must be bundled or external")
 	}
+	pickupLocationID, err := uuidOrNull(req.PickupLocationID)
+	if err != nil {
+		return badRequest(c, "invalid pickup_location_id")
+	}
 
 	invoice, lineItems, err := h.createInvoiceCore(c.Context(), createInvoiceCoreParams{
 		MerchantID:          merchantID,
@@ -197,6 +213,7 @@ func (h *Handler) CreateInvoice(c *fiber.Ctx) error {
 		DeliveryAddress:     req.DeliveryAddress,
 		DeliveryFeeHandling: req.DeliveryFeeHandling,
 		DeliveryFeePesewas:  req.DeliveryFeePesewas,
+		PickupLocationID:    pickupLocationID,
 	})
 	if err != nil {
 		if isValidationError(err) {

@@ -200,6 +200,7 @@ type createInvoiceCoreParams struct {
 	DeliveryAddress     string
 	DeliveryFeeHandling string // "bundled" | "external" | ""
 	DeliveryFeePesewas  int64
+	PickupLocationID    pgtype.UUID // feedback item 4 — optional reference pickup point
 }
 
 const maxReferenceAttempts = 3
@@ -277,6 +278,7 @@ func (h *Handler) insertInvoice(ctx context.Context, p createInvoiceCoreParams, 
 		DeliveryFeeHandling:     textOrNull(p.DeliveryFeeHandling),
 		DeliveryFeePesewas:      deliveryFeePesewas,
 		CommissionPesewas:       amounts.CommissionPesewas,
+		PickupLocationID:        p.PickupLocationID,
 	})
 	if err != nil {
 		return db.Invoice{}, nil, fmt.Errorf("create invoice: %w", err)

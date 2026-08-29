@@ -144,6 +144,7 @@ type Invoice struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	CommissionPesewas       int64              `json:"commission_pesewas"`
+	PickupLocationID        pgtype.UUID        `json:"pickup_location_id"`
 }
 
 type InvoiceLineItem struct {
@@ -221,6 +222,18 @@ type Merchant struct {
 	EmailVerifiedAt           pgtype.Timestamptz `json:"email_verified_at"`
 	WhatsappPhoneNumberID     pgtype.Text        `json:"whatsapp_phone_number_id"`
 	StorageUsedBytes          int64              `json:"storage_used_bytes"`
+}
+
+type MerchantLocation struct {
+	ID         pgtype.UUID        `json:"id"`
+	MerchantID pgtype.UUID        `json:"merchant_id"`
+	Label      string             `json:"label"`
+	Address    string             `json:"address"`
+	Phone      pgtype.Text        `json:"phone"`
+	IsDefault  bool               `json:"is_default"`
+	Status     string             `json:"status"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 type MerchantNote struct {

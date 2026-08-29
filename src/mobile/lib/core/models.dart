@@ -321,6 +321,37 @@ class DeliveryOption {
   );
 }
 
+/// Feedback item 4 — a pickup/delivery reference point a merchant manages
+/// under More → Locations. Deliberately flat: not tied to a specific
+/// DeliveryOption, so it works as a reference for a third-party provider,
+/// a merchant's own rider, or a customer arranging their own pickup alike.
+class MerchantLocation {
+  MerchantLocation({
+    required this.id,
+    required this.label,
+    required this.address,
+    required this.phone,
+    required this.isDefault,
+    required this.status,
+  });
+
+  final String id;
+  final String label;
+  final String address;
+  final String? phone;
+  final bool isDefault;
+  final String status;
+
+  factory MerchantLocation.fromJson(Map<String, dynamic> j) => MerchantLocation(
+    id: _str(j['id']),
+    label: _str(j['label']),
+    address: _str(j['address']),
+    phone: _strOrNull(j['phone']),
+    isDefault: j['is_default'] == true,
+    status: _str(j['status']),
+  );
+}
+
 /// Section 4.11/9.4: the admin-maintained catalog of verified delivery
 /// providers (Bolt, Uber, Yango, ...) — the merchant-app side just reads
 /// it to offer pre-populated toggles instead of merchants typing names in.

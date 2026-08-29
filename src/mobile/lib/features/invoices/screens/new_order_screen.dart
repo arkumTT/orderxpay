@@ -49,12 +49,14 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   Merchant? _merchant;
   int _commissionBps = 0;
   List<DeliveryOption> _deliveryOptions = [];
+  List<MerchantLocation> _locations = [];
   List<String> _recentCustomers = [];
 
   String? _deliveryOptionId;
   String? _deliveryLabel;
   String? _deliveryFeeHandling; // bundled | external | null (none chosen)
   int _deliveryFeePesewas = 0;
+  String? _pickupLocationId; // feedback item 4 — optional reference pickup point
   final _deliveryAddressController = TextEditingController();
 
   @override
@@ -82,6 +84,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         _api.getCommissionBps(merchantId),
         _api.listDeliveryOptions(merchantId),
         _api.listInvoices(merchantId),
+        _api.listMerchantLocations(merchantId),
       ]);
       setState(() {
         _items = results[0] as List<Item>;
@@ -89,6 +92,13 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         _commissionBps = results[2] as int;
         _deliveryOptions = results[3] as List<DeliveryOption>;
         _recentCustomers = _dedupeCustomers(results[4] as List<Invoice>);
+        _locations = results[5] as List<MerchantLocation>;
+        for (final location in _locations) {
+          if (location.isDefault) {
+            _pickupLocationId = location.id;
+            break;
+          }
+        }
         _loading = false;
       });
       _prefillFromRequest();
@@ -211,6 +221,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         selectedId: _deliveryOptionId,
         initialFeeHandling: _deliveryFeeHandling,
         addressController: _deliveryAddressController,
+        locations: _locations,
+        selectedLocationId: _pickupLocationId,
       ),
     );
     if (result == null) return; // dismissed without tapping "Add to Order"
@@ -228,6 +240,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         _deliveryFeePesewas =
             result.feeHandling == 'bundled' ? (opt.flatFeePesewas ?? 1500) : 0;
       }
+      _pickupLocationId = result.pickupLocationId;
     });
   }
 
@@ -258,6 +271,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               : _deliveryAddressController.text,
           deliveryFeeHandling: _deliveryFeeHandling,
           deliveryFeePesewas: _deliveryFeeHandling != null ? _deliveryFeePesewas : null,
+          pickupLocationId: _pickupLocationId,
         );
       } else {
         invoice = await _api.createInvoice(
@@ -270,6 +284,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               : _deliveryAddressController.text,
           deliveryFeeHandling: _deliveryFeeHandling,
           deliveryFeePesewas: _deliveryFeeHandling != null ? _deliveryFeePesewas : null,
+          pickupLocationId: _pickupLocationId,
         );
       }
       if (!mounted) return;
@@ -612,9 +627,10 @@ class _SummaryRow extends StatelessWidget {
 /// order (Section 4.11 decision: fee handling is no longer a preset tied
 /// to the delivery option in Settings, it's an order-time choice).
 class _DeliverySelection {
-  const _DeliverySelection({required this.option, required this.feeHandling});
+  const _DeliverySelection({required this.option, required this.feeHandling, required this.pickupLocationId});
   final DeliveryOption? option;
   final String? feeHandling; // bundled | external | null (no option chosen)
+  final String? pickupLocationId; // feedback item 4 — optional reference pickup point
 }
 
 class _DeliverySheet extends StatefulWidget {
@@ -623,12 +639,16 @@ class _DeliverySheet extends StatefulWidget {
     required this.selectedId,
     required this.initialFeeHandling,
     required this.addressController,
+    required this.locations,
+    required this.selectedLocationId,
   });
 
   final List<DeliveryOption> options;
   final String? selectedId;
   final String? initialFeeHandling;
   final TextEditingController addressController;
+  final List<MerchantLocation> locations;
+  final String? selectedLocationId;
 
   @override
   State<_DeliverySheet> createState() => _DeliverySheetState();
@@ -637,12 +657,14 @@ class _DeliverySheet extends StatefulWidget {
 class _DeliverySheetState extends State<_DeliverySheet> {
   String? _selectedId;
   late String _feeHandling;
+  String? _selectedLocationId;
 
   @override
   void initState() {
     super.initState();
     _selectedId = widget.selectedId;
     _feeHandling = widget.initialFeeHandling ?? 'bundled';
+    _selectedLocationId = widget.selectedLocationId;
   }
 
   DeliveryOption? get _selectedOption {
@@ -766,6 +788,41 @@ class _DeliverySheetState extends State<_DeliverySheet> {
                         ],
                       ),
                     ],
+                    if (widget.locations.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Pickup location (optional)',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'The reference point handed to a provider, or shown to a '
+                        'customer arranging their own pickup.',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final loc in widget.locations)
+                            ChoiceChip(
+                              label: Text(loc.label),
+                              selected: _selectedLocationId == loc.id,
+                              onSelected: (_) => setState(() => _selectedLocationId = loc.id),
+                            ),
+                          ChoiceChip(
+                            label: const Text('None'),
+                            selected: _selectedLocationId == null,
+                            onSelected: (_) => setState(() => _selectedLocationId = null),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     OxpField(
                       label: 'Delivery address (optional)',
@@ -783,6 +840,7 @@ class _DeliverySheetState extends State<_DeliverySheet> {
                   _DeliverySelection(
                     option: option,
                     feeHandling: option == null ? null : _feeHandling,
+                    pickupLocationId: _selectedLocationId,
                   ),
                 ),
               ),
