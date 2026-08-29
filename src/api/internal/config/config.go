@@ -27,6 +27,19 @@ type Config struct {
 	// WebBaseURL, which is the customer-facing web app's origin).
 	UploadDir        string
 	APIPublicBaseURL string
+
+	// Real OTP/verification-email delivery (Section 9 — previously
+	// unwired; see otp.go/merchants.go). SMS via Arkesel (Ghana-focused,
+	// plain REST API); email via generic SMTP so any provider works.
+	SMSAPIKey   string
+	SMSSenderID string
+
+	SMTPHost      string
+	SMTPPort      string
+	SMTPUsername  string
+	SMTPPassword  string
+	SMTPFromEmail string
+	SMTPFromName  string
 }
 
 func Load() (Config, error) {
@@ -46,6 +59,16 @@ func Load() (Config, error) {
 
 		UploadDir:        getEnv("UPLOAD_DIR", "./uploads"),
 		APIPublicBaseURL: getEnv("API_PUBLIC_BASE_URL", "http://localhost:8080"),
+
+		SMSAPIKey:   os.Getenv("SMS_API_KEY"),
+		SMSSenderID: os.Getenv("SMS_SENDER_ID"),
+
+		SMTPHost:      os.Getenv("SMTP_HOST"),
+		SMTPPort:      getEnv("SMTP_PORT", "587"),
+		SMTPUsername:  os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:  os.Getenv("SMTP_PASSWORD"),
+		SMTPFromEmail: os.Getenv("SMTP_FROM_EMAIL"),
+		SMTPFromName:  getEnv("SMTP_FROM_NAME", "OrderxPay"),
 	}
 
 	if cfg.DatabaseURL == "" {

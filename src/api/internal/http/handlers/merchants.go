@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -12,11 +14,20 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	db "github.com/orderxpay/api/internal/db/sqlc"
+	"github.com/orderxpay/api/internal/email"
 )
 
 const emailVerificationExpiry = 24 * time.Hour
 
 const minPasswordLength = 8
+
+func sendVerificationEmailAsync(client *email.Client, to, body string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := client.Send(ctx, to, "Verify your OrderxPay email", body); err != nil {
+		log.Printf("email verification: failed to email %s: %v", to, err)
+	}
+}
 
 // stripMerchantSecrets zeroes password_hash before a Merchant row is ever
 // serialized to a client — no handler should return a bcrypt hash, even to
@@ -43,12 +54,13 @@ type createMerchantRequest struct {
 // password.
 //
 // The merchant is created with email_verified_at unset; a real
-// verification token is generated and would be emailed, but no email
-// provider is wired up (Section 9), so — same honesty as the OTP side —
-// the token/link is only exposed in the response when running in
-// ENV=development. Email verification is advisory, not a login gate: see
-// MerchantLogin, which returns email_verified so the app can show that
-// state without blocking access.
+// verification token is generated and, when SMTP is configured
+// (h.Email.Enabled()), emailed via email.Client. The token/link is also
+// exposed in the response when running in ENV=development, so the flow
+// stays genuinely testable locally without a real mailbox. Email
+// verification is advisory, not a login gate: see MerchantLogin, which
+// returns email_verified so the app can show that state without blocking
+// access.
 func (h *Handler) CreateMerchant(c *fiber.Ctx) error {
 	var req createMerchantRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -107,7 +119,27 @@ func (h *Handler) CreateMerchant(c *fiber.Ctx) error {
 		if err != nil {
 			log.Printf("email verification: failed to create record for merchant %s: %v", merchant.ID, err)
 		} else {
-			log.Printf("email verification: would email %s a link with token %s — no email provider wired up, dev-mode-only delivery", req.Email, token)
+			// Points at the API's own verify endpoint directly (a real,
+			// working GET that flips email_verified_at) rather than a
+			// polished web landing page — src/web has no verification
+			// page yet. Good enough to prove real delivery; a friendlier
+			// redirect-to-login landing page is a reasonable fast-follow,
+			// not required for the link itself to actually work.
+			link := fmt.Sprintf("%s/api/v1/public/email/verify?token=%s", h.APIPublicBaseURL, token)
+			if h.Email.Enabled() {
+				// Backgrounded for the same reason the OTP SMS send is
+				// (see otp.go's sendOTPSMSAsync): registration is already
+				// done the moment this handler returns a response, so
+				// there's no reason to make the merchant's signup wait on
+				// however long the SMTP round-trip takes.
+				body := fmt.Sprintf(
+					"Welcome to OrderxPay!\n\nVerify your email by opening this link:\n%s\n\nThis link expires in 24 hours.",
+					link,
+				)
+				go sendVerificationEmailAsync(h.Email, req.Email, body)
+			} else {
+				log.Printf("email verification: would email %s a link (%s) — no SMTP configured, dev-mode-only delivery", req.Email, link)
+			}
 			if h.DevMode {
 				devToken = ev.Token
 			}

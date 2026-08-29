@@ -10,6 +10,7 @@ import (
 
 	db "github.com/orderxpay/api/internal/db/sqlc"
 	"github.com/orderxpay/api/internal/psp"
+	"github.com/orderxpay/api/internal/sms"
 	"github.com/orderxpay/api/internal/whatsapp"
 )
 
@@ -36,6 +37,19 @@ func (h *Handler) whatsappClient(ctx context.Context) *whatsapp.Client {
 		return whatsapp.NewClient(row.SecretValue.String)
 	}
 	return h.WhatsApp
+}
+
+// smsClient mirrors paystackClient/whatsappClient — a key set through the
+// Integrations page for "sms_email" wins over SMS_API_KEY, rotatable
+// without a restart. The Sender ID always comes from env (SMS_SENDER_ID),
+// same reasoning as email.Client staying env-only: it isn't a secret, and
+// the single secret_value column only has room for one rotatable value.
+func (h *Handler) smsClient(ctx context.Context) *sms.Client {
+	row, err := h.Queries.GetIntegration(ctx, "sms_email")
+	if err == nil && row.SecretValue.Valid && row.SecretValue.String != "" {
+		return sms.NewClient(row.SecretValue.String, h.SMS.SenderID)
+	}
+	return h.SMS
 }
 
 // integrationView strips secret_value entirely — ListIntegrations must

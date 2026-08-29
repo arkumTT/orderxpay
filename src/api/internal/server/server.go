@@ -25,6 +25,16 @@ type Options struct {
 
 	UploadDir        string
 	APIPublicBaseURL string
+
+	SMSAPIKey   string
+	SMSSenderID string
+
+	SMTPHost      string
+	SMTPPort      string
+	SMTPUsername  string
+	SMTPPassword  string
+	SMTPFromEmail string
+	SMTPFromName  string
 }
 
 func New(opts Options) *fiber.App {
@@ -49,6 +59,16 @@ func New(opts Options) *fiber.App {
 
 		UploadDir:        opts.UploadDir,
 		APIPublicBaseURL: opts.APIPublicBaseURL,
+
+		SMSAPIKey:   opts.SMSAPIKey,
+		SMSSenderID: opts.SMSSenderID,
+
+		SMTPHost:      opts.SMTPHost,
+		SMTPPort:      opts.SMTPPort,
+		SMTPUsername:  opts.SMTPUsername,
+		SMTPPassword:  opts.SMTPPassword,
+		SMTPFromEmail: opts.SMTPFromEmail,
+		SMTPFromName:  opts.SMTPFromName,
 	})
 	orderxpayhttp.RegisterRoutes(app, h)
 
