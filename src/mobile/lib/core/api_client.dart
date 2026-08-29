@@ -412,6 +412,8 @@ class ApiClient {
     required String address,
     String? phone,
     bool isDefault = false,
+    double? lat,
+    double? lng,
   }) async {
     final res = await _send(
       'POST',
@@ -421,6 +423,8 @@ class ApiClient {
         'address': address,
         'phone': phone ?? '',
         'is_default': isDefault,
+        if (lat != null) 'lat': lat,
+        if (lng != null) 'lng': lng,
       },
     );
     return MerchantLocation.fromJson(res as Map<String, dynamic>);
@@ -433,6 +437,8 @@ class ApiClient {
     required String address,
     String? phone,
     required String status,
+    double? lat,
+    double? lng,
   }) => _send(
     'PUT',
     '/api/v1/app/merchants/$merchantId/locations/$locationId',
@@ -441,6 +447,8 @@ class ApiClient {
       'address': address,
       'phone': phone ?? '',
       'status': status,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
     },
   );
 

@@ -32,6 +32,8 @@
 	<string>Take a photo of an item to add it to your catalog.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a photo of an item to add it to your catalog.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Use your current location to fill in a pickup location's address.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

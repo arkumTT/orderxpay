@@ -24,17 +24,19 @@ func (q *Queries) ClearDefaultMerchantLocation(ctx context.Context, merchantID p
 }
 
 const createMerchantLocation = `-- name: CreateMerchantLocation :one
-INSERT INTO merchant_locations (merchant_id, label, address, phone, is_default)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, merchant_id, label, address, phone, is_default, status, created_at, updated_at
+INSERT INTO merchant_locations (merchant_id, label, address, phone, is_default, lat, lng)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, merchant_id, label, address, phone, is_default, status, created_at, updated_at, lat, lng
 `
 
 type CreateMerchantLocationParams struct {
-	MerchantID pgtype.UUID `json:"merchant_id"`
-	Label      string      `json:"label"`
-	Address    string      `json:"address"`
-	Phone      pgtype.Text `json:"phone"`
-	IsDefault  bool        `json:"is_default"`
+	MerchantID pgtype.UUID   `json:"merchant_id"`
+	Label      string        `json:"label"`
+	Address    string        `json:"address"`
+	Phone      pgtype.Text   `json:"phone"`
+	IsDefault  bool          `json:"is_default"`
+	Lat        pgtype.Float8 `json:"lat"`
+	Lng        pgtype.Float8 `json:"lng"`
 }
 
 func (q *Queries) CreateMerchantLocation(ctx context.Context, arg CreateMerchantLocationParams) (MerchantLocation, error) {
@@ -44,6 +46,8 @@ func (q *Queries) CreateMerchantLocation(ctx context.Context, arg CreateMerchant
 		arg.Address,
 		arg.Phone,
 		arg.IsDefault,
+		arg.Lat,
+		arg.Lng,
 	)
 	var i MerchantLocation
 	err := row.Scan(
@@ -56,12 +60,14 @@ func (q *Queries) CreateMerchantLocation(ctx context.Context, arg CreateMerchant
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Lat,
+		&i.Lng,
 	)
 	return i, err
 }
 
 const getMerchantLocation = `-- name: GetMerchantLocation :one
-SELECT id, merchant_id, label, address, phone, is_default, status, created_at, updated_at FROM merchant_locations WHERE id = $1
+SELECT id, merchant_id, label, address, phone, is_default, status, created_at, updated_at, lat, lng FROM merchant_locations WHERE id = $1
 `
 
 func (q *Queries) GetMerchantLocation(ctx context.Context, id pgtype.UUID) (MerchantLocation, error) {
@@ -77,12 +83,14 @@ func (q *Queries) GetMerchantLocation(ctx context.Context, id pgtype.UUID) (Merc
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Lat,
+		&i.Lng,
 	)
 	return i, err
 }
 
 const listMerchantLocationsByMerchant = `-- name: ListMerchantLocationsByMerchant :many
-SELECT id, merchant_id, label, address, phone, is_default, status, created_at, updated_at FROM merchant_locations
+SELECT id, merchant_id, label, address, phone, is_default, status, created_at, updated_at, lat, lng FROM merchant_locations
 WHERE merchant_id = $1 AND status = 'active'
 ORDER BY is_default DESC, created_at
 `
@@ -106,6 +114,8 @@ func (q *Queries) ListMerchantLocationsByMerchant(ctx context.Context, merchantI
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Lat,
+			&i.Lng,
 		); err != nil {
 			return nil, err
 		}
@@ -139,17 +149,21 @@ UPDATE merchant_locations
 SET label = $2,
     address = $3,
     phone = $4,
-    status = $5
-WHERE id = $1 AND merchant_id = $6
+    status = $5,
+    lat = $6,
+    lng = $7
+WHERE id = $1 AND merchant_id = $8
 `
 
 type UpdateMerchantLocationParams struct {
-	ID         pgtype.UUID `json:"id"`
-	Label      string      `json:"label"`
-	Address    string      `json:"address"`
-	Phone      pgtype.Text `json:"phone"`
-	Status     string      `json:"status"`
-	MerchantID pgtype.UUID `json:"merchant_id"`
+	ID         pgtype.UUID   `json:"id"`
+	Label      string        `json:"label"`
+	Address    string        `json:"address"`
+	Phone      pgtype.Text   `json:"phone"`
+	Status     string        `json:"status"`
+	Lat        pgtype.Float8 `json:"lat"`
+	Lng        pgtype.Float8 `json:"lng"`
+	MerchantID pgtype.UUID   `json:"merchant_id"`
 }
 
 // Ownership enforced in the WHERE clause, same pattern as
@@ -162,6 +176,8 @@ func (q *Queries) UpdateMerchantLocation(ctx context.Context, arg UpdateMerchant
 		arg.Address,
 		arg.Phone,
 		arg.Status,
+		arg.Lat,
+		arg.Lng,
 		arg.MerchantID,
 	)
 	if err != nil {

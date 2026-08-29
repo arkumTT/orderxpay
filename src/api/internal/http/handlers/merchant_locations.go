@@ -10,10 +10,12 @@ import (
 )
 
 type createMerchantLocationRequest struct {
-	Label     string `json:"label"`
-	Address   string `json:"address"`
-	Phone     string `json:"phone"`
-	IsDefault bool   `json:"is_default"`
+	Label     string   `json:"label"`
+	Address   string   `json:"address"`
+	Phone     string   `json:"phone"`
+	IsDefault bool     `json:"is_default"`
+	Lat       *float64 `json:"lat"` // set when the address was filled via "Use current location"
+	Lng       *float64 `json:"lng"`
 }
 
 // CreateMerchantLocation adds a pickup/delivery reference point (feedback
@@ -57,6 +59,8 @@ func (h *Handler) CreateMerchantLocation(c *fiber.Ctx) error {
 		Address:    req.Address,
 		Phone:      textOrNull(req.Phone),
 		IsDefault:  makeDefault,
+		Lat:        float8OrNull(req.Lat),
+		Lng:        float8OrNull(req.Lng),
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create location"})
@@ -78,10 +82,12 @@ func (h *Handler) ListMerchantLocations(c *fiber.Ctx) error {
 }
 
 type updateMerchantLocationRequest struct {
-	Label   string `json:"label"`
-	Address string `json:"address"`
-	Phone   string `json:"phone"`
-	Status  string `json:"status"` // active | inactive
+	Label   string   `json:"label"`
+	Address string   `json:"address"`
+	Phone   string   `json:"phone"`
+	Status  string   `json:"status"` // active | inactive
+	Lat     *float64 `json:"lat"`
+	Lng     *float64 `json:"lng"`
 }
 
 func (h *Handler) UpdateMerchantLocation(c *fiber.Ctx) error {
@@ -114,6 +120,8 @@ func (h *Handler) UpdateMerchantLocation(c *fiber.Ctx) error {
 		Address:    req.Address,
 		Phone:      textOrNull(req.Phone),
 		Status:     req.Status,
+		Lat:        float8OrNull(req.Lat),
+		Lng:        float8OrNull(req.Lng),
 		MerchantID: merchantID,
 	})
 	if err != nil {

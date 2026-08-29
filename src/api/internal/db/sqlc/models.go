@@ -234,6 +234,8 @@ type MerchantLocation struct {
 	Status     string             `json:"status"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	Lat        pgtype.Float8      `json:"lat"`
+	Lng        pgtype.Float8      `json:"lng"`
 }
 
 type MerchantNote struct {

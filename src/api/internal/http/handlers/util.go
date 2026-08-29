@@ -40,6 +40,15 @@ func textOrNull(s string) pgtype.Text {
 	return pgtype.Text{String: s, Valid: true}
 }
 
+// float8OrNull converts an optional float64 request field (nil when the
+// client sends it as JSON null / omits it) into pgtype.Float8.
+func float8OrNull(f *float64) pgtype.Float8 {
+	if f == nil {
+		return pgtype.Float8{}
+	}
+	return pgtype.Float8{Float64: *f, Valid: true}
+}
+
 func badRequest(c *fiber.Ctx, msg string) error {
 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": msg})
 }

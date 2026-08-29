@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import '../../../core/api_client.dart';
 import '../../../core/models.dart';
 import '../../../core/session.dart';
@@ -60,100 +63,176 @@ class _LocationsScreenState extends State<LocationsScreen> {
     }
   }
 
+  /// Captures the device's GPS position and reverse-geocodes it into a
+  /// human-readable address via OpenStreetMap's free Nominatim endpoint —
+  /// no Google Maps billing account needed for this first cut (see PR
+  /// discussion). Nominatim's usage policy requires a descriptive
+  /// User-Agent and caps public use to light, occasional requests, which
+  /// matches "merchant taps this once per location" — a self-hosted or
+  /// paid geocoder would be the move if usage ever grows past that.
+  /// Throws a plain String on any failure, meant to be shown as-is.
+  Future<({double lat, double lng, String address})> _captureCurrentLocation() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw 'Location services are off. Enable them in your phone settings.';
+    }
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      throw 'Location permission denied. Enable it in your phone settings to use this.';
+    }
+
+    // A hard timeout here matters, not just as a nicety — without it a
+    // device that never delivers a fix (weak signal, or a location
+    // provider quirk) leaves "Locating…" spinning forever with no way
+    // out short of closing the sheet. Caught live: on this session's
+    // Android emulator, getCurrentPosition never resolved at all.
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    ).timeout(
+      const Duration(seconds: 20),
+      onTimeout: () => throw 'Could not get your location in time. Check your '
+          'signal, or type the address in by hand.',
+    );
+
+    String address = '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?format=json&lat=${position.latitude}&lon=${position.longitude}&zoom=18',
+      );
+      final res = await http
+          .get(uri, headers: {'User-Agent': 'OrderxPay-Merchant-App (support@orderxpay.app)'})
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final displayName = body['display_name'] as String?;
+        if (displayName != null && displayName.isNotEmpty) address = displayName;
+      }
+    } catch (_) {
+      // Reverse geocoding is a nicety — fall back to raw coordinates rather
+      // than failing the whole capture over a flaky geocoding request.
+    }
+
+    return (lat: position.latitude, lng: position.longitude, address: address);
+  }
+
   /// One sheet for both add and edit — pass [existing] to pre-fill and
   /// reveal a Deactivate action; omit it to create a new one.
   Future<void> _openLocationSheet([MerchantLocation? existing]) async {
     final labelController = TextEditingController(text: existing?.label);
     final addressController = TextEditingController(text: existing?.address);
     final phoneController = TextEditingController(text: existing?.phone);
+    double? lat = existing?.lat;
+    double? lng = existing?.lng;
+    bool locating = false;
 
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  existing != null ? 'Edit Location' : 'Add Location',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                ),
-                const SizedBox(height: 16),
-                OxpField(
-                  label: 'Label',
-                  controller: labelController,
-                  hintText: 'Osu Kitchen / Main Branch',
-                ),
-                const SizedBox(height: 12),
-                OxpField(
-                  label: 'Address',
-                  controller: addressController,
-                  hintText: '12 Volta Street, Osu',
-                ),
-                const SizedBox(height: 12),
-                OxpField(
-                  label: 'Phone (optional)',
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 20),
-                OxpButton(
-                  label: 'Save',
-                  onPressed: () async {
-                    if (labelController.text.trim().isEmpty || addressController.text.trim().isEmpty) {
-                      return;
-                    }
-                    try {
-                      if (existing != null) {
-                        await _api.updateMerchantLocation(
-                          Session.instance.merchantId!,
-                          existing.id,
-                          label: labelController.text.trim(),
-                          address: addressController.text.trim(),
-                          phone: phoneController.text.trim(),
-                          status: 'active',
-                        );
-                      } else {
-                        await _api.createMerchantLocation(
-                          Session.instance.merchantId!,
-                          label: labelController.text.trim(),
-                          address: addressController.text.trim(),
-                          phone: phoneController.text.trim(),
-                        );
-                      }
-                      if (context.mounted) Navigator.pop(context, 'saved');
-                    } on ApiException catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-                      }
-                    }
-                  },
-                ),
-                if (existing != null) ...[
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    existing != null ? 'Edit Location' : 'Add Location',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                  const SizedBox(height: 16),
+                  OxpField(
+                    label: 'Label',
+                    controller: labelController,
+                    hintText: 'Osu Kitchen / Main Branch',
+                  ),
+                  const SizedBox(height: 12),
+                  OxpField(
+                    label: 'Address',
+                    controller: addressController,
+                    hintText: '12 Volta Street, Osu',
+                  ),
                   const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: locating
+                          ? null
+                          : () async {
+                              setSheetState(() => locating = true);
+                              try {
+                                final captured = await _captureCurrentLocation();
+                                addressController.text = captured.address;
+                                lat = captured.lat;
+                                lng = captured.lng;
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                                }
+                              } finally {
+                                setSheetState(() => locating = false);
+                              }
+                            },
+                      icon: locating
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.my_location, size: 16),
+                      label: Text(locating ? 'Locating…' : 'Use current location'),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  OxpField(
+                    label: 'Phone (optional)',
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 20),
                   OxpButton(
-                    label: 'Deactivate',
-                    variant: OxpButtonVariant.secondary,
+                    label: 'Save',
                     onPressed: () async {
+                      if (labelController.text.trim().isEmpty || addressController.text.trim().isEmpty) {
+                        return;
+                      }
                       try {
-                        await _api.updateMerchantLocation(
-                          Session.instance.merchantId!,
-                          existing.id,
-                          label: existing.label,
-                          address: existing.address,
-                          phone: existing.phone,
-                          status: 'inactive',
-                        );
+                        if (existing != null) {
+                          await _api.updateMerchantLocation(
+                            Session.instance.merchantId!,
+                            existing.id,
+                            label: labelController.text.trim(),
+                            address: addressController.text.trim(),
+                            phone: phoneController.text.trim(),
+                            status: 'active',
+                            lat: lat,
+                            lng: lng,
+                          );
+                        } else {
+                          await _api.createMerchantLocation(
+                            Session.instance.merchantId!,
+                            label: labelController.text.trim(),
+                            address: addressController.text.trim(),
+                            phone: phoneController.text.trim(),
+                            lat: lat,
+                            lng: lng,
+                          );
+                        }
                         if (context.mounted) Navigator.pop(context, 'saved');
                       } on ApiException catch (e) {
                         if (context.mounted) {
@@ -162,8 +241,34 @@ class _LocationsScreenState extends State<LocationsScreen> {
                       }
                     },
                   ),
+                  if (existing != null) ...[
+                    const SizedBox(height: 8),
+                    OxpButton(
+                      label: 'Deactivate',
+                      variant: OxpButtonVariant.secondary,
+                      onPressed: () async {
+                        try {
+                          await _api.updateMerchantLocation(
+                            Session.instance.merchantId!,
+                            existing.id,
+                            label: existing.label,
+                            address: existing.address,
+                            phone: existing.phone,
+                            status: 'inactive',
+                            lat: existing.lat,
+                            lng: existing.lng,
+                          );
+                          if (context.mounted) Navigator.pop(context, 'saved');
+                        } on ApiException catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                          }
+                        }
+                      },
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

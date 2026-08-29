@@ -1,6 +1,6 @@
 -- name: CreateMerchantLocation :one
-INSERT INTO merchant_locations (merchant_id, label, address, phone, is_default)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO merchant_locations (merchant_id, label, address, phone, is_default, lat, lng)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: ListMerchantLocationsByMerchant :many
@@ -19,8 +19,10 @@ UPDATE merchant_locations
 SET label = $2,
     address = $3,
     phone = $4,
-    status = $5
-WHERE id = $1 AND merchant_id = $6;
+    status = $5,
+    lat = $6,
+    lng = $7
+WHERE id = $1 AND merchant_id = $8;
 
 -- name: ClearDefaultMerchantLocation :exec
 -- Step 1 of "set this location as default" — unset whatever the current
