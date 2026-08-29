@@ -233,6 +233,7 @@ class ApiClient {
     String? deliveryAddress,
     String? deliveryFeeHandling,
     int? deliveryFeePesewas,
+    String? pickupLocationId,
   }) async {
     final res = await _send(
       'POST',
@@ -246,6 +247,7 @@ class ApiClient {
           'delivery_fee_handling': deliveryFeeHandling,
         if (deliveryFeePesewas != null)
           'delivery_fee_pesewas': deliveryFeePesewas,
+        if (pickupLocationId != null) 'pickup_location_id': pickupLocationId,
       },
     );
     final map = res as Map<String, dynamic>;
@@ -292,6 +294,7 @@ class ApiClient {
     String? deliveryAddress,
     String? deliveryFeeHandling,
     int? deliveryFeePesewas,
+    String? pickupLocationId,
   }) async {
     final res = await _send(
       'PATCH',
@@ -305,6 +308,7 @@ class ApiClient {
           'delivery_fee_handling': deliveryFeeHandling,
         if (deliveryFeePesewas != null)
           'delivery_fee_pesewas': deliveryFeePesewas,
+        if (pickupLocationId != null) 'pickup_location_id': pickupLocationId,
       },
     );
     final map = res as Map<String, dynamic>;
@@ -394,6 +398,64 @@ class ApiClient {
     final res = await _send('GET', '/api/v1/app/merchants/$merchantId/delivery-providers');
     return (res as List).map((e) => DeliveryProvider.fromJson(e)).toList();
   }
+
+  /// Feedback item 4 — pickup/delivery reference locations, managed under
+  /// More → Locations.
+  Future<List<MerchantLocation>> listMerchantLocations(String merchantId) async {
+    final res = await _send('GET', '/api/v1/app/merchants/$merchantId/locations');
+    return (res as List).map((e) => MerchantLocation.fromJson(e)).toList();
+  }
+
+  Future<MerchantLocation> createMerchantLocation(
+    String merchantId, {
+    required String label,
+    required String address,
+    String? phone,
+    bool isDefault = false,
+    double? lat,
+    double? lng,
+  }) async {
+    final res = await _send(
+      'POST',
+      '/api/v1/app/merchants/$merchantId/locations',
+      body: {
+        'label': label,
+        'address': address,
+        'phone': phone ?? '',
+        'is_default': isDefault,
+        if (lat != null) 'lat': lat,
+        if (lng != null) 'lng': lng,
+      },
+    );
+    return MerchantLocation.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<void> updateMerchantLocation(
+    String merchantId,
+    String locationId, {
+    required String label,
+    required String address,
+    String? phone,
+    required String status,
+    double? lat,
+    double? lng,
+  }) => _send(
+    'PUT',
+    '/api/v1/app/merchants/$merchantId/locations/$locationId',
+    body: {
+      'label': label,
+      'address': address,
+      'phone': phone ?? '',
+      'status': status,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
+    },
+  );
+
+  Future<void> setDefaultMerchantLocation(String merchantId, String locationId) => _send(
+    'PATCH',
+    '/api/v1/app/merchants/$merchantId/locations/$locationId/default',
+  );
 
   Future<List<Map<String, dynamic>>> listStaff(String merchantId) async {
     final res = await _send('GET', '/api/v1/app/merchants/$merchantId/staff');

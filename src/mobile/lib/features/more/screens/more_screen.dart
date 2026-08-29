@@ -16,6 +16,7 @@ const _items = [
   _MoreItem('Order Requests', '/order-requests', Icons.inbox_outlined),
   _MoreItem('Staff', '/staff', Icons.people_outline),
   _MoreItem('Delivery Settings', '/delivery', Icons.local_shipping_outlined),
+  _MoreItem('Locations', '/locations', Icons.storefront_outlined),
   _MoreItem('Service Charge', '/settings', Icons.percent_outlined),
   _MoreItem('WhatsApp Settings', '/messaging', Icons.chat_bubble_outline),
   _MoreItem('Catalog Sync', '/catalog-sync', Icons.sync_outlined),

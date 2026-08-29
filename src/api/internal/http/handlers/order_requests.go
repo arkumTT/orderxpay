@@ -100,6 +100,7 @@ type setOrderRequestStatusRequest struct {
 	DeliveryAddress     string            `json:"delivery_address"`
 	DeliveryFeeHandling string            `json:"delivery_fee_handling"`
 	DeliveryFeePesewas  int64             `json:"delivery_fee_pesewas"`
+	PickupLocationID    string            `json:"pickup_location_id"`
 }
 
 // SetOrderRequestStatus lets the merchant confirm or decline a request
@@ -153,6 +154,10 @@ func (h *Handler) SetOrderRequestStatus(c *fiber.Ctx) error {
 		if req.DeliveryFeeHandling != "" && req.DeliveryFeeHandling != "bundled" && req.DeliveryFeeHandling != "external" {
 			return badRequest(c, "delivery_fee_handling must be bundled or external")
 		}
+		pickupLocationID, err := uuidOrNull(req.PickupLocationID)
+		if err != nil {
+			return badRequest(c, "invalid pickup_location_id")
+		}
 
 		invoice, lineItems, err = h.createInvoiceCore(c.Context(), createInvoiceCoreParams{
 			MerchantID:          merchantID,
@@ -163,6 +168,7 @@ func (h *Handler) SetOrderRequestStatus(c *fiber.Ctx) error {
 			DeliveryAddress:     req.DeliveryAddress,
 			DeliveryFeeHandling: req.DeliveryFeeHandling,
 			DeliveryFeePesewas:  req.DeliveryFeePesewas,
+			PickupLocationID:    pickupLocationID,
 		})
 		if err != nil {
 			if isValidationError(err) {

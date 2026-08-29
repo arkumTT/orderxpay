@@ -8,6 +8,12 @@
          gallery uses the system Photo Picker and needs no permission
          declaration on modern Android. -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Feedback item 4 — "Use current location" when adding/editing a
+         pickup location, via geolocator. FINE (not just COARSE) so the
+         reverse-geocoded address is actually street-accurate rather than
+         landing a block or two off. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="orderxpay_mobile"
         android:name="${applicationName}"

@@ -3,6 +3,7 @@
 
 int _int(dynamic v) => v == null ? 0 : (v as num).toInt();
 int? _intOrNull(dynamic v) => v == null ? null : (v as num).toInt();
+double? _doubleOrNull(dynamic v) => v == null ? null : (v as num).toDouble();
 String _str(dynamic v) => v == null ? '' : v as String;
 String? _strOrNull(dynamic v) => v as String?;
 
@@ -318,6 +319,43 @@ class DeliveryOption {
     flatFeePesewas: _intOrNull(j['flat_fee_pesewas']),
     serviceZone: _strOrNull(j['service_zone']),
     status: _str(j['status']),
+  );
+}
+
+/// Feedback item 4 — a pickup/delivery reference point a merchant manages
+/// under More → Locations. Deliberately flat: not tied to a specific
+/// DeliveryOption, so it works as a reference for a third-party provider,
+/// a merchant's own rider, or a customer arranging their own pickup alike.
+class MerchantLocation {
+  MerchantLocation({
+    required this.id,
+    required this.label,
+    required this.address,
+    required this.phone,
+    required this.isDefault,
+    required this.status,
+    required this.lat,
+    required this.lng,
+  });
+
+  final String id;
+  final String label;
+  final String address;
+  final String? phone;
+  final bool isDefault;
+  final String status;
+  final double? lat; // set when the address was filled via "Use current location"
+  final double? lng;
+
+  factory MerchantLocation.fromJson(Map<String, dynamic> j) => MerchantLocation(
+    id: _str(j['id']),
+    label: _str(j['label']),
+    address: _str(j['address']),
+    phone: _strOrNull(j['phone']),
+    isDefault: j['is_default'] == true,
+    status: _str(j['status']),
+    lat: _doubleOrNull(j['lat']),
+    lng: _doubleOrNull(j['lng']),
   );
 }
 

@@ -12,7 +12,7 @@ import (
 )
 
 const getSupportTransaction = `-- name: GetSupportTransaction :one
-SELECT i.id, i.merchant_id, i.order_request_id, i.reference, i.customer_contact, i.subtotal_pesewas, i.service_charge_pesewas, i.service_charge_allocation, i.total_pesewas, i.status, i.delivery_option_id, i.delivery_address, i.delivery_fee_handling, i.delivery_fee_pesewas, i.expires_at, i.created_at, i.updated_at, i.commission_pesewas, m.business_name AS merchant_business_name, m.phone AS merchant_phone
+SELECT i.id, i.merchant_id, i.order_request_id, i.reference, i.customer_contact, i.subtotal_pesewas, i.service_charge_pesewas, i.service_charge_allocation, i.total_pesewas, i.status, i.delivery_option_id, i.delivery_address, i.delivery_fee_handling, i.delivery_fee_pesewas, i.expires_at, i.created_at, i.updated_at, i.commission_pesewas, i.pickup_location_id, m.business_name AS merchant_business_name, m.phone AS merchant_phone
 FROM invoices i
 JOIN merchants m ON m.id = i.merchant_id
 WHERE i.reference = $1::text
@@ -37,6 +37,7 @@ type GetSupportTransactionRow struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	CommissionPesewas       int64              `json:"commission_pesewas"`
+	PickupLocationID        pgtype.UUID        `json:"pickup_location_id"`
 	MerchantBusinessName    string             `json:"merchant_business_name"`
 	MerchantPhone           string             `json:"merchant_phone"`
 }
@@ -63,6 +64,7 @@ func (q *Queries) GetSupportTransaction(ctx context.Context, reference string) (
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CommissionPesewas,
+		&i.PickupLocationID,
 		&i.MerchantBusinessName,
 		&i.MerchantPhone,
 	)
@@ -70,7 +72,7 @@ func (q *Queries) GetSupportTransaction(ctx context.Context, reference string) (
 }
 
 const searchInvoicesForSupport = `-- name: SearchInvoicesForSupport :many
-SELECT i.id, i.merchant_id, i.order_request_id, i.reference, i.customer_contact, i.subtotal_pesewas, i.service_charge_pesewas, i.service_charge_allocation, i.total_pesewas, i.status, i.delivery_option_id, i.delivery_address, i.delivery_fee_handling, i.delivery_fee_pesewas, i.expires_at, i.created_at, i.updated_at, i.commission_pesewas, m.business_name AS merchant_business_name, m.phone AS merchant_phone
+SELECT i.id, i.merchant_id, i.order_request_id, i.reference, i.customer_contact, i.subtotal_pesewas, i.service_charge_pesewas, i.service_charge_allocation, i.total_pesewas, i.status, i.delivery_option_id, i.delivery_address, i.delivery_fee_handling, i.delivery_fee_pesewas, i.expires_at, i.created_at, i.updated_at, i.commission_pesewas, i.pickup_location_id, m.business_name AS merchant_business_name, m.phone AS merchant_phone
 FROM invoices i
 JOIN merchants m ON m.id = i.merchant_id
 WHERE i.status != 'draft'
@@ -99,6 +101,7 @@ type SearchInvoicesForSupportRow struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	CommissionPesewas       int64              `json:"commission_pesewas"`
+	PickupLocationID        pgtype.UUID        `json:"pickup_location_id"`
 	MerchantBusinessName    string             `json:"merchant_business_name"`
 	MerchantPhone           string             `json:"merchant_phone"`
 }
@@ -133,6 +136,7 @@ func (q *Queries) SearchInvoicesForSupport(ctx context.Context, query string) ([
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CommissionPesewas,
+			&i.PickupLocationID,
 			&i.MerchantBusinessName,
 			&i.MerchantPhone,
 		); err != nil {
