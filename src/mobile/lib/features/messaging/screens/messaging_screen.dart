@@ -18,6 +18,14 @@ import '../../../core/design/widgets.dart';
 /// Integrations lists it as "Not built"), so no bot is actually replying to
 /// customers. That's surfaced honestly via the status card below rather than
 /// implied by a working-looking toggle.
+///
+/// The "Quick replies" list is illustrative only. Even once WhatsApp
+/// Business is connected, the webhook handler
+/// (src/api/.../handlers/whatsapp.go processInboundWhatsAppMessage) sends
+/// the single configured greeting to every inbound message — there is no
+/// keyword or intent routing behind it. The list is framed as examples of
+/// replies a merchant could add once that feature exists, marked not active,
+/// not as behaviour that runs today.
 class MessagingScreen extends StatefulWidget {
   const MessagingScreen({super.key});
 
@@ -209,17 +217,40 @@ class _MessagingScreenState extends State<MessagingScreen> {
           ),
           const SizedBox(height: 16),
 
-          const Text('Quick replies', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+          Row(
+            children: [
+              const Text('Quick replies', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.fieldFill,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'Not active yet',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "Auto-reply only sends your greeting — it can't recognise specific "
+            "questions yet. These are examples of replies you'll be able to add "
+            "once keyword routing ships.",
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
+          ),
           const SizedBox(height: 8),
           const OxpCard(
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                _QuickReplyRow(trigger: 'Is this available?', action: 'Auto-checks your catalog', showDivider: false),
-                _QuickReplyRow(trigger: 'Send menu', action: 'Sends your catalog link', showDivider: true),
+                _QuickReplyRow(trigger: 'Is this available?', action: 'Could check your catalog', showDivider: false),
+                _QuickReplyRow(trigger: 'Send menu', action: 'Could send your catalog link', showDivider: true),
                 _QuickReplyRow(
                   trigger: 'How do I pay?',
-                  action: 'Explains Mobile Money, card & USSD',
+                  action: 'Could explain Mobile Money, card & USSD',
                   showDivider: true,
                 ),
               ],
