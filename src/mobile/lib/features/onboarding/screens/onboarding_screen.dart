@@ -10,11 +10,12 @@ import 'register_credentials_screen.dart';
 /// succeeds does Page 2 (username/email/password) become reachable — see
 /// RegisterCredentialsScreen.
 ///
-/// No SMS provider is wired up server-side (Section 9 — not yet selected),
-/// so the API can't actually text the code to the merchant. In dev builds
-/// the request response includes dev_otp directly (see otp.go), shown here
-/// as a clearly-labeled dev hint so the whole loop is genuinely testable —
-/// this must be replaced by real SMS delivery before real users register.
+/// Real SMS delivery is wired up server-side (Arkesel, see otp.go) when
+/// the API is configured with an SMS_API_KEY — falls back to log-only
+/// delivery otherwise. In dev builds the request response also includes
+/// dev_otp directly regardless of whether SMS actually sent, shown here as
+/// a clearly-labeled dev hint so the whole loop stays testable without
+/// burning real SMS credits on every local run.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 

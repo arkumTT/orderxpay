@@ -47,6 +47,16 @@ func main() {
 
 		UploadDir:        cfg.UploadDir,
 		APIPublicBaseURL: cfg.APIPublicBaseURL,
+
+		SMSAPIKey:   cfg.SMSAPIKey,
+		SMSSenderID: cfg.SMSSenderID,
+
+		SMTPHost:      cfg.SMTPHost,
+		SMTPPort:      cfg.SMTPPort,
+		SMTPUsername:  cfg.SMTPUsername,
+		SMTPPassword:  cfg.SMTPPassword,
+		SMTPFromEmail: cfg.SMTPFromEmail,
+		SMTPFromName:  cfg.SMTPFromName,
 	})
 
 	log.Printf("orderxpay-api listening on :%s (%s)", cfg.Port, cfg.Env)
