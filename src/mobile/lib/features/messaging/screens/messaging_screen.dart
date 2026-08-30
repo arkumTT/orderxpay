@@ -19,12 +19,13 @@ import '../../../core/design/widgets.dart';
 /// the merchant's number to be provisioned by an admin in the Back Office
 /// first (SetMerchantWhatsAppPhoneNumberID).
 ///
-/// NOTE the "Quick replies" card below is aspirational, not real — the
-/// backend sends the same configured greeting to every inbound message
-/// regardless of its content; there's no keyword routing that actually
-/// auto-checks the catalog or explains payment methods the way those rows
-/// imply. Flagging rather than fixing here — out of scope for what this
-/// screen's current pass touched.
+/// The "Quick replies" card below is illustrative only. The backend sends
+/// the same configured greeting to every inbound message regardless of its
+/// content (processInboundWhatsAppMessage) — there's no keyword or intent
+/// routing that auto-checks the catalog or explains payment methods the way
+/// those rows imply. The card is framed as examples a merchant could add
+/// once keyword routing exists, marked "Not active yet", not as behaviour
+/// that runs today.
 class MessagingScreen extends StatefulWidget {
   const MessagingScreen({super.key});
 
@@ -216,17 +217,40 @@ class _MessagingScreenState extends State<MessagingScreen> {
           ),
           const SizedBox(height: 16),
 
-          const Text('Quick replies', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+          Row(
+            children: [
+              const Text('Quick replies', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.fieldFill,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'Not active yet',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "Auto-reply only sends your greeting — it can't recognise specific "
+            "questions yet. These are examples of replies you'll be able to add "
+            "once keyword routing ships.",
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
+          ),
           const SizedBox(height: 8),
           const OxpCard(
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                _QuickReplyRow(trigger: 'Is this available?', action: 'Auto-checks your catalog', showDivider: false),
-                _QuickReplyRow(trigger: 'Send menu', action: 'Sends your catalog link', showDivider: true),
+                _QuickReplyRow(trigger: 'Is this available?', action: 'Could check your catalog', showDivider: false),
+                _QuickReplyRow(trigger: 'Send menu', action: 'Could send your catalog link', showDivider: true),
                 _QuickReplyRow(
                   trigger: 'How do I pay?',
-                  action: 'Explains Mobile Money, card & USSD',
+                  action: 'Could explain Mobile Money, card & USSD',
                   showDivider: true,
                 ),
               ],
