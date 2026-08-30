@@ -11,7 +11,9 @@ import (
 
 	"github.com/orderxpay/api/internal/auth"
 	db "github.com/orderxpay/api/internal/db/sqlc"
+	"github.com/orderxpay/api/internal/email"
 	"github.com/orderxpay/api/internal/psp"
+	"github.com/orderxpay/api/internal/sms"
 	"github.com/orderxpay/api/internal/whatsapp"
 )
 
@@ -36,6 +38,12 @@ type Handler struct {
 	// API's own public origin, for building an absolute image_url.
 	UploadDir        string
 	APIPublicBaseURL string
+	// SMS is nil-safe, same posture as PSP/WhatsApp — see smsClient in
+	// integrations.go for the DB-secret-override-wins-over-env pattern.
+	// Email has no DB-override path (SMTP is multiple values, not one
+	// secret) — it's env-configured only, see email.Client's doc comment.
+	SMS   *sms.Client
+	Email *email.Client
 }
 
 type Options struct {
@@ -51,6 +59,16 @@ type Options struct {
 
 	UploadDir        string
 	APIPublicBaseURL string
+
+	SMSAPIKey   string
+	SMSSenderID string
+
+	SMTPHost      string
+	SMTPPort      string
+	SMTPUsername  string
+	SMTPPassword  string
+	SMTPFromEmail string
+	SMTPFromName  string
 }
 
 func New(opts Options) *Handler {
@@ -66,5 +84,10 @@ func New(opts Options) *Handler {
 		WhatsAppWebhookVerifyToken: opts.WhatsAppWebhookVerifyToken,
 		UploadDir:                  opts.UploadDir,
 		APIPublicBaseURL:           opts.APIPublicBaseURL,
+		SMS:                        sms.NewClient(opts.SMSAPIKey, opts.SMSSenderID),
+		Email: email.NewClient(
+			opts.SMTPHost, opts.SMTPPort, opts.SMTPUsername, opts.SMTPPassword,
+			opts.SMTPFromEmail, opts.SMTPFromName,
+		),
 	}
 }

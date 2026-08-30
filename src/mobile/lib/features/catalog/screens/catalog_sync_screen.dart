@@ -10,13 +10,15 @@ import '../../../core/design/widgets.dart';
 const _featureFlagKey = 'whatsapp_catalog_sync';
 
 /// Section 6.2: syncing the merchant's OrderxPay catalog into a WhatsApp
-/// Business catalog. The catalog preview and early-access enrollment status
-/// below are real — they read the merchant's actual items and their actual
-/// feature-flag opt-in. What isn't real: there's no WhatsApp Business
-/// Platform integration anywhere in this codebase yet (the Back Office
-/// Integrations page lists it as "Not built"), so "Sync now" can't actually
-/// send anything. It's left tappable to preview the intended flow, and says
-/// so plainly rather than pretending a sync happened.
+/// Business/Meta Commerce catalog (the shoppable product catalog Meta
+/// shows inside a WhatsApp chat) — distinct from basic messaging, which
+/// is built (see api/internal/whatsapp: real send/receive, auto-reply).
+/// The catalog preview and early-access enrollment status below are real
+/// — they read the merchant's actual items and their actual feature-flag
+/// opt-in. What isn't real: there's no Meta Commerce Manager/Catalog API
+/// integration anywhere in this codebase, so "Sync now" can't actually
+/// send anything. It's left tappable to preview the intended flow, and
+/// says so plainly rather than pretending a sync happened.
 class CatalogSyncScreen extends StatefulWidget {
   const CatalogSyncScreen({super.key});
 

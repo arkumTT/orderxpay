@@ -13,19 +13,19 @@ import '../../../core/design/widgets.dart';
 /// catalog link. The catalog link, its copy action, and its share action are
 /// real — that page (src/web/app/catalog/[merchantId]) actually exists.
 /// The auto-reply toggle and greeting message are real, persisted merchant
-/// preferences too, but nothing acts on them yet: there's no WhatsApp
-/// Business Solution Provider connection in this codebase (Back Office
-/// Integrations lists it as "Not built"), so no bot is actually replying to
-/// customers. That's surfaced honestly via the status card below rather than
-/// implied by a working-looking toggle.
+/// preferences, and they're genuinely acted on: an inbound WhatsApp message
+/// triggers the configured greeting to actually send back, via Meta's Cloud
+/// API directly (see api/internal/whatsapp + handlers/whatsapp.go). Requires
+/// the merchant's number to be provisioned by an admin in the Back Office
+/// first (SetMerchantWhatsAppPhoneNumberID).
 ///
-/// The "Quick replies" list is illustrative only. Even once WhatsApp
-/// Business is connected, the webhook handler
-/// (src/api/.../handlers/whatsapp.go processInboundWhatsAppMessage) sends
-/// the single configured greeting to every inbound message — there is no
-/// keyword or intent routing behind it. The list is framed as examples of
-/// replies a merchant could add once that feature exists, marked not active,
-/// not as behaviour that runs today.
+/// The "Quick replies" card below is illustrative only. The backend sends
+/// the same configured greeting to every inbound message regardless of its
+/// content (processInboundWhatsAppMessage) — there's no keyword or intent
+/// routing that auto-checks the catalog or explains payment methods the way
+/// those rows imply. The card is framed as examples a merchant could add
+/// once keyword routing exists, marked "Not active yet", not as behaviour
+/// that runs today.
 class MessagingScreen extends StatefulWidget {
   const MessagingScreen({super.key});
 
