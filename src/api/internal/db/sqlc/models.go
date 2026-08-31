@@ -222,6 +222,7 @@ type Merchant struct {
 	EmailVerifiedAt           pgtype.Timestamptz `json:"email_verified_at"`
 	WhatsappPhoneNumberID     pgtype.Text        `json:"whatsapp_phone_number_id"`
 	StorageUsedBytes          int64              `json:"storage_used_bytes"`
+	WhatsappCatalogID         pgtype.Text        `json:"whatsapp_catalog_id"`
 }
 
 type MerchantLocation struct {

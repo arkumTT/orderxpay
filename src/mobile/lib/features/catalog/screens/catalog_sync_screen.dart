@@ -13,12 +13,16 @@ const _featureFlagKey = 'whatsapp_catalog_sync';
 /// Business/Meta Commerce catalog (the shoppable product catalog Meta
 /// shows inside a WhatsApp chat) — distinct from basic messaging, which
 /// is built (see api/internal/whatsapp: real send/receive, auto-reply).
-/// The catalog preview and early-access enrollment status below are real
-/// — they read the merchant's actual items and their actual feature-flag
-/// opt-in. What isn't real: there's no Meta Commerce Manager/Catalog API
-/// integration anywhere in this codebase, so "Sync now" can't actually
-/// send anything. It's left tappable to preview the intended flow, and
-/// says so plainly rather than pretending a sync happened.
+///
+/// Real now: once an admin has provisioned merchant.whatsappCatalogId
+/// (Back Office, after manually creating the catalog in Meta Commerce
+/// Manager and connecting it to the merchant's WhatsApp Business
+/// Account — there's no API to automate that creation step), "Sync now"
+/// actually pushes items to Meta via the Catalog Batch API
+/// (SyncMerchantWhatsAppCatalog / whatsapp.SyncCatalogItems). Before
+/// that's provisioned, the screen says so plainly rather than pretending
+/// a sync happened — same honesty this screen always had, just a
+/// narrower gap now.
 class CatalogSyncScreen extends StatefulWidget {
   const CatalogSyncScreen({super.key});
 
@@ -29,6 +33,7 @@ class CatalogSyncScreen extends StatefulWidget {
 class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
   final _api = ApiClient();
   late Future<_SyncData> _future;
+  bool _syncing = false;
 
   @override
   void initState() {
@@ -41,48 +46,47 @@ class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
     final results = await Future.wait([
       _api.listItems(merchantId),
       _api.getFeatureFlagStatus(merchantId, _featureFlagKey),
+      _api.getMerchant(merchantId),
     ]);
     return _SyncData(
       items: results[0] as List<Item>,
       earlyAccess: results[1] as bool,
+      merchant: results[2] as Merchant,
     );
   }
 
-  void _showNotConnectedSheet() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(AppSpace.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.info_outline, color: AppColors.textSecondary),
-            const SizedBox(height: 12),
-            const Text(
-              'WhatsApp Business isn\'t connected',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+  Future<void> _refresh() async {
+    final next = _load();
+    setState(() {
+      _future = next;
+    });
+    await next;
+  }
+
+  Future<void> _sync() async {
+    setState(() => _syncing = true);
+    try {
+      final result = await _api.syncWhatsAppCatalog(Session.instance.merchantId!);
+      final synced = result['synced_items'] as int? ?? 0;
+      final errors = result['errors'] as int? ?? 0;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errors > 0
+                  ? 'Synced $synced items — $errors had errors, check Meta Commerce Manager'
+                  : 'Synced $synced items to your WhatsApp catalog',
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'OrderxPay doesn\'t have a WhatsApp Business Platform connection '
-              'set up yet, so nothing was sent. Once that\'s live, this button '
-              'will push your current items, prices, and availability into '
-              'your WhatsApp catalog automatically.',
-              style: TextStyle(color: AppColors.textSecondary, height: 1.4),
-            ),
-            const SizedBox(height: 20),
-            OxpButton(
-              label: 'Got it',
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      ),
-    );
+          ),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
   }
 
   @override
@@ -102,15 +106,10 @@ class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
           }
 
           final data = snapshot.data!;
+          final connected = data.merchant.whatsappCatalogId != null && data.merchant.whatsappCatalogId!.isNotEmpty;
 
           return RefreshIndicator(
-            onRefresh: () async {
-              final next = _load();
-              setState(() {
-                _future = next;
-              });
-              await next;
-            },
+            onRefresh: _refresh,
             child: ListView(
               padding: const EdgeInsets.all(AppSpace.xl),
               children: [
@@ -134,24 +133,34 @@ class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: AppColors.fieldFill,
+                          color: connected
+                              ? AppColors.statusPaid.withValues(alpha: 0.12)
+                              : AppColors.fieldFill,
                           borderRadius: BorderRadius.circular(AppRadius.control),
                         ),
-                        child: const Icon(Icons.link_off, size: 18, color: AppColors.textSecondary),
+                        child: Icon(
+                          connected ? Icons.link : Icons.link_off,
+                          size: 18,
+                          color: connected ? AppColors.statusPaid : AppColors.textSecondary,
+                        ),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'WhatsApp Business',
                               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                             ),
-                            SizedBox(height: 2),
+                            const SizedBox(height: 2),
                             Text(
-                              'Not connected',
-                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                              connected ? 'Connected' : 'Not connected',
+                              style: TextStyle(
+                                color: connected ? AppColors.statusPaid : AppColors.textSecondary,
+                                fontSize: 12,
+                                fontWeight: connected ? FontWeight.w600 : FontWeight.w400,
+                              ),
                             ),
                           ],
                         ),
@@ -160,7 +169,7 @@ class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
                   ),
                 ),
 
-                if (data.earlyAccess) ...[
+                if (!connected && data.earlyAccess) ...[
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -171,8 +180,8 @@ class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
                     ),
                     child: const Text(
                       "You're on the early-access list for this feature — you'll "
-                      "be among the first merchants to get it once WhatsApp "
-                      "Business is connected.",
+                      "be among the first merchants to get it once your WhatsApp "
+                      "catalog is connected.",
                       style: TextStyle(color: AppColors.statusPending, fontSize: 12, height: 1.4),
                     ),
                   ),
@@ -235,9 +244,20 @@ class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
 
                 const SizedBox(height: 24),
                 OxpButton(
-                  label: 'Sync to WhatsApp',
-                  onPressed: data.items.isEmpty ? null : _showNotConnectedSheet,
+                  label: connected ? 'Sync to WhatsApp' : 'WhatsApp not connected',
+                  loading: _syncing,
+                  onPressed: (!connected || data.items.isEmpty || _syncing) ? null : _sync,
                 ),
+                if (!connected) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Ask support to connect your WhatsApp catalog — once it is, '
+                    'this button will push your current items, prices, and '
+                    'availability automatically.',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ],
             ),
           );
@@ -248,7 +268,8 @@ class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
 }
 
 class _SyncData {
-  _SyncData({required this.items, required this.earlyAccess});
+  _SyncData({required this.items, required this.earlyAccess, required this.merchant});
   final List<Item> items;
   final bool earlyAccess;
+  final Merchant merchant;
 }

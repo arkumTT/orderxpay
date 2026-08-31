@@ -133,6 +133,15 @@ class ApiClient {
     return (res as List).map((e) => Item.fromJson(e)).toList();
   }
 
+  /// Section 6.2 — pushes the merchant's current active items into their
+  /// connected Meta/WhatsApp catalog. Only works once an admin has
+  /// provisioned merchant.whatsappCatalogId; the server returns a plain
+  /// 400 with a clear message otherwise, surfaced via ApiException.
+  Future<Map<String, dynamic>> syncWhatsAppCatalog(String merchantId) async {
+    final res = await _send('POST', '/api/v1/app/merchants/$merchantId/whatsapp-catalog/sync');
+    return res as Map<String, dynamic>;
+  }
+
   /// Whether a feature flag (Section 7.4 staged rollout) is on for this
   /// merchant right now — enabled globally, or opted in specifically.
   Future<bool> getFeatureFlagStatus(String merchantId, String key) async {

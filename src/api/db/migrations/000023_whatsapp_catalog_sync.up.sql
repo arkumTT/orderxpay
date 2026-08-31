@@ -1,0 +1,16 @@
+-- Section 6.2 — real WhatsApp/Meta Commerce catalog sync, replacing the
+-- mobile app's "Sync now" preview-only button. Mirrors the existing
+-- whatsapp_phone_number_id pattern exactly: admin-provisioned in the Back
+-- Office after the admin has manually created the Meta catalog and
+-- connected it to the merchant's WhatsApp Business Account in Meta's own
+-- Commerce Manager / WhatsApp Manager — there's no merchant self-service
+-- path for this, same reasoning as phone number provisioning (registering
+-- a catalog with Meta is an admin action, not something the mobile app
+-- does).
+-- The existing whatsapp_catalog_sync feature flag stays as-is (still
+-- gates the early-access banner for merchants without a catalog yet) —
+-- whether sync actually works is now determined per-merchant by whether
+-- whatsapp_catalog_id is set, not by a global rollout switch. Flipping
+-- that flag globally is a rollout decision for later, not implied by
+-- this column existing.
+ALTER TABLE merchants ADD COLUMN whatsapp_catalog_id text;

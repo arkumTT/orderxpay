@@ -171,3 +171,104 @@ func (h *Handler) SetMerchantWhatsAppPhoneNumberID(c *fiber.Ctx) error {
 	}
 	return c.JSON(stripMerchantSecrets(merchant))
 }
+
+type setMerchantWhatsAppCatalogRequest struct {
+	CatalogID string `json:"catalog_id"`
+}
+
+// SetMerchantWhatsAppCatalogID is the Back Office provisioning step for
+// Section 6.2 catalog sync — same shape as SetMerchantWhatsAppPhoneNumberID
+// above. An admin creates the catalog in Meta Commerce Manager and connects
+// it to the merchant's WhatsApp Business Account (both manual steps in
+// Meta's own console; there's no API to automate creating the catalog
+// itself), then records the resulting catalog_id here so
+// SyncMerchantWhatsAppCatalog knows where to push items.
+func (h *Handler) SetMerchantWhatsAppCatalogID(c *fiber.Ctx) error {
+	id, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+
+	var req setMerchantWhatsAppCatalogRequest
+	if err := c.BodyParser(&req); err != nil {
+		return badRequest(c, "invalid request body")
+	}
+
+	merchant, err := h.Queries.UpdateMerchantWhatsAppCatalogID(c.Context(), db.UpdateMerchantWhatsAppCatalogIDParams{
+		ID:                id,
+		WhatsappCatalogID: textOrNull(req.CatalogID),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update catalog id"})
+	}
+	return c.JSON(stripMerchantSecrets(merchant))
+}
+
+// SyncMerchantWhatsAppCatalog is what the mobile app's "Sync now" button
+// (Section 6.2) actually calls — pushes the merchant's current active
+// items into their connected Meta catalog via the Catalog Batch API. Every
+// tap reconciles the full catalog (UPDATE with allow_upsert, see
+// whatsapp.SyncCatalogItems) rather than diffing against the last sync, so
+// there's no local sync-state to keep consistent.
+func (h *Handler) SyncMerchantWhatsAppCatalog(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+
+	merchant, err := h.Queries.GetMerchant(c.Context(), merchantID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load merchant"})
+	}
+	if !merchant.WhatsappCatalogID.Valid || merchant.WhatsappCatalogID.String == "" {
+		return badRequest(c, "no WhatsApp catalog connected yet — contact support")
+	}
+
+	client := h.whatsappClient(c.Context())
+	if !client.Enabled() {
+		return notImplemented(c, "WhatsApp is not configured")
+	}
+
+	dbItems, err := h.Queries.ListItemsByMerchant(c.Context(), merchantID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load items"})
+	}
+	if len(dbItems) == 0 {
+		return badRequest(c, "add items to your catalog before syncing")
+	}
+
+	link := h.WebBaseURL + "/catalog/" + merchantID.String()
+	items := make([]whatsapp.CatalogItem, 0, len(dbItems))
+	for _, it := range dbItems {
+		items = append(items, whatsapp.CatalogItem{
+			RetailerID:       it.ID.String(),
+			Title:            it.Name,
+			PricePesewas:     it.UnitPricePesewas,
+			Currency:         "GHS",
+			ImageURL:         it.ImageUrl.String,
+			ProductURL:       link,
+			Available:        it.AvailabilityStatus == "in_stock",
+			AvailableToOrder: it.AvailabilityStatus == "made_to_order",
+		})
+	}
+
+	result, err := client.SyncCatalogItems(c.Context(), merchant.WhatsappCatalogID.String, items, merchant.BusinessName)
+	if err != nil {
+		log.Printf("whatsapp catalog sync: failed for merchant %s: %v", merchantID, err)
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "sync failed — see server logs"})
+	}
+
+	errorCount := 0
+	for _, v := range result.ValidationStatus {
+		errorCount += len(v.Errors)
+	}
+	return c.JSON(fiber.Map{
+		"synced_items": len(items),
+		"errors":       errorCount,
+		"result":       result,
+	})
+}

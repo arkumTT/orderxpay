@@ -70,6 +70,7 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Put("/items/:itemId", h.UpdateItem)
 	own.Delete("/items/:itemId", h.ArchiveItem)
 	own.Post("/items/photo", h.UploadItemPhoto)
+	own.Post("/whatsapp-catalog/sync", h.SyncMerchantWhatsAppCatalog)
 
 	own.Get("/order-requests", h.ListPendingOrderRequests)
 	own.Patch("/order-requests/:requestId", h.SetOrderRequestStatus)
@@ -132,6 +133,7 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	merchants.Get("/:id/notes", perm("merchants.view"), h.ListMerchantNotes)
 	merchants.Post("/:id/notes", perm("merchants.view"), h.CreateMerchantNote)
 	merchants.Patch("/:id/whatsapp-phone-number", perm("integrations.manage"), h.SetMerchantWhatsAppPhoneNumberID)
+	merchants.Patch("/:id/whatsapp-catalog", perm("integrations.manage"), h.SetMerchantWhatsAppCatalogID)
 
 	r.Get("/kyc-submissions", perm("merchants.kyc_review"), h.ListKYCSubmissionsAdmin)
 	r.Patch("/kyc-submissions/:id/status", perm("merchants.kyc_review"), h.ReviewKYCSubmission)

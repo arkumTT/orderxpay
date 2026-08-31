@@ -66,7 +66,7 @@ func (q *Queries) MarkEmailVerificationUsed(ctx context.Context, id pgtype.UUID)
 
 const markMerchantEmailVerified = `-- name: MarkMerchantEmailVerified :one
 UPDATE merchants SET email_verified_at = now() WHERE id = $1
-RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, payout_fee_absorption, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes, whatsapp_catalog_id
 `
 
 func (q *Queries) MarkMerchantEmailVerified(ctx context.Context, id pgtype.UUID) (Merchant, error) {
@@ -97,6 +97,7 @@ func (q *Queries) MarkMerchantEmailVerified(ctx context.Context, id pgtype.UUID)
 		&i.EmailVerifiedAt,
 		&i.WhatsappPhoneNumberID,
 		&i.StorageUsedBytes,
+		&i.WhatsappCatalogID,
 	)
 	return i, err
 }

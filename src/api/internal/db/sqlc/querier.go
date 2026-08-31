@@ -270,6 +270,12 @@ type Querier interface {
 	// id, not the merchant id.
 	UpdateMerchantLocation(ctx context.Context, arg UpdateMerchantLocationParams) (int64, error)
 	UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantStatusParams) (Merchant, error)
+	// Admin-only provisioning step (Section 6.2), same reasoning as
+	// UpdateMerchantWhatsAppPhoneNumberID: an admin creates the catalog in
+	// Meta Commerce Manager and connects it to the merchant's WhatsApp
+	// Business Account, then records the resulting catalog_id here — no
+	// merchant self-service path exists for this.
+	UpdateMerchantWhatsAppCatalogID(ctx context.Context, arg UpdateMerchantWhatsAppCatalogIDParams) (Merchant, error)
 	// Admin-only provisioning step (Section 7.3): OrderxPay registers the
 	// merchant's number under the platform WABA in Meta's console, then
 	// records the resulting phone_number_id here.
