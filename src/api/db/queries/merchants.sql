@@ -57,6 +57,15 @@ SELECT * FROM merchants WHERE whatsapp_phone_number_id = $1::text;
 UPDATE merchants SET whatsapp_phone_number_id = $2 WHERE id = $1
 RETURNING *;
 
+-- name: UpdateMerchantWhatsAppCatalogID :one
+-- Admin-only provisioning step (Section 6.2), same reasoning as
+-- UpdateMerchantWhatsAppPhoneNumberID: an admin creates the catalog in
+-- Meta Commerce Manager and connects it to the merchant's WhatsApp
+-- Business Account, then records the resulting catalog_id here — no
+-- merchant self-service path exists for this.
+UPDATE merchants SET whatsapp_catalog_id = $2 WHERE id = $1
+RETURNING *;
+
 -- name: IncrementMerchantStorageUsed :one
 -- Section 4.2: item photo uploads. delta is the file size in bytes — always
 -- positive today (nothing decrements it yet; replacing/archiving an item's
