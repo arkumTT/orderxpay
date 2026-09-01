@@ -5,3 +5,4 @@ export 'widgets/status_pill.dart';
 export 'widgets/avatar_initials.dart';
 export 'widgets/oxp_bottom_nav.dart';
 export 'widgets/oxp_wordmark.dart';
+export 'widgets/eganow_freedom_card.dart';
