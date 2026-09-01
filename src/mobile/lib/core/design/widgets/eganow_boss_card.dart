@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'eganow_card_face.dart';
 
-/// The Eganow Freedom card face (`assets/images/eganow_freedom_card.png`).
+/// The Eganow Boss card face (`assets/images/eganow_boss_card.png`).
 ///
 /// Pass [cardNumber], [cardholderName] and [expiry] to overlay live card
 /// data in the blank lower half of the design, the way a wallet/virtual
 /// card screen would. Omit them to show the bare card face.
-class EganowFreedomCard extends StatelessWidget {
-  const EganowFreedomCard({
+class EganowBossCard extends StatelessWidget {
+  const EganowBossCard({
     super.key,
     this.cardNumber,
     this.cardholderName,
@@ -23,9 +23,9 @@ class EganowFreedomCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return EganowCardFace(
-      asset: 'assets/images/eganow_freedom_card.png',
+      asset: 'assets/images/eganow_boss_card.png',
       // Measured from the artwork's alpha channel.
-      cornerRadiusFraction: 0.028,
+      cornerRadiusFraction: 0.04,
       cardNumber: cardNumber,
       cardholderName: cardholderName,
       expiry: expiry,
