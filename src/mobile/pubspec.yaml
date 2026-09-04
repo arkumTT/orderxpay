@@ -23,6 +23,69 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.1
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/
+
+# App icon: "OrderxPay logo_Icon Reverse" everywhere — the flat,
+# self-contained mark (white bubble+X on solid brand-orange #FF5F1F, no
+# transparency). Used as image_path (iOS + the plain/legacy Android
+# launcher icon) AND as adaptive_icon_foreground.
+#
+# On real devices (API 26+, which is effectively all of them) Android
+# always renders the *adaptive* icon, never the flat image_path one —
+# so adaptive_icon_foreground is what actually shows, not image_path.
+# It previously pointed at a transparent-background variant composited
+# over a white adaptive_icon_background, which produced a white-bg/
+# orange-mark icon on-device instead of the orange-bg/white-mark "Icon
+# Reverse" look that was actually asked for. Using the same flat Icon
+# Reverse file as the foreground fixes that — its own baked-in orange
+# fills the canvas, so the masked icon reads as solid orange with the
+# white mark, matching image_path exactly. adaptive_icon_background is
+# set to the same orange rather than white: flutter_launcher_icons
+# insets the foreground layer by 16% by default (see the generated
+# android/.../mipmap-anydpi-v26/ic_launcher.xml), and that margin shows
+# adaptive_icon_background underneath — white there would show as a
+# mismatched ring around the orange icon.
+#
+# This source file's artwork already fills only ~58% of its canvas
+# width; combined with the 16% inset, that's safely inside the ~66.7%
+# circle/squircle safe zone Android's adaptive-icon masks clip to — no
+# extra padding step needed.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/branding/app_icon.png"
+  adaptive_icon_background: "#FF5F1F"
+  adaptive_icon_foreground: "assets/branding/app_icon.png"
+  remove_alpha_ios: true
+
+# Splash screen: "OrderxPay logo_Primary" (icon + wordmark) on white, for
+# Android <12 and iOS, which draw this image centered/unclipped.
+#
+# Android 12+ is different: its system Splash Screen API hard-crops the
+# splash icon to a circle covering only the inner 66.7% of a 1152x1152
+# canvas (768x768) — anything outside that circle is clipped, no
+# exceptions, so android_12's `image` reuses the same transparent
+# icon-only mark as the adaptive app icon foreground above (already
+# safely within the 66.7% zone) rather than the full lockup.
+#
+# No `branding` (wordmark) entry here deliberately: Android's own splash
+# screen docs recommend against using windowSplashScreenBrandingImage at
+# all, and — unlike the icon — publish no fixed dimensions or aspect
+# ratio for it. In practice it gets stretched to whatever box the OS
+# decides on that device, with no documented spec to design a source
+# image against, which showed up as a visibly distorted wordmark on
+# device. The wordmark isn't lost, just deferred a beat — it's the first
+# thing rendered on the login/onboarding screen right after (see
+# OxpWordmark), which is fully within our own rendering control.
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/branding/splash_logo.png
+  android_12:
+    color: "#FFFFFF"
+    image: assets/branding/splash_icon_android12.png

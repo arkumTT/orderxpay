@@ -1,32 +1,22 @@
 import 'package:flutter/material.dart';
-import '../app_colors.dart';
 
-/// The "OrderxPay" wordmark, styled per the design spec — the "x" in
-/// accent orange, everything else in the primary black. Text-based rather
-/// than an image asset: simpler, scales cleanly, no binary asset to keep
-/// in sync.
+/// The "OrderxPay" wordmark — the actual brand logotype asset (see
+/// assets/branding/wordmark_logo.png), used anywhere a screen's title
+/// text would otherwise just be the string "OrderxPay" (the onboarding
+/// and login screens' headers, currently). Sized by height, not
+/// fontSize — the asset's own aspect ratio (~4:1) determines the width.
 class OxpWordmark extends StatelessWidget {
-  const OxpWordmark({super.key, this.fontSize = 32});
+  const OxpWordmark({super.key, this.height = 32});
 
-  final double fontSize;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
-    final style = TextStyle(
-      fontSize: fontSize,
-      fontWeight: FontWeight.w800,
-      color: AppColors.primaryBlack,
-      letterSpacing: -0.5,
-    );
-    return RichText(
-      text: TextSpan(
-        style: style,
-        children: [
-          const TextSpan(text: 'Order'),
-          TextSpan(text: 'x', style: style.copyWith(color: AppColors.accent)),
-          const TextSpan(text: 'Pay'),
-        ],
-      ),
+    return Image.asset(
+      'assets/branding/wordmark_logo.png',
+      height: height,
+      fit: BoxFit.contain,
+      semanticLabel: 'OrderxPay',
     );
   }
 }

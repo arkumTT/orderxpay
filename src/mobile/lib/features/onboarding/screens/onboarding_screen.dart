@@ -117,7 +117,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             key: _formKey,
             child: Column(
               children: [
-                const OxpWordmark(fontSize: 34),
+                const OxpWordmark(height: 34),
                 const SizedBox(height: 14),
                 const Text(
                   'Invoice your customers. Get paid instantly.',
