@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
             key: _formKey,
             child: Column(
               children: [
-                const OxpWordmark(fontSize: 34),
+                const OxpWordmark(height: 34),
                 const SizedBox(height: 14),
                 const Text(
                   'Invoice your customers. Get paid instantly.',

@@ -23,6 +23,49 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.1
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/
+
+# App icon. image_path is "OrderxPay logo_Icon Reverse" — the flat,
+# self-contained mark (white bubble+X on solid brand-orange #FF5F1F, no
+# transparency) used for iOS and the plain/legacy Android launcher icon.
+# adaptive_icon_foreground is "OrderxPay logo_Icon" — the same mark on a
+# transparent background (orange bubble, transparent/white X cutout),
+# used for Android's adaptive icon; adaptive_icon_background is white so
+# that cutout reads as white, matching the brand mark. This source
+# file's artwork already fills only ~58% of its canvas width, safely
+# inside the ~66.7% circle/squircle safe zone Android's adaptive-icon
+# masks clip to — no extra padding step needed before using it directly.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/branding/app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/branding/app_icon_adaptive_fg.png"
+  remove_alpha_ios: true
+
+# Splash screen: "OrderxPay logo_Primary" (icon + wordmark) on white, for
+# Android <12 and iOS, which draw this image centered/unclipped.
+#
+# Android 12+ is different: its system Splash Screen API hard-crops the
+# splash icon to a circle covering only the inner 66.7% of a 1152x1152
+# canvas (768x768) — anything outside that circle is clipped, no
+# exceptions, and a wide wordmark doesn't suit being squeezed into a
+# circle even if padded to fit. So for android_12 we split it: `image`
+# reuses the same transparent icon-only mark as the adaptive app icon
+# foreground above (already safely within the 66.7% zone), and the
+# wordmark goes in `branding`, which Android places in its own
+# unclipped strip near the bottom of the screen instead.
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/branding/splash_logo.png
+  android_12:
+    color: "#FFFFFF"
+    image: assets/branding/splash_icon_android12.png
+    branding: assets/branding/wordmark_logo.png
+    branding_mode: bottom
