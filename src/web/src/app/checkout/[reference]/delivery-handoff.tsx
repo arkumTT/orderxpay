@@ -97,9 +97,14 @@ function buildDeepLink(
     pickupLng: number | null;
   },
 ): string {
+  // replaceAll, not replace — a provider's real template may reasonably
+  // need the same placeholder more than once (e.g. a query param plus a
+  // human-readable note param); plain .replace() only substitutes the
+  // first occurrence and silently leaves the rest as a literal, broken
+  // "{pickup}" in the URL.
   return template
-    .replace("{pickup}", encodeURIComponent(opts.pickup))
-    .replace("{dropoff}", encodeURIComponent(opts.dropoff))
-    .replace("{pickup_lat}", opts.pickupLat != null ? String(opts.pickupLat) : "")
-    .replace("{pickup_lng}", opts.pickupLng != null ? String(opts.pickupLng) : "");
+    .replaceAll("{pickup}", encodeURIComponent(opts.pickup))
+    .replaceAll("{dropoff}", encodeURIComponent(opts.dropoff))
+    .replaceAll("{pickup_lat}", opts.pickupLat != null ? String(opts.pickupLat) : "")
+    .replaceAll("{pickup_lng}", opts.pickupLng != null ? String(opts.pickupLng) : "");
 }
