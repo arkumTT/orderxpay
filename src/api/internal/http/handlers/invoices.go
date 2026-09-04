@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/orderxpay/api/internal/db/sqlc"
 )
@@ -55,17 +56,44 @@ func (h *Handler) buildCheckoutResponse(c *fiber.Ctx, invoice db.Invoice) (fiber
 		return nil, c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to compute amount owed"})
 	}
 
+	// Fetched unconditionally (not just inside the delivery branch below) —
+	// the checkout page needs the merchant's own name for its header
+	// regardless of whether this particular invoice has delivery attached.
+	merchant, merr := h.Queries.GetMerchant(c.Context(), invoice.MerchantID)
+
 	body := fiber.Map{
 		"invoice":             invoice,
 		"line_items":          lineItems,
 		"amount_paid_pesewas": paid,
 		"amount_owed_pesewas": owed,
 	}
+	if merr == nil {
+		body["merchant"] = fiber.Map{"business_name": merchant.BusinessName}
+	}
+
+	// Resolved before the delivery block below so a real pickup address
+	// (and coordinates, when the merchant captured them via "use current
+	// location") is available to hand a third-party provider's deep link —
+	// see db/migrations/000021_merchant_location_coordinates.up.sql, which
+	// added lat/lng to merchant_locations specifically for this.
+	var pickupLocation *db.MerchantLocation
+	if invoice.PickupLocationID.Valid {
+		location, err := h.Queries.GetMerchantLocation(c.Context(), invoice.PickupLocationID)
+		if err == nil {
+			pickupLocation = &location
+			body["pickup_location"] = fiber.Map{
+				"label":   location.Label,
+				"address": location.Address,
+				"phone":   location.Phone,
+				"lat":     nullableFloat8(location.Lat),
+				"lng":     nullableFloat8(location.Lng),
+			}
+		}
+	}
 
 	if invoice.DeliveryOptionID.Valid {
 		option, err := h.Queries.GetDeliveryOption(c.Context(), invoice.DeliveryOptionID)
 		if err == nil {
-			merchant, merr := h.Queries.GetMerchant(c.Context(), invoice.MerchantID)
 			delivery := fiber.Map{
 				"type":                 option.Type,
 				"contact_name":         option.ContactName,
@@ -77,6 +105,18 @@ func (h *Handler) buildCheckoutResponse(c *fiber.Ctx, invoice db.Invoice) (fiber
 				"fee_handling_default": option.FeeHandlingDefault,
 				"delivery_address":     invoice.DeliveryAddress,
 			}
+			// pickup_address is what a deep link (e.g. Bolt Send's pickup=
+			// param) should actually use — a real address, not just the
+			// business name. Falls back to the business name only when
+			// this merchant/order has no pickup location on file yet, so
+			// existing deep links degrade gracefully rather than breaking.
+			if pickupLocation != nil {
+				delivery["pickup_address"] = pickupLocation.Address
+				delivery["pickup_lat"] = nullableFloat8(pickupLocation.Lat)
+				delivery["pickup_lng"] = nullableFloat8(pickupLocation.Lng)
+			} else if merr == nil {
+				delivery["pickup_address"] = merchant.BusinessName
+			}
 			if merr == nil {
 				delivery["merchant_business_name"] = merchant.BusinessName
 			}
@@ -84,18 +124,14 @@ func (h *Handler) buildCheckoutResponse(c *fiber.Ctx, invoice db.Invoice) (fiber
 		}
 	}
 
-	if invoice.PickupLocationID.Valid {
-		location, err := h.Queries.GetMerchantLocation(c.Context(), invoice.PickupLocationID)
-		if err == nil {
-			body["pickup_location"] = fiber.Map{
-				"label":   location.Label,
-				"address": location.Address,
-				"phone":   location.Phone,
-			}
-		}
-	}
-
 	return body, nil
+}
+
+func nullableFloat8(v pgtype.Float8) *float64 {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Float64
 }
 
 // GetInvoiceDetail backs the merchant app's Records detail view — nested

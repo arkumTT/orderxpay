@@ -10,6 +10,15 @@ const TERMINAL_STATUSES = new Set(["expired", "cancelled", "refunded"]);
 // Hosted checkout page (Section 5.1): single-purpose, lightweight, no login.
 // The reference in the URL is a bearer credential (Section 5.3) — rate
 // limiting / expiry enforcement belongs on the API side once built.
+//
+// Visual design follows the Claude Design handoff (OrderxPay.dc.html,
+// gallery screens 6-8 — "Customer Checkout" / "Checkout — Success (Kojo
+// rider)" / "Checkout — Success (Bolt Send / arrange)"). That mockup was
+// built as a single fixed-state screen per delivery outcome; this page
+// derives the same visual states from real invoice/delivery data instead,
+// plus two states the mockup doesn't cover — partially-paid and terminal
+// (expired/cancelled/refunded) — since this page has to handle every real
+// invoice status, not just the two the prototype demonstrates.
 export default async function CheckoutPage(
   props: PageProps<"/checkout/[reference]">,
 ) {
@@ -35,74 +44,114 @@ export default async function CheckoutPage(
     throw err;
   }
 
-  const { invoice, line_items, amount_paid_pesewas, amount_owed_pesewas, delivery } = data;
-  const canPay = !TERMINAL_STATUSES.has(invoice.status) && invoice.status !== "paid";
+  const { invoice, line_items, amount_paid_pesewas, amount_owed_pesewas, delivery, merchant } = data;
+  const isPaid = invoice.status === "paid";
+  const isPartial = invoice.status === "partially_paid";
+  const isTerminal = TERMINAL_STATUSES.has(invoice.status);
+  const canPay = !isTerminal && !isPaid;
+  // The delivery fee only belongs in the invoice total when it's actually
+  // bundled into this invoice (the merchant's own rider) — a Bolt Send /
+  // third-party fee is set and collected by that provider separately, so
+  // it's deliberately not shown as a line item here (Prompt 5/6).
+  const hasDeliveryFee =
+    invoice.delivery_fee_handling === "bundled" &&
+    !!invoice.delivery_fee_pesewas;
 
   return (
-    <div className="mx-auto max-w-md px-4 py-8">
-      <div className="rounded-xl border border-neutral-200 p-6">
-        <p className="text-xs uppercase tracking-wide text-neutral-400">
-          Invoice {invoice.reference}
-        </p>
-        <p className="mt-1 text-sm text-neutral-500 capitalize">
-          Status: {invoice.status.replace("_", " ")}
-        </p>
-
-        <ul className="mt-6 divide-y divide-neutral-100">
-          {line_items.map((item) => (
-            <li key={item.id} className="flex justify-between py-2 text-sm">
-              <span>
-                {item.description} × {item.quantity}
-              </span>
-              <span>{formatPesewas(item.line_total_pesewas)}</span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-4 space-y-1 border-t border-neutral-200 pt-4 text-sm">
-          <div className="flex justify-between text-neutral-500">
-            <span>Subtotal</span>
-            <span>{formatPesewas(invoice.subtotal_pesewas)}</span>
-          </div>
-          <div className="flex justify-between text-neutral-500">
-            <span>Service charge</span>
-            <span>{formatPesewas(invoice.service_charge_pesewas)}</span>
-          </div>
-          <div className="flex justify-between text-base font-semibold text-neutral-900">
-            <span>Total</span>
-            <span>{formatPesewas(invoice.total_pesewas)}</span>
-          </div>
+    <div className="min-h-full bg-oxp-app-bg">
+      <div className="mx-auto max-w-md">
+        <div className="bg-oxp-black px-5 py-[18px]">
+          <p className="text-xl font-bold text-white">
+            {merchant?.business_name ?? "OrderxPay"}
+          </p>
+          <p className="mt-1 text-xs text-white/60">Invoice #{invoice.reference}</p>
         </div>
 
-        {invoice.status === "paid" && (
-          <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-center text-sm font-medium text-green-800">
-            Payment received — thank you.
+        <div className="flex flex-col gap-4 px-5 py-6">
+          <div className="rounded-2xl border border-oxp-border bg-white p-4">
+            <div className="flex flex-col gap-2.5">
+              {line_items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex justify-between gap-3 text-[13px] text-oxp-black"
+                >
+                  <span>
+                    {item.description} × {item.quantity}
+                  </span>
+                  <span className="font-semibold">
+                    {formatPesewas(item.line_total_pesewas)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="my-2.5 h-px bg-oxp-border" />
+
+            <div className="flex flex-col gap-2.5">
+              <div className="flex justify-between text-[13px] text-oxp-muted">
+                <span>Service charge</span>
+                <span className="font-semibold text-oxp-black">
+                  {formatPesewas(invoice.service_charge_pesewas)}
+                </span>
+              </div>
+              {hasDeliveryFee && (
+                <div className="flex justify-between text-[13px] text-oxp-muted">
+                  <span>
+                    Delivery
+                    {delivery?.contact_name ? ` (${delivery.contact_name})` : ""}
+                  </span>
+                  <span className="font-semibold text-oxp-black">
+                    {formatPesewas(invoice.delivery_fee_pesewas!)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="my-2.5 h-px bg-oxp-border" />
+
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-oxp-black">Total due</span>
+              <span className="text-2xl font-bold text-oxp-orange">
+                {formatPesewas(invoice.total_pesewas)}
+              </span>
+            </div>
           </div>
-        )}
 
-        {invoice.status === "paid" && delivery && (
-          <DeliveryHandoff delivery={delivery} />
-        )}
+          {isPaid && (
+            <div className="flex items-center gap-2 rounded-xl border border-oxp-green/30 bg-oxp-green/10 px-4 py-3.5">
+              <span className="text-sm font-bold text-oxp-green">
+                Payment received ✓
+              </span>
+            </div>
+          )}
 
-        {invoice.status === "partially_paid" && (
-          <p className="mt-6 text-center text-sm text-neutral-500">
-            {formatPesewas(amount_paid_pesewas)} received so far — pay the
-            remaining {formatPesewas(amount_owed_pesewas)} below.
-          </p>
-        )}
+          {isPartial && (
+            <p className="text-center text-sm text-oxp-muted">
+              {formatPesewas(amount_paid_pesewas)} received so far — pay the
+              remaining {formatPesewas(amount_owed_pesewas)} below.
+            </p>
+          )}
 
-        {TERMINAL_STATUSES.has(invoice.status) && (
-          <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-center text-sm text-neutral-500">
-            This invoice is {invoice.status} and can no longer be paid.
-          </div>
-        )}
+          {isTerminal && (
+            <div className="rounded-xl border border-oxp-border bg-white p-4 text-center text-sm text-oxp-muted">
+              This invoice is {invoice.status} and can no longer be paid.
+            </div>
+          )}
 
-        {canPay && (
-          <PaymentPanel
-            reference={reference}
-            amountOwedPesewas={amount_owed_pesewas}
-          />
-        )}
+          {isPaid && delivery && <DeliveryHandoff delivery={delivery} />}
+
+          {canPay && (
+            <>
+              <PaymentPanel
+                reference={reference}
+                amountOwedPesewas={amount_owed_pesewas}
+              />
+              <p className="text-center text-[11px] text-oxp-placeholder">
+                Secured by licensed payment partner · No account needed
+              </p>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
