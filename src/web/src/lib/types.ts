@@ -52,6 +52,27 @@ export type DeliveryHandoff = {
   fee_handling_default: "bundled" | "external";
   delivery_address: string | null;
   merchant_business_name?: string;
+  // The real pickup point for a third-party deep link (e.g. Bolt Send's
+  // pickup= param) — the merchant's actual address/coordinates from their
+  // saved locations, when this invoice has one attached. Falls back to
+  // merchant_business_name (a name, not an address) only when the
+  // merchant hasn't set a pickup location — see pickup_location below,
+  // and buildDeepLink in delivery-handoff.tsx.
+  pickup_address?: string | null;
+  pickup_lat?: number | null;
+  pickup_lng?: number | null;
+};
+
+// Resolved from invoice.pickup_location_id, independent of any delivery
+// option (Section 4.11 feedback item 4) — a merchant can have this set
+// even on an order with no delivery attached, e.g. to tell a customer
+// picking up in person where to go.
+export type PickupLocation = {
+  label: string;
+  address: string;
+  phone: string | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export type CheckoutResponse = {
@@ -59,7 +80,9 @@ export type CheckoutResponse = {
   line_items: InvoiceLineItem[];
   amount_paid_pesewas: number;
   amount_owed_pesewas: number;
+  merchant?: { business_name: string };
   delivery?: DeliveryHandoff;
+  pickup_location?: PickupLocation;
 };
 
 export type InitiatePaymentResponse = {
