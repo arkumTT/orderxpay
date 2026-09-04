@@ -55,17 +55,22 @@ flutter_launcher_icons:
 # Android 12+ is different: its system Splash Screen API hard-crops the
 # splash icon to a circle covering only the inner 66.7% of a 1152x1152
 # canvas (768x768) — anything outside that circle is clipped, no
-# exceptions, and a wide wordmark doesn't suit being squeezed into a
-# circle even if padded to fit. So for android_12 we split it: `image`
-# reuses the same transparent icon-only mark as the adaptive app icon
-# foreground above (already safely within the 66.7% zone), and the
-# wordmark goes in `branding`, which Android places in its own
-# unclipped strip near the bottom of the screen instead.
+# exceptions, so android_12's `image` reuses the same transparent
+# icon-only mark as the adaptive app icon foreground above (already
+# safely within the 66.7% zone) rather than the full lockup.
+#
+# No `branding` (wordmark) entry here deliberately: Android's own splash
+# screen docs recommend against using windowSplashScreenBrandingImage at
+# all, and — unlike the icon — publish no fixed dimensions or aspect
+# ratio for it. In practice it gets stretched to whatever box the OS
+# decides on that device, with no documented spec to design a source
+# image against, which showed up as a visibly distorted wordmark on
+# device. The wordmark isn't lost, just deferred a beat — it's the first
+# thing rendered on the login/onboarding screen right after (see
+# OxpWordmark), which is fully within our own rendering control.
 flutter_native_splash:
   color: "#FFFFFF"
   image: assets/branding/splash_logo.png
   android_12:
     color: "#FFFFFF"
     image: assets/branding/splash_icon_android12.png
-    branding: assets/branding/wordmark_logo.png
-    branding_mode: bottom
