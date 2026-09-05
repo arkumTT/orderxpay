@@ -6,6 +6,13 @@ import { apiFetch } from "@/lib/api";
 import { formatPesewas } from "@/lib/money";
 import type { Item } from "@/lib/types";
 
+// OrderxPay is Ghana-only for now — merchants don't have a country field in
+// the data model yet, so this mirrors the fixed "🇬🇭 +233" prefix already
+// hardcoded in src/mobile's onboarding screen rather than inventing a
+// per-merchant lookup that doesn't exist. Revisit if multi-country ever
+// ships (a real merchant.country field to key off).
+const COUNTRY_CODE = "+233";
+
 // Customer-initiated ordering (Section 4.6, 12.2): browse, select quantities,
 // submit a request — this is a request, not a payable invoice. The merchant
 // confirms availability before an invoice is generated.
@@ -24,7 +31,9 @@ export function CatalogBrowser({
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>(
     {},
   );
-  const [customerContact, setCustomerContact] = useState("");
+  // The customer types only the local number; the country code is a fixed
+  // prefix (see COUNTRY_CODE above), joined on submit.
+  const [phoneLocal, setPhoneLocal] = useState("");
   const [status, setStatus] = useState<
     "idle" | "submitting" | "submitted" | "error"
   >("idle");
@@ -64,14 +73,14 @@ export function CatalogBrowser({
   }
 
   async function handleSubmit() {
-    if (!customerContact || selectedItems.length === 0) return;
+    if (!phoneLocal.trim() || selectedItems.length === 0) return;
     setStatus("submitting");
     setError(null);
     try {
       await apiFetch(`/api/v1/public/merchants/${merchantId}/order-requests`, {
         method: "POST",
         body: JSON.stringify({
-          customer_contact: customerContact,
+          customer_contact: `${COUNTRY_CODE}${phoneLocal.replace(/\s/g, "")}`,
           requested_items: selectedItems.map(({ item, quantity }) => ({
             item_id: item.id,
             name: item.name,
@@ -172,14 +181,22 @@ export function CatalogBrowser({
         <label className="text-sm text-neutral-700" htmlFor="contact">
           Your phone number or WhatsApp
         </label>
-        <input
-          id="contact"
-          type="text"
-          value={customerContact}
-          onChange={(e) => setCustomerContact(e.target.value)}
-          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          placeholder="+233..."
-        />
+        <div className="flex gap-2">
+          <div className="flex shrink-0 items-center justify-center rounded-md bg-neutral-100 px-3 text-sm font-semibold text-neutral-900">
+            🇬🇭 {COUNTRY_CODE}
+          </div>
+          <input
+            id="contact"
+            type="tel"
+            inputMode="tel"
+            value={phoneLocal}
+            onChange={(e) =>
+              setPhoneLocal(e.target.value.replace(/[^\d\s]/g, ""))
+            }
+            className="w-full min-w-0 flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            placeholder="20 553 7712"
+          />
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -189,7 +206,7 @@ export function CatalogBrowser({
         disabled={
           status === "submitting" ||
           selectedItems.length === 0 ||
-          !customerContact
+          !phoneLocal.trim()
         }
         onClick={handleSubmit}
         className="w-full rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
