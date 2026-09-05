@@ -29,12 +29,16 @@
   --color-oxp-fill: #f2f2f2;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* No dark-mode variant here on purpose: nothing in this app (the Claude
+   Design handoff's screens are all light-theme only) has an actual
+   designed dark counterpart. The Next.js starter template's automatic
+   prefers-color-scheme flip used to invert the page background to
+   near-black while every page's own text/border classes (text-neutral-900,
+   border-neutral-200, etc.) stayed fixed for a light background — on a
+   device with system dark mode on (the default on many phones), that left
+   near-black text on a near-black background, unreadable. Forcing a
+   consistent light background sitewide is more correct than a broken
+   auto-dark-mode nobody designed for. */
 
 body {
   background: var(--background);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { apiFetch } from "@/lib/api";
 import { formatPesewas } from "@/lib/money";
 import type { Item } from "@/lib/types";
@@ -25,6 +26,13 @@ export function CatalogBrowser({
   const selectedItems = items
     .filter((item) => (quantities[item.id] ?? 0) > 0)
     .map((item) => ({ item, quantity: quantities[item.id] }));
+
+  function adjustQuantity(itemId: string, delta: number) {
+    setQuantities((q) => ({
+      ...q,
+      [itemId]: Math.max(0, (q[itemId] ?? 0) + delta),
+    }));
+  }
 
   async function handleSubmit() {
     if (!customerContact || selectedItems.length === 0) return;
@@ -61,39 +69,61 @@ export function CatalogBrowser({
   return (
     <div className="space-y-4">
       <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
-        {items.map((item) => (
-          <li
-            key={item.id}
-            className="flex items-center justify-between gap-4 px-4 py-3"
-          >
-            <div>
-              <p className="text-sm font-medium text-neutral-900">
-                {item.name}
-              </p>
-              <p className="text-sm text-neutral-500">
-                {formatPesewas(item.unit_price_pesewas)}
-                {item.qty_unit ? ` / ${item.qty_unit}` : ""}
-              </p>
-              {item.availability_status !== "in_stock" && (
-                <p className="text-xs text-amber-600">
-                  {item.availability_status.replace("_", " ")}
-                </p>
+        {items.map((item) => {
+          const quantity = quantities[item.id] ?? 0;
+          return (
+            <li
+              key={item.id}
+              className="flex items-center gap-3 px-4 py-3"
+            >
+              {item.image_url && (
+                <Image
+                  src={item.image_url}
+                  alt={item.name}
+                  width={56}
+                  height={56}
+                  className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                />
               )}
-            </div>
-            <input
-              type="number"
-              min={0}
-              value={quantities[item.id] ?? 0}
-              onChange={(e) =>
-                setQuantities((q) => ({
-                  ...q,
-                  [item.id]: Math.max(0, Number(e.target.value)),
-                }))
-              }
-              className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-sm"
-            />
-          </li>
-        ))}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-neutral-900">
+                  {item.name}
+                </p>
+                <p className="text-sm text-neutral-500">
+                  {formatPesewas(item.unit_price_pesewas)}
+                  {item.qty_unit ? ` / ${item.qty_unit}` : ""}
+                </p>
+                {item.availability_status !== "in_stock" && (
+                  <p className="text-xs text-amber-600">
+                    {item.availability_status.replace("_", " ")}
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => adjustQuantity(item.id, -1)}
+                  disabled={quantity === 0}
+                  aria-label={`Decrease quantity of ${item.name}`}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-base leading-none text-neutral-900 disabled:opacity-40"
+                >
+                  −
+                </button>
+                <span className="w-4 text-center text-sm font-semibold text-neutral-900">
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => adjustQuantity(item.id, 1)}
+                  aria-label={`Increase quantity of ${item.name}`}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-900 text-base leading-none text-white"
+                >
+                  +
+                </button>
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
       <div className="space-y-2">
