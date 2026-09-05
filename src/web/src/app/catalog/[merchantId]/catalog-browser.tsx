@@ -17,6 +17,13 @@ export function CatalogBrowser({
   items: Item[];
 }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  // While a quantity field is being typed into, its in-progress text lives
+  // here instead of `quantities` — so the field can sit empty mid-edit
+  // (e.g. after backspacing to clear it) rather than snapping to "0" on
+  // every keystroke. Committed to `quantities` on blur/Enter.
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>(
+    {},
+  );
   const [customerContact, setCustomerContact] = useState("");
   const [status, setStatus] = useState<
     "idle" | "submitting" | "submitted" | "error"
@@ -27,11 +34,33 @@ export function CatalogBrowser({
     .filter((item) => (quantities[item.id] ?? 0) > 0)
     .map((item) => ({ item, quantity: quantities[item.id] }));
 
+  function setQuantity(itemId: string, value: number) {
+    setQuantities((q) => ({ ...q, [itemId]: Math.max(0, value) }));
+  }
+
   function adjustQuantity(itemId: string, delta: number) {
     setQuantities((q) => ({
       ...q,
       [itemId]: Math.max(0, (q[itemId] ?? 0) + delta),
     }));
+  }
+
+  function handleQuantityInputChange(itemId: string, raw: string) {
+    // Digits only — keeps the field usable with a numeric keypad without
+    // letting someone type a minus sign or decimal point.
+    setQuantityDrafts((d) => ({ ...d, [itemId]: raw.replace(/\D/g, "") }));
+  }
+
+  function commitQuantityDraft(itemId: string) {
+    setQuantityDrafts((d) => {
+      const draft = d[itemId];
+      if (draft !== undefined) {
+        setQuantity(itemId, draft === "" ? 0 : parseInt(draft, 10));
+      }
+      const rest = { ...d };
+      delete rest[itemId];
+      return rest;
+    });
   }
 
   async function handleSubmit() {
@@ -109,9 +138,22 @@ export function CatalogBrowser({
                 >
                   −
                 </button>
-                <span className="w-4 text-center text-sm font-semibold text-neutral-900">
-                  {quantity}
-                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  aria-label={`Quantity of ${item.name}`}
+                  value={quantityDrafts[item.id] ?? String(quantity)}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) =>
+                    handleQuantityInputChange(item.id, e.target.value)
+                  }
+                  onBlur={() => commitQuantityDraft(item.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  className="w-8 rounded-md border border-transparent text-center text-sm font-semibold text-neutral-900 focus:border-neutral-300 focus:outline-none"
+                />
                 <button
                   type="button"
                   onClick={() => adjustQuantity(item.id, 1)}
