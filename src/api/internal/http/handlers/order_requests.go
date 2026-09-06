@@ -13,6 +13,7 @@ import (
 
 type createOrderRequestRequest struct {
 	CustomerContact string          `json:"customer_contact"`
+	CustomerName    string          `json:"customer_name"` // optional
 	RequestedItems  json.RawMessage `json:"requested_items"`
 }
 
@@ -48,10 +49,18 @@ func (h *Handler) CreateOrderRequest(c *fiber.Ctx) error {
 	orderRequest, err := h.Queries.CreateOrderRequest(c.Context(), db.CreateOrderRequestParams{
 		MerchantID:      merchantID,
 		CustomerContact: req.CustomerContact,
+		CustomerName:    textOrNull(req.CustomerName),
 		RequestedItems:  req.RequestedItems,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create order request"})
+	}
+
+	// Prefer the customer's name in the notification when they gave one —
+	// falls back to the phone number, same as before this field existed.
+	notifyAs := req.CustomerContact
+	if req.CustomerName != "" {
+		notifyAs = req.CustomerName
 	}
 
 	// Best-effort (Section 4.10) — never fail the customer's actual request
@@ -60,7 +69,7 @@ func (h *Handler) CreateOrderRequest(c *fiber.Ctx) error {
 		MerchantID:   merchantID,
 		Type:         "order_request_pending",
 		Title:        "New order request",
-		Body:         req.CustomerContact + " wants to order — review and confirm.",
+		Body:         notifyAs + " wants to order — review and confirm.",
 		TargetEntity: textOrNull("order_request"),
 		TargetID:     orderRequest.ID,
 	}); err != nil {

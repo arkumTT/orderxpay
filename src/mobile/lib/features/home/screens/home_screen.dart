@@ -210,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         for (final r in data.pendingRequests)
                           _ActivityRow(
-                            title: r.customerContact,
+                            title: r.displayName,
                             subtitle: 'Order request · new',
                             trailing: const StatusPill(
                               label: 'Review',

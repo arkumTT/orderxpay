@@ -12,19 +12,25 @@ import (
 )
 
 const createOrderRequest = `-- name: CreateOrderRequest :one
-INSERT INTO order_requests (merchant_id, customer_contact, requested_items)
-VALUES ($1, $2, $3)
-RETURNING id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at
+INSERT INTO order_requests (merchant_id, customer_contact, customer_name, requested_items)
+VALUES ($1, $2, $3, $4)
+RETURNING id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name
 `
 
 type CreateOrderRequestParams struct {
 	MerchantID      pgtype.UUID `json:"merchant_id"`
 	CustomerContact string      `json:"customer_contact"`
+	CustomerName    pgtype.Text `json:"customer_name"`
 	RequestedItems  []byte      `json:"requested_items"`
 }
 
 func (q *Queries) CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error) {
-	row := q.db.QueryRow(ctx, createOrderRequest, arg.MerchantID, arg.CustomerContact, arg.RequestedItems)
+	row := q.db.QueryRow(ctx, createOrderRequest,
+		arg.MerchantID,
+		arg.CustomerContact,
+		arg.CustomerName,
+		arg.RequestedItems,
+	)
 	var i OrderRequest
 	err := row.Scan(
 		&i.ID,
@@ -35,12 +41,13 @@ func (q *Queries) CreateOrderRequest(ctx context.Context, arg CreateOrderRequest
 		&i.DeclineReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CustomerName,
 	)
 	return i, err
 }
 
 const getOrderRequest = `-- name: GetOrderRequest :one
-SELECT id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at FROM order_requests WHERE id = $1
+SELECT id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name FROM order_requests WHERE id = $1
 `
 
 func (q *Queries) GetOrderRequest(ctx context.Context, id pgtype.UUID) (OrderRequest, error) {
@@ -55,12 +62,13 @@ func (q *Queries) GetOrderRequest(ctx context.Context, id pgtype.UUID) (OrderReq
 		&i.DeclineReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CustomerName,
 	)
 	return i, err
 }
 
 const listPendingOrderRequestsByMerchant = `-- name: ListPendingOrderRequestsByMerchant :many
-SELECT id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at FROM order_requests
+SELECT id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name FROM order_requests
 WHERE merchant_id = $1 AND status = 'pending'
 ORDER BY created_at
 `
@@ -83,6 +91,7 @@ func (q *Queries) ListPendingOrderRequestsByMerchant(ctx context.Context, mercha
 			&i.DeclineReason,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CustomerName,
 		); err != nil {
 			return nil, err
 		}
@@ -98,7 +107,7 @@ const setOrderRequestStatus = `-- name: SetOrderRequestStatus :one
 UPDATE order_requests
 SET status = $2, decline_reason = $3
 WHERE id = $1
-RETURNING id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at
+RETURNING id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name
 `
 
 type SetOrderRequestStatusParams struct {
@@ -119,6 +128,7 @@ func (q *Queries) SetOrderRequestStatus(ctx context.Context, arg SetOrderRequest
 		&i.DeclineReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CustomerName,
 	)
 	return i, err
 }
