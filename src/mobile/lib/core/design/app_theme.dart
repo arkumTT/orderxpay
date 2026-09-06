@@ -21,6 +21,25 @@ class AppSpace {
   static const double xxl = 24;
 }
 
+/// The extra bottom inset a bottom-pinned button (a scrollable screen's
+/// final action, or a bottom sheet's Save button) needs to clear the
+/// device's system UI — the persistent nav bar/gesture area normally, or
+/// the on-screen keyboard when one's up. Takes whichever is taller rather
+/// than summing them: when the keyboard is showing it already exceeds any
+/// nav bar height, so adding both would just leave extra dead space.
+///
+/// Caught live on a physical device with 3-button/gesture nav: buttons at
+/// the bottom of several screens and bottom sheets sat flush against (or
+/// under) the system nav bar because their padding only ever accounted
+/// for `viewInsets.bottom` (the keyboard) or a plain fixed constant,
+/// never `viewPadding.bottom` (the permanent system UI inset).
+double bottomSafeInset(BuildContext context) {
+  final mq = MediaQuery.of(context);
+  return mq.viewInsets.bottom > mq.viewPadding.bottom
+      ? mq.viewInsets.bottom
+      : mq.viewPadding.bottom;
+}
+
 final ThemeData appTheme = ThemeData(
   useMaterial3: true,
   scaffoldBackgroundColor: AppColors.background,

@@ -112,7 +112,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
           color: AppColors.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 32 + bottomSafeInset(context)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -207,7 +207,10 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(AppSpace.xl),
+          padding: EdgeInsets.fromLTRB(
+            AppSpace.xl, AppSpace.xl, AppSpace.xl,
+            AppSpace.xl + bottomSafeInset(context),
+          ),
           children: [
             GestureDetector(
               onTap: _uploadingPhoto ? null : _pickPhoto,

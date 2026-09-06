@@ -133,7 +133,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
             20,
             20,
             20,
-            MediaQuery.of(context).viewInsets.bottom + 24,
+            bottomSafeInset(context) + 24,
           ),
           child: SingleChildScrollView(
             child: Column(
@@ -291,7 +291,10 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
             }
 
             return ListView(
-              padding: const EdgeInsets.all(AppSpace.xl),
+              padding: EdgeInsets.fromLTRB(
+                AppSpace.xl, AppSpace.xl, AppSpace.xl,
+                AppSpace.xl + bottomSafeInset(context),
+              ),
               children: [
                 OxpCard(
                   child: Row(

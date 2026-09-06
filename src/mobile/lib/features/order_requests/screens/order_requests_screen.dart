@@ -91,7 +91,10 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
             final requests = snapshot.data ?? [];
             if (requests.isEmpty) {
               return ListView(
-                padding: const EdgeInsets.all(AppSpace.xl),
+                padding: EdgeInsets.fromLTRB(
+                  AppSpace.xl, AppSpace.xl, AppSpace.xl,
+                  AppSpace.xl + bottomSafeInset(context),
+                ),
                 children: const [
                   SizedBox(height: 60),
                   Text(
@@ -103,7 +106,10 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
               );
             }
             return ListView.separated(
-              padding: const EdgeInsets.all(AppSpace.xl),
+              padding: EdgeInsets.fromLTRB(
+                AppSpace.xl, AppSpace.xl, AppSpace.xl,
+                AppSpace.xl + bottomSafeInset(context),
+              ),
               itemCount: requests.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, i) {

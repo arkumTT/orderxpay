@@ -68,7 +68,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               await next;
             },
             child: ListView(
-              padding: const EdgeInsets.all(AppSpace.xl),
+              padding: EdgeInsets.fromLTRB(
+                AppSpace.xl, AppSpace.xl, AppSpace.xl,
+                AppSpace.xl + bottomSafeInset(context),
+              ),
               children: [
                 OxpCard(
                   child: Column(

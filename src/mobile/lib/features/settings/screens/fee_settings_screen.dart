@@ -119,7 +119,10 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpace.xl),
+        padding: EdgeInsets.fromLTRB(
+          AppSpace.xl, AppSpace.xl, AppSpace.xl,
+          AppSpace.xl + bottomSafeInset(context),
+        ),
         children: [
           OxpCard(
             padding: EdgeInsets.zero,

@@ -67,7 +67,10 @@ class _VerifyScreenState extends State<VerifyScreen> {
           final tier1 = data.merchant.kycTier >= 1;
 
           return ListView(
-            padding: const EdgeInsets.all(AppSpace.xl),
+            padding: EdgeInsets.fromLTRB(
+              AppSpace.xl, AppSpace.xl, AppSpace.xl,
+              AppSpace.xl + bottomSafeInset(context),
+            ),
             children: [
               Container(
                 padding: const EdgeInsets.all(AppSpace.lg),

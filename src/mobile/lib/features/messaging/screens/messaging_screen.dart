@@ -87,7 +87,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(bottom: bottomSafeInset(context)),
         child: Container(
           decoration: const BoxDecoration(
             color: AppColors.surface,
@@ -137,7 +137,10 @@ class _MessagingScreenState extends State<MessagingScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('WhatsApp Settings')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpace.xl),
+        padding: EdgeInsets.fromLTRB(
+          AppSpace.xl, AppSpace.xl, AppSpace.xl,
+          AppSpace.xl + bottomSafeInset(context),
+        ),
         children: [
           OxpCard(
             child: Row(
