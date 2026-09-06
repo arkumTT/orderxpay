@@ -1,4 +1,7 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter_contacts/flutter_contacts.dart';
 import '../../../core/api_client.dart';
 import '../../../core/models.dart';
 import '../../../core/phone.dart';
@@ -37,6 +40,44 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   Future<List<Customer>> _load() => _api.listCustomers(Session.instance.merchantId!);
+
+  /// Opens the native contact picker (same permission handling as New
+  /// Order's — see NewOrderScreen._pickFromContacts) and fills the
+  /// Add/Edit Customer sheet's name and phone fields separately, not a
+  /// blended string.
+  Future<void> _pickFromContacts(
+    TextEditingController nameController,
+    TextEditingController phoneController,
+    StateSetter setSheetState,
+  ) async {
+    if (Platform.isAndroid) {
+      final status = await FlutterContacts.permissions.request(PermissionType.read);
+      if (status != PermissionStatus.granted && status != PermissionStatus.limited) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Contacts permission is needed to pick a customer.')),
+          );
+        }
+        return;
+      }
+    }
+    try {
+      final contact = await FlutterContacts.native.showPicker(properties: {ContactProperty.phone});
+      if (contact == null) return;
+      final name = contact.displayName ?? '';
+      final phone = contact.phones.isNotEmpty ? contact.phones.first.number : '';
+      setSheetState(() {
+        nameController.text = name;
+        phoneController.text = localDigitsFrom(phone);
+      });
+    } on PlatformException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open contacts.')),
+        );
+      }
+    }
+  }
 
   Future<void> _refresh() async {
     final next = _load();
@@ -113,12 +154,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
                         child: TextFormField(
                           controller: phoneController,
                           keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             hintText: '20 553 7712',
                             filled: true,
                             fillColor: AppColors.fieldFill,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(AppRadius.control))),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                            border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(AppRadius.control))),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.contact_page_outlined, color: AppColors.textSecondary, size: 20),
+                              tooltip: 'Pick from contacts',
+                              onPressed: () =>
+                                  _pickFromContacts(nameController, phoneController, setSheetState),
+                            ),
                           ),
                         ),
                       ),
