@@ -1,4 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The app's own networking (every API call, starting with login) —
+         not to be confused with android/app/src/debug/AndroidManifest.xml's
+         own INTERNET declaration, which exists purely for Flutter's dev
+         tooling (hot reload, breakpoints) and only merges into debug
+         builds. Missing here meant every release build could install and
+         launch fine but couldn't open a single socket: confirmed via
+         `adb logcat` on a real device — every request failed at the OS
+         level with "SocketException: Connection failed (OS Error:
+         Operation not permitted, errno = 1)" — and via `aapt dump
+         permissions` on the built APK, which listed every other
+         permission below but not this one. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Section 4.3: lets the merchant pick a customer from their phone
          contacts on the New Order screen via flutter_contacts' native
          picker. Only READ (not WRITE) — the app never edits contacts. -->
