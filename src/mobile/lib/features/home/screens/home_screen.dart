@@ -29,9 +29,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final results = await Future.wait([
       _api.listInvoices(merchantId),
       _api.listOrderRequests(merchantId),
+      _api.listNotifications(merchantId),
     ]);
     final invoices = results[0] as List<Invoice>;
     final requests = results[1] as List<OrderRequest>;
+    final notifications = results[2] as NotificationFeed;
 
     final now = DateTime.now();
     bool isToday(DateTime d) =>
@@ -51,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
       collectedTodayPesewas: collectedToday,
       ordersToday: todaysInvoices.length,
       pendingToday: pendingToday,
+      unreadNotifications: notifications.unreadCount,
     );
   }
 
@@ -118,6 +121,52 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
+                      GestureDetector(
+                        onTap: () => Navigator.pushNamed(context, '/notifications'),
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 10, top: 2),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.fieldFill,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.notifications_none,
+                                  color: AppColors.primaryBlack,
+                                  size: 20,
+                                ),
+                              ),
+                              if (data.unreadNotifications > 0)
+                                Positioned(
+                                  right: -2,
+                                  top: -2,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.accent,
+                                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                                      border: Border.all(color: AppColors.background, width: 1.5),
+                                    ),
+                                    child: Text(
+                                      data.unreadNotifications > 99 ? '99+' : '${data.unreadNotifications}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -138,6 +187,47 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
+                  if (data.pendingRequests.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(AppRadius.control),
+                      onTap: () => Navigator.pushNamed(context, '/order-requests'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.statusPartial.withValues(alpha: 0.1),
+                          border: Border.all(color: AppColors.statusPartial.withValues(alpha: 0.3)),
+                          borderRadius: BorderRadius.circular(AppRadius.control),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: AppColors.statusPartial.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.inbox_outlined, color: AppColors.statusPartial, size: 16),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '${data.pendingRequests.length} new order request'
+                                '${data.pendingRequests.length == 1 ? '' : 's'} — review now',
+                                style: const TextStyle(
+                                  color: AppColors.statusPartial,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right, color: AppColors.statusPartial),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 18),
                   Row(
                     children: [
@@ -261,6 +351,7 @@ class _HomeData {
     required this.collectedTodayPesewas,
     required this.ordersToday,
     required this.pendingToday,
+    required this.unreadNotifications,
   });
 
   final List<Invoice> invoices;
@@ -268,6 +359,7 @@ class _HomeData {
   final int collectedTodayPesewas;
   final int ordersToday;
   final int pendingToday;
+  final int unreadNotifications;
 }
 
 class _StatColumn extends StatelessWidget {
