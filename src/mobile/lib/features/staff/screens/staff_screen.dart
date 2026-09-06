@@ -71,7 +71,7 @@ class _StaffScreenState extends State<StaffScreen> {
             color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+          padding: EdgeInsets.fromLTRB(20, 20, 20, bottomSafeInset(context) + 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -169,7 +169,10 @@ class _StaffScreenState extends State<StaffScreen> {
             }
             final staff = snapshot.data ?? [];
             return ListView(
-              padding: const EdgeInsets.all(AppSpace.xl),
+              padding: EdgeInsets.fromLTRB(
+                AppSpace.xl, AppSpace.xl, AppSpace.xl,
+                AppSpace.xl + bottomSafeInset(context),
+              ),
               children: [
                 const Text(
                   'Staff can create/send invoices, but cannot change payout '

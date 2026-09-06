@@ -347,7 +347,10 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('New Order')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpace.xl),
+        padding: EdgeInsets.fromLTRB(
+          AppSpace.xl, AppSpace.xl, AppSpace.xl,
+          AppSpace.xl + bottomSafeInset(context),
+        ),
         children: [
           Row(
             children: [
@@ -608,7 +611,7 @@ class _ChooseCustomerSheetState extends State<_ChooseCustomerSheet> {
             color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 24 + bottomSafeInset(context)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -849,7 +852,7 @@ class _DeliverySheetState extends State<_DeliverySheet> {
             color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 24 + bottomSafeInset(context)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

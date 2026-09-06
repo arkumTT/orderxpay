@@ -105,7 +105,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setSheetState) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding: EdgeInsets.only(bottom: bottomSafeInset(context)),
           child: Container(
             decoration: const BoxDecoration(
               color: AppColors.surface,
@@ -262,7 +262,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
             }
             if (snapshot.hasError) {
               return ListView(
-                padding: const EdgeInsets.all(AppSpace.xl),
+                padding: EdgeInsets.fromLTRB(
+                AppSpace.xl, AppSpace.xl, AppSpace.xl,
+                AppSpace.xl + bottomSafeInset(context),
+              ),
                 children: [Text('Failed to load: ${snapshot.error}')],
               );
             }
@@ -273,7 +276,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       .where((c) => c.displayName.toLowerCase().contains(_query.toLowerCase()))
                       .toList();
             return ListView(
-              padding: const EdgeInsets.all(AppSpace.xl),
+              padding: EdgeInsets.fromLTRB(
+                AppSpace.xl, AppSpace.xl, AppSpace.xl,
+                AppSpace.xl + bottomSafeInset(context),
+              ),
               children: [
                 const Text(
                   'Saved customers',

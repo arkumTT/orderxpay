@@ -111,7 +111,10 @@ class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
-              padding: const EdgeInsets.all(AppSpace.xl),
+              padding: EdgeInsets.fromLTRB(
+                AppSpace.xl, AppSpace.xl, AppSpace.xl,
+                AppSpace.xl + bottomSafeInset(context),
+              ),
               children: [
                 const Text(
                   'Section 6.2',

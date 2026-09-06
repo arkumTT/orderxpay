@@ -82,7 +82,10 @@ class InvoiceSentScreen extends StatelessWidget {
         title: const Text('Invoice Sent'),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(AppSpace.xl),
+        padding: EdgeInsets.fromLTRB(
+          AppSpace.xl, AppSpace.xl, AppSpace.xl,
+          AppSpace.xl + bottomSafeInset(context),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
