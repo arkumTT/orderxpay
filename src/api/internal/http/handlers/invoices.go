@@ -204,6 +204,7 @@ func (h *Handler) ListInvoicesByMerchant(c *fiber.Ctx) error {
 
 type createInvoiceRequest struct {
 	CustomerContact     string            `json:"customer_contact"`
+	CustomerName        string            `json:"customer_name"` // optional — saved to the customers list, not stored on the invoice
 	LineItems           []lineItemRequest `json:"line_items"`
 	DeliveryOptionID    string            `json:"delivery_option_id"`
 	DeliveryAddress     string            `json:"delivery_address"`
@@ -244,6 +245,7 @@ func (h *Handler) CreateInvoice(c *fiber.Ctx) error {
 	invoice, lineItems, err := h.createInvoiceCore(c.Context(), createInvoiceCoreParams{
 		MerchantID:          merchantID,
 		CustomerContact:     req.CustomerContact,
+		CustomerName:        textOrNull(req.CustomerName),
 		LineItems:           req.LineItems,
 		DeliveryOptionID:    deliveryOptionID,
 		DeliveryAddress:     req.DeliveryAddress,

@@ -14,6 +14,7 @@ class _MoreItem {
 
 const _items = [
   _MoreItem('Order Requests', '/order-requests', Icons.inbox_outlined),
+  _MoreItem('Customers', '/customers', Icons.contacts_outlined),
   _MoreItem('Staff', '/staff', Icons.people_outline),
   _MoreItem('Delivery Settings', '/delivery', Icons.local_shipping_outlined),
   _MoreItem('Locations', '/locations', Icons.storefront_outlined),

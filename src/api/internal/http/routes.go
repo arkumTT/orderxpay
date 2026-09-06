@@ -95,6 +95,11 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Put("/locations/:locationId", h.UpdateMerchantLocation)
 	own.Patch("/locations/:locationId/default", h.SetDefaultMerchantLocation)
 
+	own.Post("/customers", h.CreateCustomer)
+	own.Get("/customers", h.ListCustomers)
+	own.Put("/customers/:customerId", h.UpdateCustomer)
+	own.Delete("/customers/:customerId", h.DeleteCustomer)
+
 	own.Get("/notifications", h.ListNotifications)
 	own.Patch("/notifications/:notificationId/read", h.MarkNotificationRead)
 	own.Patch("/notifications/read-all", h.MarkAllNotificationsRead)

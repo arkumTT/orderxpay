@@ -237,6 +237,7 @@ class ApiClient {
   Future<Invoice> createInvoice(
     String merchantId, {
     required String customerContact,
+    String? customerName,
     required List<Map<String, dynamic>> lineItems,
     String? deliveryOptionId,
     String? deliveryAddress,
@@ -249,6 +250,7 @@ class ApiClient {
       '/api/v1/app/merchants/$merchantId/invoices',
       body: {
         'customer_contact': customerContact,
+        if (customerName != null && customerName.isNotEmpty) 'customer_name': customerName,
         'line_items': lineItems,
         if (deliveryOptionId != null) 'delivery_option_id': deliveryOptionId,
         if (deliveryAddress != null) 'delivery_address': deliveryAddress,
@@ -465,6 +467,42 @@ class ApiClient {
     'PATCH',
     '/api/v1/app/merchants/$merchantId/locations/$locationId/default',
   );
+
+  /// Saved customers (Section 4.3 order flow revision) — managed under
+  /// More → Customers, and offered as a quick-pick on New Order. The API
+  /// upserts a row automatically on every invoice send; this list is
+  /// what that produces, plus anything added manually.
+  Future<List<Customer>> listCustomers(String merchantId) async {
+    final res = await _send('GET', '/api/v1/app/merchants/$merchantId/customers');
+    return (res as List).map((e) => Customer.fromJson(e)).toList();
+  }
+
+  Future<Customer> createCustomer(
+    String merchantId, {
+    required String contact,
+    String? name,
+  }) async {
+    final res = await _send(
+      'POST',
+      '/api/v1/app/merchants/$merchantId/customers',
+      body: {'contact': contact, 'name': name ?? ''},
+    );
+    return Customer.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<void> updateCustomer(
+    String merchantId,
+    String customerId, {
+    required String contact,
+    String? name,
+  }) => _send(
+    'PUT',
+    '/api/v1/app/merchants/$merchantId/customers/$customerId',
+    body: {'contact': contact, 'name': name ?? ''},
+  );
+
+  Future<void> deleteCustomer(String merchantId, String customerId) =>
+      _send('DELETE', '/api/v1/app/merchants/$merchantId/customers/$customerId');
 
   Future<List<Map<String, dynamic>>> listStaff(String merchantId) async {
     final res = await _send('GET', '/api/v1/app/merchants/$merchantId/staff');

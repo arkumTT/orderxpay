@@ -6,6 +6,7 @@ import '../../../core/api_client.dart';
 import '../../../core/format.dart';
 import '../../../core/invoice_calc.dart';
 import '../../../core/models.dart';
+import '../../../core/phone.dart';
 import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
@@ -33,7 +34,8 @@ class NewOrderScreen extends StatefulWidget {
 
 class _NewOrderScreenState extends State<NewOrderScreen> {
   final _api = ApiClient();
-  final _customerController = TextEditingController();
+  final _customerNameController = TextEditingController();
+  final _customerPhoneController = TextEditingController();
   final _customDescController = TextEditingController();
   final _customPriceController = TextEditingController();
 
@@ -50,7 +52,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   int _commissionBps = 0;
   List<DeliveryOption> _deliveryOptions = [];
   List<MerchantLocation> _locations = [];
-  List<String> _recentCustomers = [];
 
   String? _deliveryOptionId;
   String? _deliveryLabel;
@@ -62,13 +63,18 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   @override
   void initState() {
     super.initState();
-    _customerController.text = widget.sourceRequest?.customerContact ?? '';
+    final req = widget.sourceRequest;
+    if (req != null) {
+      _customerNameController.text = req.customerName;
+      _customerPhoneController.text = localDigitsFrom(req.customerContact);
+    }
     _load();
   }
 
   @override
   void dispose() {
-    _customerController.dispose();
+    _customerNameController.dispose();
+    _customerPhoneController.dispose();
     _customDescController.dispose();
     _customPriceController.dispose();
     _deliveryAddressController.dispose();
@@ -83,7 +89,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         _api.getMerchant(merchantId),
         _api.getCommissionBps(merchantId),
         _api.listDeliveryOptions(merchantId),
-        _api.listInvoices(merchantId),
         _api.listMerchantLocations(merchantId),
       ]);
       setState(() {
@@ -91,8 +96,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         _merchant = results[1] as Merchant;
         _commissionBps = results[2] as int;
         _deliveryOptions = results[3] as List<DeliveryOption>;
-        _recentCustomers = _dedupeCustomers(results[4] as List<Invoice>);
-        _locations = results[5] as List<MerchantLocation>;
+        _locations = results[4] as List<MerchantLocation>;
         for (final location in _locations) {
           if (location.isDefault) {
             _pickupLocationId = location.id;
@@ -123,26 +127,15 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     }
   }
 
-  /// Most-recent-first, deduped customer contacts from past invoices — a
-  /// quick-pick substitute for "recent calls" (not accessible: iOS exposes
-  /// no call-history API to third-party apps, and Android's READ_CALL_LOG is
-  /// Play-Store-restricted to default phone/dialer apps).
-  List<String> _dedupeCustomers(List<Invoice> invoices) {
-    final seen = <String>{};
-    final recents = <String>[];
-    for (final inv in invoices) {
-      if (inv.customerContact.isNotEmpty && seen.add(inv.customerContact)) {
-        recents.add(inv.customerContact);
-      }
-      if (recents.length >= 6) break;
-    }
-    return recents;
-  }
-
   /// Opens the native contact picker (Section 4.3). Permissionless on iOS;
   /// on Android, requesting the phone-number property requires READ_CONTACTS,
   /// so that's requested first — a normal, Play-Store-approved permission for
   /// this "pick a contact" use case (unlike call-log access).
+  ///
+  /// Fills the name and phone fields separately rather than writing one
+  /// blended "Name · phone" string — a real bug this replaces: the whole
+  /// blended string used to get sent as customer_contact verbatim whenever
+  /// a merchant didn't manually clean it up before sending.
   Future<void> _pickFromContacts() async {
     if (Platform.isAndroid) {
       final status = await FlutterContacts.permissions.request(PermissionType.read);
@@ -161,9 +154,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       final name = contact.displayName ?? '';
       final phone = contact.phones.isNotEmpty ? contact.phones.first.number : '';
       setState(() {
-        _customerController.text = name.isNotEmpty && phone.isNotEmpty
-            ? '$name · $phone'
-            : (name.isNotEmpty ? name : phone);
+        _customerNameController.text = name;
+        _customerPhoneController.text = localDigitsFrom(phone);
       });
     } on PlatformException {
       if (mounted) {
@@ -172,6 +164,34 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         );
       }
     }
+  }
+
+  /// Opens the saved-customers picker (Section 4.3 order flow revision) —
+  /// the "choose from previously saved customers" option, offered as a
+  /// second icon next to the device contact-picker rather than a
+  /// permanent mode toggle, so it costs nothing when unused.
+  Future<void> _pickFromSavedCustomers() async {
+    List<Customer> customers;
+    try {
+      customers = await _api.listCustomers(Session.instance.merchantId!);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      return;
+    }
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<Customer>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ChooseCustomerSheet(customers: customers),
+    );
+    if (selected == null) return;
+    setState(() {
+      _customerNameController.text = selected.name ?? '';
+      _customerPhoneController.text = localDigitsFrom(selected.contact);
+    });
   }
 
   int get _subtotalPesewas {
@@ -245,8 +265,9 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   }
 
   Future<void> _submit() async {
-    if (_customerController.text.trim().isEmpty) {
-      setState(() => _error = 'Customer contact is required');
+    final phoneDigits = localDigitsFrom(_customerPhoneController.text);
+    if (phoneDigits.isEmpty) {
+      setState(() => _error = 'Customer phone number is required');
       return;
     }
     if (_lineItemsPayload.isEmpty) {
@@ -261,6 +282,11 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       final merchantId = Session.instance.merchantId!;
       final Invoice invoice;
       if (widget.sourceRequest != null) {
+        // Confirming an order request always bills the contact the
+        // customer originally submitted with — the API doesn't accept an
+        // override here, so any edits to the name/phone fields in this
+        // case are display-only (matches the field's pre-fill purpose:
+        // showing who this is for, not changing who gets billed).
         invoice = await _api.confirmOrderRequest(
           merchantId,
           widget.sourceRequest!.id,
@@ -276,7 +302,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       } else {
         invoice = await _api.createInvoice(
           merchantId,
-          customerContact: _customerController.text.trim(),
+          customerContact: toE164(phoneDigits),
+          customerName: _customerNameController.text.trim(),
           lineItems: _lineItemsPayload,
           deliveryOptionId: _deliveryOptionId,
           deliveryAddress: _deliveryAddressController.text.isEmpty
@@ -345,45 +372,60 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           if (_fromCatalog) _buildCatalogList() else _buildCustomForm(),
           const SizedBox(height: 16),
           OxpField(
-            label: 'Customer',
-            controller: _customerController,
-            hintText: 'Name · phone',
-            suffix: IconButton(
-              icon: const Icon(Icons.contact_page_outlined, color: AppColors.textSecondary),
-              tooltip: 'Pick from contacts',
-              onPressed: _pickFromContacts,
-            ),
+            label: 'Customer name (optional)',
+            controller: _customerNameController,
+            hintText: 'e.g. Ama',
           ),
-          if (_recentCustomers.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 30,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _recentCustomers.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, i) => GestureDetector(
-                  onTap: () => setState(() => _customerController.text = _recentCustomers[i]),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.border),
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    child: Text(
-                      _recentCustomers[i],
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primaryBlack,
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.fieldFill,
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                ),
+                alignment: Alignment.center,
+                child: const Text(
+                  '$kCountryFlag $kCountryCode',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.primaryBlack),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OxpField(
+                  label: 'Customer phone number',
+                  controller: _customerPhoneController,
+                  hintText: '20 553 7712',
+                  keyboardType: TextInputType.phone,
+                  suffix: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.contacts_outlined, color: AppColors.textSecondary, size: 20),
+                        tooltip: 'Choose saved customer',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _pickFromSavedCustomers,
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        icon: const Icon(Icons.contact_page_outlined, color: AppColors.textSecondary, size: 20),
+                        tooltip: 'Pick from contacts',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _pickFromContacts,
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
           const SizedBox(height: 16),
           OxpCard(
             child: Column(
@@ -530,6 +572,114 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           onPressed: _addCustomLine,
         ),
       ],
+    );
+  }
+}
+
+/// The "choose from previously saved customers" sheet (Section 4.3 order
+/// flow revision) — a lightweight picker, distinct from the full
+/// CustomersScreen (which manages the list; this just selects from it).
+class _ChooseCustomerSheet extends StatefulWidget {
+  const _ChooseCustomerSheet({required this.customers});
+  final List<Customer> customers;
+
+  @override
+  State<_ChooseCustomerSheet> createState() => _ChooseCustomerSheetState();
+}
+
+class _ChooseCustomerSheetState extends State<_ChooseCustomerSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _query.isEmpty
+        ? widget.customers
+        : widget.customers
+              .where((c) => c.displayName.toLowerCase().contains(_query.toLowerCase()))
+              .toList();
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Choose a Customer',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+              const SizedBox(height: 14),
+              if (widget.customers.length > 5)
+                TextField(
+                  autofocus: false,
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search name or number',
+                    hintStyle: const TextStyle(color: AppColors.textDisabled),
+                    prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                    filled: true,
+                    fillColor: AppColors.fieldFill,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.control),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: widget.customers.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No saved customers yet — they\'ll appear here as you\n'
+                          'send invoices, or add one under More → Customers.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: scrollController,
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
+                        itemBuilder: (context, i) {
+                          final customer = filtered[i];
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              customer.displayName,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            ),
+                            subtitle: (customer.name?.isNotEmpty ?? false)
+                                ? Text(customer.contact, style: const TextStyle(fontSize: 12))
+                                : null,
+                            onTap: () => Navigator.pop(context, customer),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
