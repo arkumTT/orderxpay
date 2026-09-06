@@ -56,6 +56,8 @@ class _MessagingScreenState extends State<MessagingScreen> {
     });
   }
 
+  bool get _connected => _merchant!.whatsappPhoneNumberId?.isNotEmpty ?? false;
+
   String get _catalogLink => '${AppConfig.webBaseUrl}/catalog/${_merchant!.id}';
 
   String get _greeting =>
@@ -149,19 +151,32 @@ class _MessagingScreenState extends State<MessagingScreen> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: AppColors.fieldFill,
+                    color: _connected
+                        ? AppColors.statusPaid.withValues(alpha: 0.12)
+                        : AppColors.fieldFill,
                     borderRadius: BorderRadius.circular(AppRadius.control),
                   ),
-                  child: const Icon(Icons.link_off, size: 18, color: AppColors.textSecondary),
+                  child: Icon(
+                    _connected ? Icons.link : Icons.link_off,
+                    size: 18,
+                    color: _connected ? AppColors.statusPaid : AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('WhatsApp Business', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                      SizedBox(height: 2),
-                      Text('Not connected', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      const Text('WhatsApp Business', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                      const SizedBox(height: 2),
+                      Text(
+                        _connected ? 'Connected' : 'Not connected',
+                        style: TextStyle(
+                          color: _connected ? AppColors.statusPaid : AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: _connected ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
                     ],
                   ),
                 ),
