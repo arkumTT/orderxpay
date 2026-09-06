@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 
 	"github.com/jackc/pgx/v5"
@@ -195,6 +196,7 @@ type createInvoiceCoreParams struct {
 	MerchantID          pgtype.UUID
 	OrderRequestID      pgtype.UUID // zero value (Valid: false) if not created from an order request
 	CustomerContact     string
+	CustomerName        pgtype.Text // optional — not stored on the invoice itself, only used to save/update the customers row (see insertInvoice)
 	LineItems           []lineItemRequest
 	DeliveryOptionID    pgtype.UUID
 	DeliveryAddress     string
@@ -311,6 +313,18 @@ func (h *Handler) insertInvoice(ctx context.Context, p createInvoiceCoreParams, 
 
 	if err := tx.Commit(ctx); err != nil {
 		return db.Invoice{}, nil, err
+	}
+
+	// Best-effort (same posture as the order-request notification write) —
+	// never fail the actual sale over a customers-list write. Outside the
+	// transaction on purpose: this is bookkeeping for the merchant's saved
+	// customers list, not part of what makes the invoice itself valid.
+	if _, err := h.Queries.UpsertCustomer(ctx, db.UpsertCustomerParams{
+		MerchantID: p.MerchantID,
+		Contact:    p.CustomerContact,
+		Name:       p.CustomerName,
+	}); err != nil {
+		log.Printf("invoice %s: failed to save customer %s: %v", invoice.ID, p.CustomerContact, err)
 	}
 
 	return invoice, lineItems, nil

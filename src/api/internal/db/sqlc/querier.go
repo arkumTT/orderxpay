@@ -56,6 +56,7 @@ type Querier interface {
 	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWebhookDelivery(ctx context.Context, arg CreateWebhookDeliveryParams) error
+	DeleteCustomer(ctx context.Context, arg DeleteCustomerParams) (int64, error)
 	DeleteDeliveryProvider(ctx context.Context, id pgtype.UUID) error
 	DeleteMenu(ctx context.Context, id pgtype.UUID) error
 	DeleteMerchantFeeRule(ctx context.Context, merchantID pgtype.UUID) error
@@ -73,6 +74,7 @@ type Querier interface {
 	// a multiple of their own trailing 7-day daily average (so an
 	// already-high-volume merchant isn't flagged just for staying busy).
 	FindVelocitySpikes(ctx context.Context) ([]FindVelocitySpikesRow, error)
+	GetCustomer(ctx context.Context, id pgtype.UUID) (Customer, error)
 	// Daily time series for the same period — only days with at least one
 	// successful payment (a table doesn't need zero-filled gap rows the way a
 	// chart would).
@@ -167,6 +169,7 @@ type Querier interface {
 	// Distinct target_entity values seen so far, to populate the filter dropdown.
 	ListAuditLogTargetEntities(ctx context.Context) ([]string, error)
 	ListConversationsByMerchant(ctx context.Context, arg ListConversationsByMerchantParams) ([]Conversation, error)
+	ListCustomers(ctx context.Context, merchantID pgtype.UUID) ([]Customer, error)
 	ListDeliveryOptionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]DeliveryOption, error)
 	ListDeliveryProviders(ctx context.Context) ([]DeliveryProvider, error)
 	ListDisputesAdmin(ctx context.Context, arg ListDisputesAdminParams) ([]ListDisputesAdminRow, error)
@@ -253,6 +256,10 @@ type Querier interface {
 	SetSettlementStatus(ctx context.Context, arg SetSettlementStatusParams) (Settlement, error)
 	SetUserStatus(ctx context.Context, arg SetUserStatusParams) (User, error)
 	SumSuccessfulPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) (int64, error)
+	// Ownership enforced in the WHERE clause, same pattern as
+	// UpdateMerchantLocation — the route path only carries the customer's
+	// own id, not the merchant id.
+	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (int64, error)
 	// Full edit — contact/provider details, flat fee/zone, and fee handling —
 	// used by the Delivery Settings screen's edit sheet and by the inline
 	// fee-handling selector on already-enabled catalog providers. Same
@@ -281,6 +288,12 @@ type Querier interface {
 	// records the resulting phone_number_id here.
 	UpdateMerchantWhatsAppPhoneNumberID(ctx context.Context, arg UpdateMerchantWhatsAppPhoneNumberIDParams) (Merchant, error)
 	UpdateMerchantWhatsAppSettings(ctx context.Context, arg UpdateMerchantWhatsAppSettingsParams) (Merchant, error)
+	// Best-effort auto-save (called after every invoice send) and the
+	// manual "+ Add Customer" path share this same query — both are really
+	// "remember this contact, keeping whatever name we already know unless
+	// a better one just showed up." COALESCE keeps an existing name intact
+	// when this particular call doesn't have one (EXCLUDED.name NULL).
+	UpsertCustomer(ctx context.Context, arg UpsertCustomerParams) (Customer, error)
 	// commission_bps is derived server-side (sum of the three components) so it
 	// can never drift from what the components actually add up to — every other
 	// reader (invoice engine, checkout) still just reads the one blended number.

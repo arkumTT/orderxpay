@@ -32,6 +32,15 @@ type Conversation struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type Customer struct {
+	ID         pgtype.UUID        `json:"id"`
+	MerchantID pgtype.UUID        `json:"merchant_id"`
+	Name       pgtype.Text        `json:"name"`
+	Contact    string             `json:"contact"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type DeliveryOption struct {
 	ID                 pgtype.UUID        `json:"id"`
 	MerchantID         pgtype.UUID        `json:"merchant_id"`

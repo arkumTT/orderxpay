@@ -17,7 +17,18 @@
     <application
         android:label="orderxpay_mobile"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
+        <!-- API_BASE_URL/WEB_BASE_URL (core/config.dart) point at a plain
+             http:// LAN address during local/dev testing (no HTTPS cert for
+             a machine's LAN IP) — Android blocks cleartext traffic by
+             default on API 28+, which every build here targets, so without
+             this every network call (starting with login) fails outright
+             on a real device. Confirmed missing the hard way: a release
+             APK built and installed on a physical phone couldn't log in at
+             all until this was added. Harmless once a real HTTPS domain
+             backs production — this flag only affects plain HTTP, never
+             HTTPS. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

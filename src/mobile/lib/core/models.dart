@@ -372,6 +372,32 @@ class MerchantLocation {
   );
 }
 
+/// A saved customer (Section 4.3 order flow revision) — managed under
+/// More → Customers, and offered as a quick-pick on New Order. Upserted
+/// automatically by the API whenever an invoice is sent; [name] is
+/// optional since a customer may never have given one.
+class Customer {
+  Customer({
+    required this.id,
+    required this.name,
+    required this.contact,
+  });
+
+  final String id;
+  final String? name;
+  final String contact;
+
+  /// What to show in a picker row: the name if we have one, else the
+  /// phone number — same fallback as OrderRequest.displayName.
+  String get displayName => (name?.isNotEmpty ?? false) ? name! : contact;
+
+  factory Customer.fromJson(Map<String, dynamic> j) => Customer(
+    id: _str(j['id']),
+    name: _strOrNull(j['name']),
+    contact: _str(j['contact']),
+  );
+}
+
 /// Section 4.11/9.4: the admin-maintained catalog of verified delivery
 /// providers (Bolt, Uber, Yango, ...) — the merchant-app side just reads
 /// it to offer pre-populated toggles instead of merchants typing names in.

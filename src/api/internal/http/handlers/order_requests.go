@@ -172,6 +172,7 @@ func (h *Handler) SetOrderRequestStatus(c *fiber.Ctx) error {
 			MerchantID:          merchantID,
 			OrderRequestID:      requestID,
 			CustomerContact:     orderRequest.CustomerContact,
+			CustomerName:        orderRequest.CustomerName,
 			LineItems:           req.LineItems,
 			DeliveryOptionID:    deliveryOptionID,
 			DeliveryAddress:     req.DeliveryAddress,
