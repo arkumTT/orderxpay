@@ -34,6 +34,10 @@ export function CatalogBrowser({
   // The customer types only the local number; the country code is a fixed
   // prefix (see COUNTRY_CODE above), joined on submit.
   const [phoneLocal, setPhoneLocal] = useState("");
+  // Optional — there's no customers table in this system, so
+  // customer_contact (the phone number) is normally the only identifier a
+  // merchant has for a request. A name is just a nicer label when given.
+  const [customerName, setCustomerName] = useState("");
   const [status, setStatus] = useState<
     "idle" | "submitting" | "submitted" | "error"
   >("idle");
@@ -81,6 +85,7 @@ export function CatalogBrowser({
         method: "POST",
         body: JSON.stringify({
           customer_contact: `${COUNTRY_CODE}${phoneLocal.replace(/\s/g, "")}`,
+          customer_name: customerName.trim() || undefined,
           requested_items: selectedItems.map(({ item, quantity }) => ({
             item_id: item.id,
             name: item.name,
@@ -176,6 +181,20 @@ export function CatalogBrowser({
           );
         })}
       </ul>
+
+      <div className="space-y-2">
+        <label className="text-sm text-neutral-700" htmlFor="customer-name">
+          Your name <span className="text-neutral-400">(optional)</span>
+        </label>
+        <input
+          id="customer-name"
+          type="text"
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          placeholder="e.g. Ama"
+        />
+      </div>
 
       <div className="space-y-2">
         <label className="text-sm text-neutral-700" htmlFor="contact">

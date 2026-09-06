@@ -239,6 +239,7 @@ class OrderRequest {
   OrderRequest({
     required this.id,
     required this.customerContact,
+    required this.customerName,
     required this.requestedItems,
     required this.status,
     required this.createdAt,
@@ -246,13 +247,22 @@ class OrderRequest {
 
   final String id;
   final String customerContact;
+  // Optional — empty when the customer didn't give one. Prefer this over
+  // customerContact for display; there's no customers table backing this,
+  // so the phone number remains the fallback identifier.
+  final String customerName;
   final List<dynamic> requestedItems;
   final String status;
   final DateTime createdAt;
 
+  /// What to show the merchant: the customer's name if they gave one,
+  /// otherwise the phone number they ordered from.
+  String get displayName => customerName.isNotEmpty ? customerName : customerContact;
+
   factory OrderRequest.fromJson(Map<String, dynamic> j) => OrderRequest(
     id: _str(j['id']),
     customerContact: _str(j['customer_contact']),
+    customerName: _str(j['customer_name']),
     requestedItems: (j['requested_items'] as List<dynamic>?) ?? const [],
     status: _str(j['status']),
     createdAt: DateTime.tryParse(_str(j['created_at'])) ?? DateTime.now(),

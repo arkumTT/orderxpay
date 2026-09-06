@@ -268,6 +268,7 @@ type OrderRequest struct {
 	DeclineReason   pgtype.Text        `json:"decline_reason"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	CustomerName    pgtype.Text        `json:"customer_name"`
 }
 
 type Payment struct {

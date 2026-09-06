@@ -1,6 +1,6 @@
 -- name: CreateOrderRequest :one
-INSERT INTO order_requests (merchant_id, customer_contact, requested_items)
-VALUES ($1, $2, $3)
+INSERT INTO order_requests (merchant_id, customer_contact, customer_name, requested_items)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetOrderRequest :one

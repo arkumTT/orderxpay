@@ -114,19 +114,24 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
                     children: [
                       Row(
                         children: [
-                          AvatarInitials(name: req.customerContact),
+                          AvatarInitials(name: req.displayName),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  req.customerContact,
+                                  req.displayName,
                                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                                 ),
-                                const Text(
-                                  'via catalog link',
-                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                Text(
+                                  // When we have a real name, show the phone
+                                  // number as the subtitle instead of the
+                                  // generic "via catalog link" — it's more
+                                  // useful (e.g. to call/WhatsApp them) and
+                                  // was already the primary line before.
+                                  req.customerName.isNotEmpty ? req.customerContact : 'via catalog link',
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                 ),
                               ],
                             ),
