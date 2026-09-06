@@ -21,6 +21,7 @@ class Merchant {
     required this.whatsappAutoReplyEnabled,
     required this.whatsappGreetingMessage,
     required this.whatsappCatalogId,
+    required this.whatsappPhoneNumberId,
     required this.deliveryEnabled,
   });
 
@@ -36,6 +37,7 @@ class Merchant {
   final bool whatsappAutoReplyEnabled;
   final String? whatsappGreetingMessage; // null = use the app's generated default
   final String? whatsappCatalogId; // null = no Meta catalog connected yet (Section 6.2, admin-provisioned)
+  final String? whatsappPhoneNumberId; // null = no WhatsApp number connected yet (Section 4.4, admin-provisioned)
   final bool deliveryEnabled;
 
   factory Merchant.fromJson(Map<String, dynamic> j) => Merchant(
@@ -53,6 +55,7 @@ class Merchant {
     whatsappAutoReplyEnabled: j['whatsapp_auto_reply_enabled'] as bool? ?? true,
     whatsappGreetingMessage: _strOrNull(j['whatsapp_greeting_message']),
     whatsappCatalogId: _strOrNull(j['whatsapp_catalog_id']),
+    whatsappPhoneNumberId: _strOrNull(j['whatsapp_phone_number_id']),
     deliveryEnabled: j['delivery_enabled'] as bool? ?? true,
   );
 }
