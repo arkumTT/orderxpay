@@ -6,6 +6,13 @@ import { apiFetch } from "@/lib/api";
 import { formatPesewas } from "@/lib/money";
 import type { Item } from "@/lib/types";
 
+// OrderxPay is Ghana-only for now — merchants don't have a country field in
+// the data model yet, so this mirrors the fixed "🇬🇭 +233" prefix already
+// hardcoded in src/mobile's onboarding screen rather than inventing a
+// per-merchant lookup that doesn't exist. Revisit if multi-country ever
+// ships (a real merchant.country field to key off).
+const COUNTRY_CODE = "+233";
+
 // Customer-initiated ordering (Section 4.6, 12.2): browse, select quantities,
 // submit a request — this is a request, not a payable invoice. The merchant
 // confirms availability before an invoice is generated.
@@ -17,7 +24,16 @@ export function CatalogBrowser({
   items: Item[];
 }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [customerContact, setCustomerContact] = useState("");
+  // While a quantity field is being typed into, its in-progress text lives
+  // here instead of `quantities` — so the field can sit empty mid-edit
+  // (e.g. after backspacing to clear it) rather than snapping to "0" on
+  // every keystroke. Committed to `quantities` on blur/Enter.
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>(
+    {},
+  );
+  // The customer types only the local number; the country code is a fixed
+  // prefix (see COUNTRY_CODE above), joined on submit.
+  const [phoneLocal, setPhoneLocal] = useState("");
   const [status, setStatus] = useState<
     "idle" | "submitting" | "submitted" | "error"
   >("idle");
@@ -27,6 +43,10 @@ export function CatalogBrowser({
     .filter((item) => (quantities[item.id] ?? 0) > 0)
     .map((item) => ({ item, quantity: quantities[item.id] }));
 
+  function setQuantity(itemId: string, value: number) {
+    setQuantities((q) => ({ ...q, [itemId]: Math.max(0, value) }));
+  }
+
   function adjustQuantity(itemId: string, delta: number) {
     setQuantities((q) => ({
       ...q,
@@ -34,15 +54,33 @@ export function CatalogBrowser({
     }));
   }
 
+  function handleQuantityInputChange(itemId: string, raw: string) {
+    // Digits only — keeps the field usable with a numeric keypad without
+    // letting someone type a minus sign or decimal point.
+    setQuantityDrafts((d) => ({ ...d, [itemId]: raw.replace(/\D/g, "") }));
+  }
+
+  function commitQuantityDraft(itemId: string) {
+    setQuantityDrafts((d) => {
+      const draft = d[itemId];
+      if (draft !== undefined) {
+        setQuantity(itemId, draft === "" ? 0 : parseInt(draft, 10));
+      }
+      const rest = { ...d };
+      delete rest[itemId];
+      return rest;
+    });
+  }
+
   async function handleSubmit() {
-    if (!customerContact || selectedItems.length === 0) return;
+    if (!phoneLocal.trim() || selectedItems.length === 0) return;
     setStatus("submitting");
     setError(null);
     try {
       await apiFetch(`/api/v1/public/merchants/${merchantId}/order-requests`, {
         method: "POST",
         body: JSON.stringify({
-          customer_contact: customerContact,
+          customer_contact: `${COUNTRY_CODE}${phoneLocal.replace(/\s/g, "")}`,
           requested_items: selectedItems.map(({ item, quantity }) => ({
             item_id: item.id,
             name: item.name,
@@ -109,9 +147,22 @@ export function CatalogBrowser({
                 >
                   −
                 </button>
-                <span className="w-4 text-center text-sm font-semibold text-neutral-900">
-                  {quantity}
-                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  aria-label={`Quantity of ${item.name}`}
+                  value={quantityDrafts[item.id] ?? String(quantity)}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) =>
+                    handleQuantityInputChange(item.id, e.target.value)
+                  }
+                  onBlur={() => commitQuantityDraft(item.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  className="w-8 rounded-md border border-transparent text-center text-sm font-semibold text-neutral-900 focus:border-neutral-300 focus:outline-none"
+                />
                 <button
                   type="button"
                   onClick={() => adjustQuantity(item.id, 1)}
@@ -130,14 +181,22 @@ export function CatalogBrowser({
         <label className="text-sm text-neutral-700" htmlFor="contact">
           Your phone number or WhatsApp
         </label>
-        <input
-          id="contact"
-          type="text"
-          value={customerContact}
-          onChange={(e) => setCustomerContact(e.target.value)}
-          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          placeholder="+233..."
-        />
+        <div className="flex gap-2">
+          <div className="flex shrink-0 items-center justify-center rounded-md bg-neutral-100 px-3 text-sm font-semibold text-neutral-900">
+            🇬🇭 {COUNTRY_CODE}
+          </div>
+          <input
+            id="contact"
+            type="tel"
+            inputMode="tel"
+            value={phoneLocal}
+            onChange={(e) =>
+              setPhoneLocal(e.target.value.replace(/[^\d\s]/g, ""))
+            }
+            className="w-full min-w-0 flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            placeholder="20 553 7712"
+          />
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -147,7 +206,7 @@ export function CatalogBrowser({
         disabled={
           status === "submitting" ||
           selectedItems.length === 0 ||
-          !customerContact
+          !phoneLocal.trim()
         }
         onClick={handleSubmit}
         className="w-full rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
