@@ -25,6 +25,7 @@ type Options struct {
 
 	UploadDir        string
 	APIPublicBaseURL string
+	KYCUploadDir     string
 
 	SMSAPIKey   string
 	SMSSenderID string
@@ -59,6 +60,7 @@ func New(opts Options) *fiber.App {
 
 		UploadDir:        opts.UploadDir,
 		APIPublicBaseURL: opts.APIPublicBaseURL,
+		KYCUploadDir:     opts.KYCUploadDir,
 
 		SMSAPIKey:   opts.SMSAPIKey,
 		SMSSenderID: opts.SMSSenderID,

@@ -12,9 +12,9 @@ import (
 )
 
 const createKYCSubmission = `-- name: CreateKYCSubmission :one
-INSERT INTO kyc_submissions (merchant_id, requested_tier, ghana_card_number, business_reg_number, notes)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at
+INSERT INTO kyc_submissions (merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, selfie_photo_path)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at, selfie_photo_path
 `
 
 type CreateKYCSubmissionParams struct {
@@ -23,6 +23,7 @@ type CreateKYCSubmissionParams struct {
 	GhanaCardNumber   string      `json:"ghana_card_number"`
 	BusinessRegNumber pgtype.Text `json:"business_reg_number"`
 	Notes             pgtype.Text `json:"notes"`
+	SelfiePhotoPath   pgtype.Text `json:"selfie_photo_path"`
 }
 
 func (q *Queries) CreateKYCSubmission(ctx context.Context, arg CreateKYCSubmissionParams) (KycSubmission, error) {
@@ -32,6 +33,7 @@ func (q *Queries) CreateKYCSubmission(ctx context.Context, arg CreateKYCSubmissi
 		arg.GhanaCardNumber,
 		arg.BusinessRegNumber,
 		arg.Notes,
+		arg.SelfiePhotoPath,
 	)
 	var i KycSubmission
 	err := row.Scan(
@@ -47,12 +49,13 @@ func (q *Queries) CreateKYCSubmission(ctx context.Context, arg CreateKYCSubmissi
 		&i.ReviewedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SelfiePhotoPath,
 	)
 	return i, err
 }
 
 const getKYCSubmission = `-- name: GetKYCSubmission :one
-SELECT id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at FROM kyc_submissions WHERE id = $1
+SELECT id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at, selfie_photo_path FROM kyc_submissions WHERE id = $1
 `
 
 func (q *Queries) GetKYCSubmission(ctx context.Context, id pgtype.UUID) (KycSubmission, error) {
@@ -71,12 +74,13 @@ func (q *Queries) GetKYCSubmission(ctx context.Context, id pgtype.UUID) (KycSubm
 		&i.ReviewedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SelfiePhotoPath,
 	)
 	return i, err
 }
 
 const getOpenKYCSubmissionByMerchant = `-- name: GetOpenKYCSubmissionByMerchant :one
-SELECT id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at FROM kyc_submissions
+SELECT id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at, selfie_photo_path FROM kyc_submissions
 WHERE merchant_id = $1 AND status IN ('pending', 'more_info_requested')
 LIMIT 1
 `
@@ -97,12 +101,13 @@ func (q *Queries) GetOpenKYCSubmissionByMerchant(ctx context.Context, merchantID
 		&i.ReviewedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SelfiePhotoPath,
 	)
 	return i, err
 }
 
 const listKYCSubmissionsAdmin = `-- name: ListKYCSubmissionsAdmin :many
-SELECT s.id, s.merchant_id, s.requested_tier, s.ghana_card_number, s.business_reg_number, s.notes, s.status, s.reviewer_notes, s.reviewed_by, s.reviewed_at, s.created_at, s.updated_at, m.business_name AS merchant_business_name
+SELECT s.id, s.merchant_id, s.requested_tier, s.ghana_card_number, s.business_reg_number, s.notes, s.status, s.reviewer_notes, s.reviewed_by, s.reviewed_at, s.created_at, s.updated_at, s.selfie_photo_path, m.business_name AS merchant_business_name
 FROM kyc_submissions s
 JOIN merchants m ON m.id = s.merchant_id
 WHERE ($1::text = '' OR s.status = $1::text)
@@ -129,6 +134,7 @@ type ListKYCSubmissionsAdminRow struct {
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	SelfiePhotoPath      pgtype.Text        `json:"selfie_photo_path"`
 	MerchantBusinessName string             `json:"merchant_business_name"`
 }
 
@@ -154,6 +160,7 @@ func (q *Queries) ListKYCSubmissionsAdmin(ctx context.Context, arg ListKYCSubmis
 			&i.ReviewedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SelfiePhotoPath,
 			&i.MerchantBusinessName,
 		); err != nil {
 			return nil, err
@@ -167,7 +174,7 @@ func (q *Queries) ListKYCSubmissionsAdmin(ctx context.Context, arg ListKYCSubmis
 }
 
 const listKYCSubmissionsByMerchant = `-- name: ListKYCSubmissionsByMerchant :many
-SELECT id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at FROM kyc_submissions WHERE merchant_id = $1 ORDER BY created_at DESC
+SELECT id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at, selfie_photo_path FROM kyc_submissions WHERE merchant_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListKYCSubmissionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]KycSubmission, error) {
@@ -192,6 +199,7 @@ func (q *Queries) ListKYCSubmissionsByMerchant(ctx context.Context, merchantID p
 			&i.ReviewedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SelfiePhotoPath,
 		); err != nil {
 			return nil, err
 		}
@@ -205,10 +213,10 @@ func (q *Queries) ListKYCSubmissionsByMerchant(ctx context.Context, merchantID p
 
 const resubmitKYCSubmission = `-- name: ResubmitKYCSubmission :one
 UPDATE kyc_submissions
-SET ghana_card_number = $2, business_reg_number = $3, notes = $4,
+SET ghana_card_number = $2, business_reg_number = $3, notes = $4, selfie_photo_path = $5,
     status = 'pending', reviewer_notes = NULL, reviewed_by = NULL, reviewed_at = NULL
 WHERE id = $1
-RETURNING id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at
+RETURNING id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at, selfie_photo_path
 `
 
 type ResubmitKYCSubmissionParams struct {
@@ -216,6 +224,7 @@ type ResubmitKYCSubmissionParams struct {
 	GhanaCardNumber   string      `json:"ghana_card_number"`
 	BusinessRegNumber pgtype.Text `json:"business_reg_number"`
 	Notes             pgtype.Text `json:"notes"`
+	SelfiePhotoPath   pgtype.Text `json:"selfie_photo_path"`
 }
 
 // Reuses the existing row after a more_info_requested response instead of
@@ -228,6 +237,7 @@ func (q *Queries) ResubmitKYCSubmission(ctx context.Context, arg ResubmitKYCSubm
 		arg.GhanaCardNumber,
 		arg.BusinessRegNumber,
 		arg.Notes,
+		arg.SelfiePhotoPath,
 	)
 	var i KycSubmission
 	err := row.Scan(
@@ -243,6 +253,7 @@ func (q *Queries) ResubmitKYCSubmission(ctx context.Context, arg ResubmitKYCSubm
 		&i.ReviewedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SelfiePhotoPath,
 	)
 	return i, err
 }
@@ -252,7 +263,7 @@ UPDATE kyc_submissions
 SET status = $1, reviewer_notes = $2,
     reviewed_by = $3, reviewed_at = now()
 WHERE id = $4
-RETURNING id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at
+RETURNING id, merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at, selfie_photo_path
 `
 
 type ReviewKYCSubmissionParams struct {
@@ -283,6 +294,7 @@ func (q *Queries) ReviewKYCSubmission(ctx context.Context, arg ReviewKYCSubmissi
 		&i.ReviewedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SelfiePhotoPath,
 	)
 	return i, err
 }

@@ -13,6 +13,7 @@ Thumbs.db
 src/api/bin/
 src/api/tmp/
 src/api/uploads/
+src/api/private_kyc_uploads/
 *.exe
 *.test
 *.out

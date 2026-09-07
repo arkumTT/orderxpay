@@ -1,6 +1,6 @@
 -- name: CreateKYCSubmission :one
-INSERT INTO kyc_submissions (merchant_id, requested_tier, ghana_card_number, business_reg_number, notes)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO kyc_submissions (merchant_id, requested_tier, ghana_card_number, business_reg_number, notes, selfie_photo_path)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetKYCSubmission :one
@@ -17,7 +17,7 @@ LIMIT 1;
 -- reject a second open row anyway, and this is the correct UX: the
 -- reviewer's original notes/decision get replaced by the fresh review cycle.
 UPDATE kyc_submissions
-SET ghana_card_number = $2, business_reg_number = $3, notes = $4,
+SET ghana_card_number = $2, business_reg_number = $3, notes = $4, selfie_photo_path = $5,
     status = 'pending', reviewer_notes = NULL, reviewed_by = NULL, reviewed_at = NULL
 WHERE id = $1
 RETURNING *;

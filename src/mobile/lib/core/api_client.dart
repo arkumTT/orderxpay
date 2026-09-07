@@ -540,6 +540,7 @@ class ApiClient {
   Future<KYCSubmission> submitKYC(
     String merchantId, {
     required String ghanaCardNumber,
+    required String selfiePhotoPath,
     String? businessRegNumber,
     String? notes,
   }) async {
@@ -548,11 +549,29 @@ class ApiClient {
       '/api/v1/app/merchants/$merchantId/kyc-submissions',
       body: {
         'ghana_card_number': ghanaCardNumber,
+        'selfie_photo_path': selfiePhotoPath,
         if (businessRegNumber != null) 'business_reg_number': businessRegNumber,
         if (notes != null) 'notes': notes,
       },
     );
     return KYCSubmission.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Section 4.1/7.1 — uploads the frame captured at the end of the
+  /// liveness-check challenge (see liveness_check_screen.dart). Returns a
+  /// bare filename reference (never a URL — the file is stored privately),
+  /// to be passed as submitKYC's selfiePhotoPath.
+  Future<String> uploadKYCSelfie(String merchantId, String filePath) async {
+    final uri = _base.resolve('/api/v1/app/merchants/$merchantId/kyc-submissions/selfie');
+    final request = http.MultipartRequest('POST', uri);
+    if (Session.instance.token != null) {
+      request.headers['Authorization'] = 'Bearer ${Session.instance.token}';
+    }
+    request.files.add(await http.MultipartFile.fromPath('selfie', filePath));
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    final decoded = _decode(response) as Map<String, dynamic>;
+    return decoded['selfie_photo_path'] as String;
   }
 
   Future<Merchant> updateFeeSettings(

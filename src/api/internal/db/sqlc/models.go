@@ -192,6 +192,7 @@ type KycSubmission struct {
 	ReviewedAt        pgtype.Timestamptz `json:"reviewed_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	SelfiePhotoPath   pgtype.Text        `json:"selfie_photo_path"`
 }
 
 type Menu struct {

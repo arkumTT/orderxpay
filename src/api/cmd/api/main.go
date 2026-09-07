@@ -47,6 +47,7 @@ func main() {
 
 		UploadDir:        cfg.UploadDir,
 		APIPublicBaseURL: cfg.APIPublicBaseURL,
+		KYCUploadDir:     cfg.KYCUploadDir,
 
 		SMSAPIKey:   cfg.SMSAPIKey,
 		SMSSenderID: cfg.SMSSenderID,

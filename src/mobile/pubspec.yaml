@@ -19,6 +19,12 @@ dependencies:
   image_picker: ^1.2.3
   geolocator: ^13.0.1
   url_launcher: ^6.3.1
+  # Section 4.1/7.1 liveness check: live camera preview (camera) + on-device
+  # face detection (google_mlkit_face_detection, free/no-cloud-account) for
+  # a blink + head-turn active challenge. See liveness_check_screen.dart's
+  # doc comment for the honest limitation (not commercial anti-spoofing).
+  camera: ^0.11.0+2
+  google_mlkit_face_detection: ^0.13.1
 
 dev_dependencies:
   flutter_test:

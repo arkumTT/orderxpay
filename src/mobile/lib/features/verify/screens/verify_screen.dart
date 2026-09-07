@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:camera/camera.dart' show XFile;
 import 'package:flutter/material.dart';
 import '../../../core/api_client.dart';
 import '../../../core/models.dart';
@@ -5,11 +8,12 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import 'liveness_check_screen.dart';
 
-/// Section 4.1/4.9's Tier 1 upgrade. Document/selfie capture has no backend
-/// yet (needs a file-storage vendor decision), so the submission below is
-/// text-only — Ghana Card number, business registration number, notes —
-/// but it's a real submission a Back Office reviewer acts on, not a mockup.
+/// Section 4.1/4.9's Tier 1 upgrade: Ghana Card number, business
+/// registration number, notes, and — per Section 4.1/7.1 — a liveness-check
+/// selfie captured via an active on-device challenge (see
+/// liveness_check_screen.dart), all reviewed by a Back Office staff member.
 class VerifyScreen extends StatefulWidget {
   const VerifyScreen({super.key});
 
@@ -164,7 +168,10 @@ class _KYCSectionState extends State<_KYCSection> {
     text: widget.submission?.notes ?? '',
   );
   bool _submitting = false;
+  bool _uploadingSelfie = false;
   String? _error;
+  String? _selfiePhotoPath; // opaque filename returned by uploadKYCSelfie
+  File? _selfiePreview;
 
   @override
   void dispose() {
@@ -174,8 +181,36 @@ class _KYCSectionState extends State<_KYCSection> {
     super.dispose();
   }
 
+  Future<void> _runLivenessCheck() async {
+    setState(() => _error = null);
+    final captured = await Navigator.of(context).push<XFile>(
+      MaterialPageRoute(builder: (_) => const LivenessCheckScreen()),
+    );
+    if (captured == null || !mounted) return;
+
+    setState(() => _uploadingSelfie = true);
+    try {
+      final path = await widget.api.uploadKYCSelfie(
+        widget.merchantId,
+        captured.path,
+      );
+      setState(() {
+        _selfiePhotoPath = path;
+        _selfiePreview = File(captured.path);
+      });
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _uploadingSelfie = false);
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selfiePhotoPath == null) {
+      setState(() => _error = 'Complete the liveness check first');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -184,6 +219,7 @@ class _KYCSectionState extends State<_KYCSection> {
       await widget.api.submitKYC(
         widget.merchantId,
         ghanaCardNumber: _ghanaCardController.text.trim(),
+        selfiePhotoPath: _selfiePhotoPath!,
         businessRegNumber: _businessRegController.text.trim(),
         notes: _notesController.text.trim(),
       );
@@ -273,6 +309,56 @@ class _KYCSectionState extends State<_KYCSection> {
                   hintText: 'Anything else a reviewer should know',
                   maxLines: 3,
                 ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Liveness check',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryBlack,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (_selfiePreview != null)
+                  Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.control),
+                        child: Image.file(
+                          _selfiePreview!,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle, size: 16, color: AppColors.statusPaid),
+                            const SizedBox(width: 6),
+                            const Expanded(
+                              child: Text(
+                                'Selfie captured',
+                                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _uploadingSelfie ? null : _runLivenessCheck,
+                              child: const Text('Retake'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  OxpButton(
+                    label: _uploadingSelfie ? 'Uploading…' : 'Start liveness check',
+                    loading: _uploadingSelfie,
+                    variant: OxpButtonVariant.secondary,
+                    onPressed: _uploadingSelfie ? null : _runLivenessCheck,
+                  ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -295,8 +381,9 @@ class _KYCSectionState extends State<_KYCSection> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Ghana Card photo and selfie liveness check aren\'t built yet — '
-          'review is based on the details above for now.',
+          'The liveness check confirms a real person is present at signup — '
+          'it stops a static printed/screen photo, not a sophisticated '
+          'pre-recorded video.',
           style: TextStyle(color: AppColors.textDisabled, fontSize: 11),
         ),
       ],

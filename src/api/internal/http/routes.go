@@ -104,6 +104,7 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Patch("/notifications/:notificationId/read", h.MarkNotificationRead)
 	own.Patch("/notifications/read-all", h.MarkAllNotificationsRead)
 
+	own.Post("/kyc-submissions/selfie", h.UploadKYCSelfie)
 	own.Post("/kyc-submissions", h.CreateKYCSubmission)
 	own.Get("/kyc-submissions", h.ListKYCSubmissionsByMerchant)
 
@@ -141,6 +142,7 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	merchants.Patch("/:id/whatsapp-catalog", perm("integrations.manage"), h.SetMerchantWhatsAppCatalogID)
 
 	r.Get("/kyc-submissions", perm("merchants.kyc_review"), h.ListKYCSubmissionsAdmin)
+	r.Get("/kyc-submissions/:id/selfie-photo", perm("merchants.kyc_review"), h.GetKYCSelfiePhoto)
 	r.Patch("/kyc-submissions/:id/status", perm("merchants.kyc_review"), h.ReviewKYCSubmission)
 
 	r.Get("/disputes", perm("disputes.view"), h.ListDisputesAdmin)
