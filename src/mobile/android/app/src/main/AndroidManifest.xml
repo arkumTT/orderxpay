@@ -26,6 +26,12 @@
          landing a block or two off. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Section 4.10 Phase 2: required on Android 13+ (API 33) to actually
+         display a push notification — without it, FCM still delivers the
+         message but nothing shows. firebase_messaging's requestPermission()
+         call (see push_notifications.dart) is what triggers the runtime
+         prompt this declaration gates. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="orderxpay_mobile"
         android:name="${applicationName}"

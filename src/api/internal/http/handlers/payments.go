@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -329,16 +330,22 @@ func (h *Handler) creditSuccessfulPayment(ctx context.Context, pspReference, cha
 	if updated.Status == "paid" {
 		paidWord = "fully paid"
 	}
+	notifTitle := "Payment received"
+	notifBody := fmt.Sprintf("%s received — invoice %s is now %s.", formatPesewas(payment.AmountPesewas), invoice.Reference, paidWord)
 	if _, err := h.Queries.CreateNotification(ctx, db.CreateNotificationParams{
 		MerchantID:   invoice.MerchantID,
 		Type:         "payment_received",
-		Title:        "Payment received",
-		Body:         fmt.Sprintf("%s received — invoice %s is now %s.", formatPesewas(payment.AmountPesewas), invoice.Reference, paidWord),
+		Title:        notifTitle,
+		Body:         notifBody,
 		TargetEntity: textOrNull("invoice"),
 		TargetID:     invoice.ID,
 	}); err != nil {
 		log.Printf("paystack: failed to create notification for payment %s: %v", pspReference, err)
 	}
+	h.pushToMerchant(ctx, invoice.MerchantID, notifTitle, notifBody, map[string]string{
+		"target_entity": "invoice",
+		"target_id":     uuid.UUID(invoice.ID.Bytes).String(),
+	})
 
 	return nil
 }

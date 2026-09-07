@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/api_client.dart';
+import '../../../core/push_notifications.dart';
 import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
@@ -112,6 +113,7 @@ class _MoreScreenState extends State<MoreScreen> {
             label: 'Sign Out',
             variant: OxpButtonVariant.secondary,
             onPressed: () async {
+              await PushNotifications.instance.unregisterToken();
               await Session.instance.clear();
               if (context.mounted) {
                 Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);

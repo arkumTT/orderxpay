@@ -103,6 +103,8 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Get("/notifications", h.ListNotifications)
 	own.Patch("/notifications/:notificationId/read", h.MarkNotificationRead)
 	own.Patch("/notifications/read-all", h.MarkAllNotificationsRead)
+	own.Post("/device-tokens", h.RegisterDeviceToken)
+	own.Delete("/device-tokens", h.UnregisterDeviceToken)
 
 	own.Post("/kyc-submissions/selfie", h.UploadKYCSelfie)
 	own.Post("/kyc-submissions", h.CreateKYCSubmission)

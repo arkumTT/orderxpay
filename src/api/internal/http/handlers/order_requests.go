@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	db "github.com/orderxpay/api/internal/db/sqlc"
@@ -65,16 +66,21 @@ func (h *Handler) CreateOrderRequest(c *fiber.Ctx) error {
 
 	// Best-effort (Section 4.10) — never fail the customer's actual request
 	// submission over a notification write.
+	notifBody := notifyAs + " wants to order — review and confirm."
 	if _, err := h.Queries.CreateNotification(c.Context(), db.CreateNotificationParams{
 		MerchantID:   merchantID,
 		Type:         "order_request_pending",
 		Title:        "New order request",
-		Body:         notifyAs + " wants to order — review and confirm.",
+		Body:         notifBody,
 		TargetEntity: textOrNull("order_request"),
 		TargetID:     orderRequest.ID,
 	}); err != nil {
 		log.Printf("order request: failed to create notification for %s: %v", orderRequest.ID, err)
 	}
+	h.pushToMerchant(c.Context(), merchantID, "New order request", notifBody, map[string]string{
+		"target_entity": "order_request",
+		"target_id":     uuid.UUID(orderRequest.ID.Bytes).String(),
+	})
 
 	return c.Status(fiber.StatusCreated).JSON(toOrderRequestJSON(orderRequest))
 }

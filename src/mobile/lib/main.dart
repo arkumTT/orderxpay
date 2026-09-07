@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'core/design/app_theme.dart';
+import 'core/push_notifications.dart';
 import 'core/session.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/onboarding/screens/login_screen.dart';
@@ -22,6 +25,13 @@ import 'features/more/screens/more_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Session.instance.load();
+  await PushNotifications.instance.init();
+  if (Session.instance.isSignedIn) {
+    // Already signed in from a previous launch — (re-)register this
+    // device's token rather than waiting for a fresh login, since FCM
+    // tokens can rotate between app launches.
+    unawaited(PushNotifications.instance.registerToken());
+  }
   runApp(OrderxPayApp(startSignedIn: Session.instance.isSignedIn));
 }
 
@@ -35,6 +45,7 @@ class OrderxPayApp extends StatelessWidget {
     return MaterialApp(
       title: 'OrderxPay',
       theme: appTheme,
+      navigatorKey: PushNotifications.navigatorKey,
       initialRoute: startSignedIn ? '/' : '/login',
       routes: {
         '/login': (context) => const LoginScreen(),

@@ -53,7 +53,11 @@ class ApiClient {
           body: body != null ? jsonEncode(body) : null,
         );
       case 'DELETE':
-        res = await _client.delete(uri, headers: _headers);
+        res = await _client.delete(
+          uri,
+          headers: _headers,
+          body: body != null ? jsonEncode(body) : null,
+        );
       default:
         throw ArgumentError('unsupported method $method');
     }
@@ -631,6 +635,23 @@ class ApiClient {
   Future<void> markAllNotificationsRead(String merchantId) => _send(
     'PATCH',
     '/api/v1/app/merchants/$merchantId/notifications/read-all',
+  );
+
+  /// Section 4.10 Phase 2 — registers this device's FCM token so the
+  /// backend can push to it (see push_notifications.dart). Idempotent:
+  /// re-registering the same token on relaunch just refreshes it.
+  Future<void> registerDeviceToken(String merchantId, String fcmToken) => _send(
+    'POST',
+    '/api/v1/app/merchants/$merchantId/device-tokens',
+    body: {'fcm_token': fcmToken, 'platform': 'android'},
+  );
+
+  /// Called on sign-out (see more_screen.dart) so a signed-out device
+  /// stops receiving pushes for a merchant it's no longer logged into.
+  Future<void> unregisterDeviceToken(String merchantId, String fcmToken) => _send(
+    'DELETE',
+    '/api/v1/app/merchants/$merchantId/device-tokens',
+    body: {'fcm_token': fcmToken},
   );
 
   /// Section 4.7 — best-selling items, daily collections, average order

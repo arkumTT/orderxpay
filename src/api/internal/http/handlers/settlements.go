@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -242,6 +243,10 @@ func (h *Handler) UpdateSettlementStatus(c *fiber.Ctx) error {
 		}); err != nil {
 			log.Printf("settlements: failed to create notification for %s: %v", updated.ID, err)
 		}
+		h.pushToMerchant(c.Context(), updated.MerchantID, "Payout processed", body, map[string]string{
+			"target_entity": "settlement",
+			"target_id":     uuid.UUID(updated.ID.Bytes).String(),
+		})
 	}
 
 	return c.JSON(updated)
