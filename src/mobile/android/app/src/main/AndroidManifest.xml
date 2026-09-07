@@ -32,6 +32,12 @@
          call (see push_notifications.dart) is what triggers the runtime
          prompt this declaration gates. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Biometric app unlock (see core/biometric_lock.dart) — Face ID
+         equivalent/fingerprint gate in front of the already-logged-in
+         session. Required for local_auth's BiometricPrompt on API < 28;
+         on modern Android the system prompt works without it, but this is
+         still required by local_auth_android's own manifest merge check. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
         android:label="orderxpay_mobile"
         android:name="${applicationName}"
