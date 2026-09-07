@@ -58,6 +58,8 @@ func main() {
 		SMTPPassword:  cfg.SMTPPassword,
 		SMTPFromEmail: cfg.SMTPFromEmail,
 		SMTPFromName:  cfg.SMTPFromName,
+
+		FirebaseServiceAccountJSON: cfg.FirebaseServiceAccountJSON,
 	})
 
 	log.Printf("orderxpay-api listening on :%s (%s)", cfg.Port, cfg.Env)

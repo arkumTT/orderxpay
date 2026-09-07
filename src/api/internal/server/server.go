@@ -36,6 +36,8 @@ type Options struct {
 	SMTPPassword  string
 	SMTPFromEmail string
 	SMTPFromName  string
+
+	FirebaseServiceAccountJSON string
 }
 
 func New(opts Options) *fiber.App {
@@ -71,6 +73,8 @@ func New(opts Options) *fiber.App {
 		SMTPPassword:  opts.SMTPPassword,
 		SMTPFromEmail: opts.SMTPFromEmail,
 		SMTPFromName:  opts.SMTPFromName,
+
+		FirebaseServiceAccountJSON: opts.FirebaseServiceAccountJSON,
 	})
 	orderxpayhttp.RegisterRoutes(app, h)
 

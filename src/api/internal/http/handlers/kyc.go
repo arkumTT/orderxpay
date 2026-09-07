@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	db "github.com/orderxpay/api/internal/db/sqlc"
@@ -242,6 +243,14 @@ func (h *Handler) ReviewKYCSubmission(c *fiber.Ctx) error {
 	if err := tx.Commit(c.Context()); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to commit review"})
 	}
+
+	// Push (Section 4.10 Phase 2) deliberately happens after commit, not
+	// inside the transaction above — a push-send failure must never roll
+	// back a review decision that's otherwise already succeeded.
+	h.pushToMerchant(c.Context(), submission.MerchantID, "Verification "+strings.ReplaceAll(updated.Status, "_", " "), body, map[string]string{
+		"target_entity": "kyc_submission",
+		"target_id":     uuid.UUID(updated.ID.Bytes).String(),
+	})
 
 	return c.JSON(updated)
 }

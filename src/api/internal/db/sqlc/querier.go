@@ -58,6 +58,7 @@ type Querier interface {
 	CreateWebhookDelivery(ctx context.Context, arg CreateWebhookDeliveryParams) error
 	DeleteCustomer(ctx context.Context, arg DeleteCustomerParams) (int64, error)
 	DeleteDeliveryProvider(ctx context.Context, id pgtype.UUID) error
+	DeleteDeviceToken(ctx context.Context, fcmToken string) error
 	DeleteMenu(ctx context.Context, id pgtype.UUID) error
 	DeleteMerchantFeeRule(ctx context.Context, merchantID pgtype.UUID) error
 	// merchant_id in the WHERE clause, not just id — a staff row belongs to
@@ -172,6 +173,7 @@ type Querier interface {
 	ListCustomers(ctx context.Context, merchantID pgtype.UUID) ([]Customer, error)
 	ListDeliveryOptionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]DeliveryOption, error)
 	ListDeliveryProviders(ctx context.Context) ([]DeliveryProvider, error)
+	ListDeviceTokensByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]DeviceToken, error)
 	ListDisputesAdmin(ctx context.Context, arg ListDisputesAdminParams) ([]ListDisputesAdminRow, error)
 	ListFeatureFlagMerchants(ctx context.Context, featureFlagID pgtype.UUID) ([]ListFeatureFlagMerchantsRow, error)
 	ListFeatureFlags(ctx context.Context) ([]FeatureFlag, error)
@@ -294,6 +296,10 @@ type Querier interface {
 	// a better one just showed up." COALESCE keeps an existing name intact
 	// when this particular call doesn't have one (EXCLUDED.name NULL).
 	UpsertCustomer(ctx context.Context, arg UpsertCustomerParams) (Customer, error)
+	// Re-registering the same token (app relaunch) just bumps updated_at; a
+	// token that moved to a different merchant (see migration comment) is
+	// repointed rather than rejected.
+	UpsertDeviceToken(ctx context.Context, arg UpsertDeviceTokenParams) (DeviceToken, error)
 	// commission_bps is derived server-side (sum of the three components) so it
 	// can never drift from what the components actually add up to — every other
 	// reader (invoice engine, checkout) still just reads the one blended number.

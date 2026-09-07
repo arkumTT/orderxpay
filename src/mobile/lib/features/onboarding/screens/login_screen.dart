@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../core/api_client.dart';
+import '../../../core/push_notifications.dart';
 import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
@@ -47,6 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
         businessName: res['business_name'] as String? ?? 'Merchant',
         actorType: res['actor_type'] as String? ?? 'merchant',
       );
+      unawaited(PushNotifications.instance.registerToken());
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/');
     } on ApiException catch (e) {

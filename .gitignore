@@ -4,6 +4,12 @@
 .env.*.local
 *.pem
 *.key
+src/api/firebase-service-account.json
+# Real per-project Firebase config (API key, project id) for the Android
+# app's push-notification setup (Section 4.10 Phase 2) — not committed for
+# the same reason .env isn't; place it manually after cloning (Firebase
+# console > Project settings > General > download google-services.json).
+src/mobile/android/app/google-services.json
 
 # --- OS ---
 .DS_Store

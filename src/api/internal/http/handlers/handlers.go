@@ -12,6 +12,7 @@ import (
 	"github.com/orderxpay/api/internal/auth"
 	db "github.com/orderxpay/api/internal/db/sqlc"
 	"github.com/orderxpay/api/internal/email"
+	"github.com/orderxpay/api/internal/fcm"
 	"github.com/orderxpay/api/internal/psp"
 	"github.com/orderxpay/api/internal/sms"
 	"github.com/orderxpay/api/internal/whatsapp"
@@ -48,6 +49,9 @@ type Handler struct {
 	// secret) — it's env-configured only, see email.Client's doc comment.
 	SMS   *sms.Client
 	Email *email.Client
+	// FCM is nil-safe, same posture as PSP/WhatsApp/SMS — Section 4.10
+	// Phase 2 push notifications, Android only (see internal/fcm).
+	FCM *fcm.Client
 }
 
 type Options struct {
@@ -74,6 +78,8 @@ type Options struct {
 	SMTPPassword  string
 	SMTPFromEmail string
 	SMTPFromName  string
+
+	FirebaseServiceAccountJSON string
 }
 
 func New(opts Options) *Handler {
@@ -95,5 +101,6 @@ func New(opts Options) *Handler {
 			opts.SMTPHost, opts.SMTPPort, opts.SMTPUsername, opts.SMTPPassword,
 			opts.SMTPFromEmail, opts.SMTPFromName,
 		),
+		FCM: fcm.NewClient(opts.FirebaseServiceAccountJSON),
 	}
 }

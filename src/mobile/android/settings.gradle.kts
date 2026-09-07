@@ -21,6 +21,10 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.1.0" apply false
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+    // Section 4.10 Phase 2 — push notifications via FCM. Reads
+    // android/app/google-services.json (gitignored — see .gitignore's
+    // comment) to wire the app to the OrderxPay Firebase project.
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 include(":app")

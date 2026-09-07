@@ -25,6 +25,15 @@ dependencies:
   # doc comment for the honest limitation (not commercial anti-spoofing).
   camera: ^0.11.0+2
   google_mlkit_face_detection: ^0.13.1
+  # Section 4.10 Phase 2 — push notifications (Android only for now; see
+  # internal/fcm's doc comment on the backend for why iOS is deferred).
+  # flutter_local_notifications displays the system notification when a
+  # push arrives while the app is in the foreground — FCM's own
+  # "notification" payload only auto-displays when the app is backgrounded
+  # or terminated.
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.6
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:

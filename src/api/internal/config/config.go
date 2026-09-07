@@ -44,6 +44,13 @@ type Config struct {
 	SMSAPIKey   string
 	SMSSenderID string
 
+	// Section 4.10 Phase 2 — push notifications via Firebase Cloud
+	// Messaging, Android only for now (see internal/fcm's doc comment).
+	// Empty means push silently doesn't fire, same posture as the other
+	// optional integrations above — the in-app notification feed (Phase 1)
+	// still works regardless.
+	FirebaseServiceAccountJSON string
+
 	SMTPHost      string
 	SMTPPort      string
 	SMTPUsername  string
@@ -73,6 +80,8 @@ func Load() (Config, error) {
 
 		SMSAPIKey:   os.Getenv("SMS_API_KEY"),
 		SMSSenderID: os.Getenv("SMS_SENDER_ID"),
+
+		FirebaseServiceAccountJSON: getEnv("FIREBASE_SERVICE_ACCOUNT_JSON", "./firebase-service-account.json"),
 
 		SMTPHost:      os.Getenv("SMTP_HOST"),
 		SMTPPort:      getEnv("SMTP_PORT", "587"),

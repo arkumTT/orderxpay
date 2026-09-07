@@ -68,6 +68,15 @@ type DeliveryProvider struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
+type DeviceToken struct {
+	ID         pgtype.UUID        `json:"id"`
+	MerchantID pgtype.UUID        `json:"merchant_id"`
+	FcmToken   string             `json:"fcm_token"`
+	Platform   string             `json:"platform"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Dispute struct {
 	ID                  pgtype.UUID        `json:"id"`
 	InvoiceID           pgtype.UUID        `json:"invoice_id"`
