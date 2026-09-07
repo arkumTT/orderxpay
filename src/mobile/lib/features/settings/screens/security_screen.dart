@@ -22,6 +22,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
   bool _enabled = false;
   bool _busy = false;
   String? _error;
+  late AutoLockDuration _autoLock;
 
   @override
   void initState() {
@@ -35,8 +36,14 @@ class _SecurityScreenState extends State<SecurityScreen> {
     setState(() {
       _supported = supported;
       _enabled = BiometricLock.instance.enabled;
+      _autoLock = BiometricLock.instance.autoLock;
       _loading = false;
     });
+  }
+
+  Future<void> _setAutoLock(AutoLockDuration value) async {
+    setState(() => _autoLock = value);
+    await BiometricLock.instance.setAutoLock(value);
   }
 
   Future<void> _toggle(bool value) async {
@@ -119,6 +126,39 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     'this can\'t be enabled here — set one up in your phone\'s '
                     'settings first.',
                     style: TextStyle(fontSize: 12, color: AppColors.textDisabled),
+                  ),
+                ],
+                if (_enabled) ...[
+                  const SizedBox(height: 16),
+                  OxpCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Lock after leaving the app',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Switching to another app briefly won\'t ask again until '
+                          'this much time has passed.',
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final option in AutoLockDuration.values)
+                              ChoiceChip(
+                                label: Text(option.label),
+                                selected: _autoLock == option,
+                                onSelected: (_) => _setAutoLock(option),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
                 if (_error != null) ...[

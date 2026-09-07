@@ -49,10 +49,50 @@ Future<void> main() async {
   runApp(OrderxPayApp(initialRoute: initialRoute));
 }
 
-class OrderxPayApp extends StatelessWidget {
+class OrderxPayApp extends StatefulWidget {
   const OrderxPayApp({super.key, required this.initialRoute});
 
   final String initialRoute;
+
+  @override
+  State<OrderxPayApp> createState() => _OrderxPayAppState();
+}
+
+class _OrderxPayAppState extends State<OrderxPayApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Auto-lock (More > Security): backgrounding the app starts a clock;
+  // coming back past the configured grace period pushes the biometric lock
+  // screen as an overlay on top of wherever the app was left, rather than
+  // waiting for a full process restart the way the cold-start gate
+  // (main()'s initialRoute) does. A quick app-switch under the grace
+  // period — checking a notification, answering a call — doesn't re-lock,
+  // which is the entire point of the timer being configurable.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+        BiometricLock.instance.backgroundedAt = DateTime.now();
+      case AppLifecycleState.resumed:
+        if (!Session.instance.isSignedIn || !BiometricLock.instance.enabled) return;
+        if (!BiometricLock.instance.shouldRelockNow()) return;
+        PushNotifications.navigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const BiometricLockScreen(isOverlay: true)),
+        );
+      default:
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +100,7 @@ class OrderxPayApp extends StatelessWidget {
       title: 'OrderxPay',
       theme: appTheme,
       navigatorKey: PushNotifications.navigatorKey,
-      initialRoute: initialRoute,
+      initialRoute: widget.initialRoute,
       routes: {
         '/login': (context) => const LoginScreen(),
         '/onboarding': (context) => const OnboardingScreen(),
