@@ -38,6 +38,10 @@ type Handler struct {
 	// API's own public origin, for building an absolute image_url.
 	UploadDir        string
 	APIPublicBaseURL string
+	// Section 4.1/7.1 — the liveness-check selfie's storage, deliberately
+	// separate from UploadDir/APIPublicBaseURL above: never served through
+	// app.Static, only through the admin-authenticated GetKYCSelfiePhoto.
+	KYCUploadDir string
 	// SMS is nil-safe, same posture as PSP/WhatsApp — see smsClient in
 	// integrations.go for the DB-secret-override-wins-over-env pattern.
 	// Email has no DB-override path (SMTP is multiple values, not one
@@ -59,6 +63,7 @@ type Options struct {
 
 	UploadDir        string
 	APIPublicBaseURL string
+	KYCUploadDir     string
 
 	SMSAPIKey   string
 	SMSSenderID string
@@ -84,6 +89,7 @@ func New(opts Options) *Handler {
 		WhatsAppWebhookVerifyToken: opts.WhatsAppWebhookVerifyToken,
 		UploadDir:                  opts.UploadDir,
 		APIPublicBaseURL:           opts.APIPublicBaseURL,
+		KYCUploadDir:               opts.KYCUploadDir,
 		SMS:                        sms.NewClient(opts.SMSAPIKey, opts.SMSSenderID),
 		Email: email.NewClient(
 			opts.SMTPHost, opts.SMTPPort, opts.SMTPUsername, opts.SMTPPassword,

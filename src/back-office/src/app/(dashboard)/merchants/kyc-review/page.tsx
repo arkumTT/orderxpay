@@ -44,6 +44,28 @@ function SubmissionRow({
         {s.notes && <div className="text-xs text-neutral-400">{s.notes}</div>}
       </td>
       <td className="px-4 py-3 align-top">
+        {s.selfie_photo_path ? (
+          <a
+            href={`/api/kyc-submissions/${s.id}/selfie-photo`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open full size"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- the
+                source is a same-origin proxy route (see
+                app/api/kyc-submissions/[id]/selfie-photo/route.ts), not an
+                external/remote host next/image would need configuring for. */}
+            <img
+              src={`/api/kyc-submissions/${s.id}/selfie-photo`}
+              alt="Liveness-check selfie"
+              className="h-16 w-16 rounded-md border border-neutral-200 object-cover"
+            />
+          </a>
+        ) : (
+          <span className="text-xs text-neutral-400">No selfie</span>
+        )}
+      </td>
+      <td className="px-4 py-3 align-top">
         <span
           className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[s.status]}`}
         >
@@ -105,9 +127,11 @@ export default async function KycReviewPage() {
         </div>
         <p className="text-sm text-neutral-500">
           Ghana Card and business registration details submitted for Tier 1
-          verification. Approving immediately unlocks payouts for that
-          merchant; document photo/selfie review isn&apos;t built yet, so
-          decisions are based on the submitted details below.
+          verification, alongside a liveness-check selfie captured on-device
+          (blink + head-turn challenge — see the merchant app). This stops a
+          static printed/screen photo, not a sophisticated pre-recorded
+          video; weigh that when a selfie looks off. Approving immediately
+          unlocks payouts for that merchant.
         </p>
       </div>
 
@@ -128,6 +152,7 @@ export default async function KycReviewPage() {
                 <tr>
                   <th className="px-4 py-2">Merchant</th>
                   <th className="px-4 py-2">Submitted details</th>
+                  <th className="px-4 py-2">Selfie</th>
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Actions</th>
                 </tr>
@@ -153,6 +178,7 @@ export default async function KycReviewPage() {
                 <tr>
                   <th className="px-4 py-2">Merchant</th>
                   <th className="px-4 py-2">Submitted details</th>
+                  <th className="px-4 py-2">Selfie</th>
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Reviewed</th>
                 </tr>

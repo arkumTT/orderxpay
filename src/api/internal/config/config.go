@@ -28,6 +28,16 @@ type Config struct {
 	UploadDir        string
 	APIPublicBaseURL string
 
+	// KYCUploadDir is a deliberately separate directory from UploadDir — the
+	// liveness-check selfie captured during Tier 1 verification (Section
+	// 4.1/7.1) is sensitive (someone's face, tied to a real identity
+	// document) and must never be reachable through the public
+	// app.Static("/uploads", ...) mount UploadDir is served from. Only
+	// GetKYCSelfiePhoto (admin-authenticated, gated by the same
+	// merchants.kyc_review permission as the review queue itself) reads
+	// from here.
+	KYCUploadDir string
+
 	// Real OTP/verification-email delivery (Section 9 — previously
 	// unwired; see otp.go/merchants.go). SMS via Arkesel (Ghana-focused,
 	// plain REST API); email via generic SMTP so any provider works.
@@ -59,6 +69,7 @@ func Load() (Config, error) {
 
 		UploadDir:        getEnv("UPLOAD_DIR", "./uploads"),
 		APIPublicBaseURL: getEnv("API_PUBLIC_BASE_URL", "http://localhost:8080"),
+		KYCUploadDir:     getEnv("KYC_UPLOAD_DIR", "./private_kyc_uploads"),
 
 		SMSAPIKey:   os.Getenv("SMS_API_KEY"),
 		SMSSenderID: os.Getenv("SMS_SENDER_ID"),

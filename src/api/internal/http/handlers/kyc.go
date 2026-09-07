@@ -15,6 +15,12 @@ type submitKYCRequest struct {
 	GhanaCardNumber   string `json:"ghana_card_number"`
 	BusinessRegNumber string `json:"business_reg_number"`
 	Notes             string `json:"notes"`
+	// SelfiePhotoPath is the bare filename returned by a prior call to
+	// POST .../kyc-submissions/selfie (see UploadKYCSelfie) — the final
+	// frame of the on-device liveness challenge, not a freely-chosen
+	// gallery photo. Required: Section 4.1/7.1 makes the liveness check a
+	// requisite part of Tier 1 verification, not an optional add-on.
+	SelfiePhotoPath string `json:"selfie_photo_path"`
 }
 
 // CreateKYCSubmission is the merchant-app entry point for a Tier 1 upgrade
@@ -35,6 +41,9 @@ func (h *Handler) CreateKYCSubmission(c *fiber.Ctx) error {
 	}
 	if req.GhanaCardNumber == "" {
 		return badRequest(c, "ghana_card_number is required")
+	}
+	if req.SelfiePhotoPath == "" {
+		return badRequest(c, "selfie_photo_path is required — complete the liveness check first")
 	}
 
 	merchant, err := h.Queries.GetMerchant(c.Context(), merchantID)
@@ -63,6 +72,7 @@ func (h *Handler) CreateKYCSubmission(c *fiber.Ctx) error {
 			GhanaCardNumber:   req.GhanaCardNumber,
 			BusinessRegNumber: textOrNull(req.BusinessRegNumber),
 			Notes:             textOrNull(req.Notes),
+			SelfiePhotoPath:   textOrNull(req.SelfiePhotoPath),
 		})
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to resubmit KYC"})
@@ -76,6 +86,7 @@ func (h *Handler) CreateKYCSubmission(c *fiber.Ctx) error {
 		GhanaCardNumber:   req.GhanaCardNumber,
 		BusinessRegNumber: textOrNull(req.BusinessRegNumber),
 		Notes:             textOrNull(req.Notes),
+		SelfiePhotoPath:   textOrNull(req.SelfiePhotoPath),
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create KYC submission"})

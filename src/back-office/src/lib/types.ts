@@ -34,6 +34,11 @@ export type KYCSubmission = {
   reviewed_at: string | null;
   created_at: string;
   updated_at: string;
+  // Bare filename, not a URL — the file itself is private (see
+  // KYCUploadDir's doc comment on the Go side). Fetch the actual image via
+  // GET /api/kyc-submissions/[id]/selfie-photo, which proxies the
+  // admin-authenticated Go endpoint; never construct a direct link to it.
+  selfie_photo_path: string | null;
 };
 
 // The cross-merchant admin list joins in the merchant's name — matches
