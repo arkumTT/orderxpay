@@ -6,7 +6,7 @@ void main() {
   testWidgets('signed-out app boots to the login screen', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const OrderxPayApp(startSignedIn: false));
+    await tester.pumpWidget(const OrderxPayApp(initialRoute: '/login'));
 
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);

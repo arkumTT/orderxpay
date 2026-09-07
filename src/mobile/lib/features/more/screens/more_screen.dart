@@ -24,6 +24,7 @@ const _items = [
   _MoreItem('Catalog Sync', '/catalog-sync', Icons.sync_outlined),
   _MoreItem('Notifications', '/notifications', Icons.notifications_none),
   _MoreItem('Verify & Withdraw', '/verify', Icons.verified_outlined),
+  _MoreItem('Security', '/security', Icons.lock_outline),
 ];
 
 class MoreScreen extends StatefulWidget {
