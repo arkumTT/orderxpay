@@ -127,9 +127,9 @@ class _VerifyScreenState extends State<VerifyScreen> {
                       label: 'Business registration (Tier 2)',
                       done: tier >= 2,
                     ),
-                    const _ChecklistRow(
+                    _ChecklistRow(
                       label: 'Payout account (Mobile Money/Bank)',
-                      done: false,
+                      done: data.merchant.hasVerifiedPayoutAccount,
                     ),
                   ],
                 ),
@@ -148,6 +148,12 @@ class _VerifyScreenState extends State<VerifyScreen> {
                 const SizedBox(height: 16),
               ],
               _LimitsCard(limits: data.limits),
+              const SizedBox(height: 16),
+              _PayoutAccountSection(
+                merchant: data.merchant,
+                api: _api,
+                onSaved: _refresh,
+              ),
               if (canUpgrade) ...[
                 const SizedBox(height: 20),
                 _KYCSection(
@@ -900,6 +906,435 @@ class _LimitRow extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Section 4.1 — payout account capture with a name-match confirmation
+/// step. Three states: no account yet (form), an account resolved and
+/// waiting on the merchant to confirm it's theirs (confirm card), and a
+/// verified account (summary, with a way to change it).
+class _PayoutAccountSection extends StatefulWidget {
+  const _PayoutAccountSection({
+    required this.merchant,
+    required this.api,
+    required this.onSaved,
+  });
+
+  final Merchant merchant;
+  final ApiClient api;
+  final VoidCallback onSaved;
+
+  @override
+  State<_PayoutAccountSection> createState() => _PayoutAccountSectionState();
+}
+
+class _PayoutAccountSectionState extends State<_PayoutAccountSection> {
+  final _accountNumberController = TextEditingController();
+
+  /// Editing starts true only when nothing is saved yet, so a verified
+  /// merchant sees their summary first and has to explicitly choose to
+  /// change it rather than being dropped back into an open form.
+  late bool _editing = !widget.merchant.hasVerifiedPayoutAccount;
+
+  String _accountType = 'momo';
+  List<PayoutBank> _banks = [];
+  PayoutBank? _selectedBank;
+  bool _loadingBanks = false;
+
+  /// Set once resolvePayoutAccount succeeds — the merchant is shown this
+  /// name and asked to confirm it before setPayoutAccount is ever called.
+  String? _resolvedName;
+  bool _resolving = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_editing) _loadBanks();
+  }
+
+  @override
+  void dispose() {
+    _accountNumberController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBanks() async {
+    setState(() {
+      _loadingBanks = true;
+      _error = null;
+      _banks = [];
+      _selectedBank = null;
+    });
+    try {
+      final banks = await widget.api.listPayoutBanks(
+        widget.merchant.id,
+        _accountType,
+      );
+      setState(() => _banks = banks);
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _loadingBanks = false);
+    }
+  }
+
+  Future<void> _resolve() async {
+    if (_selectedBank == null) {
+      setState(
+        () => _error = _accountType == 'momo'
+            ? 'Choose a network'
+            : 'Choose a bank',
+      );
+      return;
+    }
+    if (_accountNumberController.text.trim().isEmpty) {
+      setState(() => _error = 'Enter the account number');
+      return;
+    }
+    setState(() {
+      _resolving = true;
+      _error = null;
+      _resolvedName = null;
+    });
+    try {
+      final name = await widget.api.resolvePayoutAccount(
+        widget.merchant.id,
+        accountType: _accountType,
+        accountNumber: _accountNumberController.text.trim(),
+        bankCode: _selectedBank!.code,
+      );
+      setState(() => _resolvedName = name);
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _resolving = false);
+    }
+  }
+
+  Future<void> _confirm() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.api.setPayoutAccount(
+        widget.merchant.id,
+        accountType: _accountType,
+        accountNumber: _accountNumberController.text.trim(),
+        bankCode: _selectedBank!.code,
+      );
+      setState(() {
+        _editing = false;
+        _resolvedName = null;
+      });
+      widget.onSaved();
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _startEditing() {
+    setState(() {
+      _editing = true;
+      _resolvedName = null;
+      _accountNumberController.clear();
+    });
+    _loadBanks();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_editing) {
+      return _VerifiedPayoutAccountCard(
+        merchant: widget.merchant,
+        onChange: _startEditing,
+      );
+    }
+
+    return OxpCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Payout account',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primaryBlack,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "Where your money goes. We check the name on the account "
+            "before saving it, so a mistyped number can't send money to "
+            'someone else.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          if (_resolvedName == null) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _TypeChip(
+                    label: 'Mobile Money',
+                    selected: _accountType == 'momo',
+                    onTap: () {
+                      setState(() => _accountType = 'momo');
+                      _loadBanks();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _TypeChip(
+                    label: 'Bank',
+                    selected: _accountType == 'bank',
+                    onTap: () {
+                      setState(() => _accountType = 'bank');
+                      _loadBanks();
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (_loadingBanks)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(8),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else
+              DropdownButtonFormField<PayoutBank>(
+                initialValue: _selectedBank,
+                decoration: InputDecoration(
+                  labelText: _accountType == 'momo' ? 'Network' : 'Bank',
+                  border: const OutlineInputBorder(),
+                ),
+                items: [
+                  for (final bank in _banks)
+                    DropdownMenuItem(value: bank, child: Text(bank.name)),
+                ],
+                onChanged: (v) => setState(() => _selectedBank = v),
+              ),
+            const SizedBox(height: 14),
+            OxpField(
+              label: _accountType == 'momo'
+                  ? 'Mobile Money number'
+                  : 'Account number',
+              controller: _accountNumberController,
+              hintText: _accountType == 'momo' ? '024XXXXXXX' : '0000000000',
+              keyboardType: TextInputType.number,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: AppColors.statusDeclined,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            OxpButton(
+              label: _resolving ? 'Checking…' : 'Verify account',
+              loading: _resolving,
+              onPressed: _resolving ? null : _resolve,
+            ),
+          ] else ...[
+            // Name-match confirmation: the name shown here came back from
+            // the PSP for the exact account number just entered — this is
+            // the check that catches a fat-fingered digit before it costs
+            // anyone money, not something to skip past quickly.
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.fieldFill,
+                borderRadius: BorderRadius.circular(AppRadius.control),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Account name on file',
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _resolvedName!,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryBlack,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Is this you?',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primaryBlack,
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: AppColors.statusDeclined,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OxpButton(
+                    label: 'Not me',
+                    variant: OxpButtonVariant.secondary,
+                    onPressed: _saving
+                        ? null
+                        : () => setState(() => _resolvedName = null),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OxpButton(
+                    label: _saving ? 'Saving…' : 'Yes, save it',
+                    loading: _saving,
+                    onPressed: _saving ? null : _confirm,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TypeChip extends StatelessWidget {
+  const _TypeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.control),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primaryBlack : AppColors.fieldFill,
+          borderRadius: BorderRadius.circular(AppRadius.control),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VerifiedPayoutAccountCard extends StatelessWidget {
+  const _VerifiedPayoutAccountCard({
+    required this.merchant,
+    required this.onChange,
+  });
+
+  final Merchant merchant;
+  final VoidCallback onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final isMomo = merchant.payoutAccountType == 'momo';
+    return OxpCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.fieldFill,
+              borderRadius: BorderRadius.circular(AppRadius.control),
+            ),
+            child: Icon(
+              isMomo ? Icons.phone_iphone : Icons.account_balance_outlined,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Text(
+                      'Payout account',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryBlack,
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    Icon(Icons.check_circle, size: 14, color: AppColors.statusPaid),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  merchant.payoutAccountName ?? '',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primaryBlack,
+                  ),
+                ),
+                Text(
+                  merchant.payoutAccountRef ?? '',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          TextButton(onPressed: onChange, child: const Text('Change')),
         ],
       ),
     );

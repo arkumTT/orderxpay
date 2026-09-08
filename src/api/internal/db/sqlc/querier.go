@@ -303,6 +303,12 @@ type Querier interface {
 	// UpdateDeliveryOption — the route path only carries the location's own
 	// id, not the merchant id.
 	UpdateMerchantLocation(ctx context.Context, arg UpdateMerchantLocationParams) (int64, error)
+	// account_name and verified_at travel together with the account details
+	// they describe — never set independently, so a resolved name can never
+	// outlive the account number it was resolved against. See
+	// UpdateMerchantPayoutAccountParams' caller (SetPayoutAccount) for the
+	// rule that clears them back to null whenever the account itself changes.
+	UpdateMerchantPayoutAccount(ctx context.Context, arg UpdateMerchantPayoutAccountParams) (Merchant, error)
 	UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantStatusParams) (Merchant, error)
 	// Admin-only provisioning step (Section 6.2), same reasoning as
 	// UpdateMerchantWhatsAppPhoneNumberID: an admin creates the catalog in

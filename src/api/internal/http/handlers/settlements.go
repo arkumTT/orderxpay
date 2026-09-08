@@ -98,6 +98,15 @@ func (h *Handler) GenerateSettlement(c *fiber.Ctx) error {
 	if merchant.Status == "suspended" {
 		return badRequest(c, "merchant is suspended and cannot receive new payouts")
 	}
+	// Section 4.1/7.2: a settlement with nowhere verified to send it just
+	// pushes the "where does this go" question off-platform to whoever
+	// executes the payout by hand — exactly the gap payout-account capture
+	// exists to close. Require it here rather than only encouraging it in
+	// the app, so Back Office staff can't generate one for a merchant who
+	// hasn't gone through the app's verify-account flow yet.
+	if !merchant.PayoutAccountVerifiedAt.Valid {
+		return badRequest(c, "this merchant has no verified payout account yet — ask them to add one under Verify & Withdraw before generating a settlement")
+	}
 
 	tx, err := h.Pool.Begin(c.Context())
 	if err != nil {

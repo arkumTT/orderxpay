@@ -83,3 +83,18 @@ RETURNING *;
 -- this first pass).
 UPDATE merchants SET storage_used_bytes = storage_used_bytes + $2 WHERE id = $1
 RETURNING *;
+
+-- name: UpdateMerchantPayoutAccount :one
+-- account_name and verified_at travel together with the account details
+-- they describe — never set independently, so a resolved name can never
+-- outlive the account number it was resolved against. See
+-- UpdateMerchantPayoutAccountParams' caller (SetPayoutAccount) for the
+-- rule that clears them back to null whenever the account itself changes.
+UPDATE merchants
+SET payout_account_type = sqlc.arg(payout_account_type),
+    payout_account_ref = sqlc.arg(payout_account_ref),
+    payout_bank_code = sqlc.arg(payout_bank_code),
+    payout_account_name = sqlc.arg(payout_account_name),
+    payout_account_verified_at = sqlc.arg(payout_account_verified_at)
+WHERE id = sqlc.arg(id)
+RETURNING *;

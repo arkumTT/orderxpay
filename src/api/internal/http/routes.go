@@ -115,6 +115,10 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Post("/conversations", h.LogConversation)
 	own.Get("/conversations", h.ListConversations)
 
+	own.Get("/payout-account/banks", h.ListPayoutBanks)
+	own.Post("/payout-account/resolve", h.ResolvePayoutAccount)
+	own.Patch("/payout-account", h.SetPayoutAccount)
+
 	own.Get("/settlements", h.ListSettlements)
 	own.Get("/fee-rule", h.GetMerchantFeeRuleOrGlobal)
 	own.Patch("/fee-settings", h.UpdateMerchantFeeSettings)
