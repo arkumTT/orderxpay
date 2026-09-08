@@ -100,10 +100,10 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
       allocation: _allocation,
       splitBps: 5000,
     );
-    final merchantReceives = exampleSubtotal -
-        (_allocation == 'merchant_only' || _allocation == 'split'
-            ? (amounts.commissionPesewas - amounts.serviceChargePesewas)
-            : 0);
+    // What lands in the merchant's settlement for this example invoice —
+    // taken straight off the shared calculator rather than re-derived here,
+    // so it can never drift from the figure the server actually settles.
+    final merchantReceives = amounts.merchantNetPesewas;
 
     return Scaffold(
       appBar: AppBar(
