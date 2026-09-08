@@ -46,6 +46,23 @@ type InitializeParams struct {
 	Currency      string
 	Reference     string
 	CallbackURL   string
+
+	// Subaccount and TransactionChargePesewas together are how a payment
+	// is split at charge time (Section 7's "Paystack subaccounts and split
+	// payments") — the merchant's share settles straight to their own
+	// Paystack subaccount, OrderxPay's commission to the main account.
+	// Leave Subaccount empty for the ordinary, non-split path (everything
+	// lands in OrderxPay's own balance, exactly as before this existed).
+	//
+	// TransactionChargePesewas is REQUIRED whenever Subaccount is set —
+	// InitializeTransaction refuses to send one without the other. A
+	// subaccount also carries its own percentage_charge, set at creation,
+	// which Paystack would otherwise use as a fallback split — but this
+	// codebase computes the exact commission per invoice (floor/cap-
+	// clamped, not a flat rate; see invoice_engine.go) and must never let
+	// a stale static percentage decide real money movement.
+	Subaccount               string
+	TransactionChargePesewas int64
 }
 
 type InitializeResult struct {
@@ -60,14 +77,50 @@ type paystackEnvelope[T any] struct {
 	Data    T      `json:"data"`
 }
 
+// errSplitRequiresTransactionCharge is a sentinel so callers (and this
+// package's own tests) can check for exactly this guardrail firing,
+// without string-matching an error message.
+var errSplitRequiresTransactionCharge = errors.New("paystack: a subaccount split requires an explicit transaction_charge")
+
+// validateInitializeParams is InitializeTransaction's structural guardrail,
+// pulled out as a pure function so it's testable without a network call:
+// splitting without an explicit flat fee would fall back to the
+// subaccount's own static percentage_charge, which this codebase never
+// wants deciding real money movement (see InitializeParams' doc comment).
+// Refusing here means a caller can't accidentally split on Paystack's
+// fallback rate by forgetting one field.
+func validateInitializeParams(p InitializeParams) error {
+	if p.Subaccount != "" && p.TransactionChargePesewas <= 0 {
+		return errSplitRequiresTransactionCharge
+	}
+	return nil
+}
+
 func (c *Client) InitializeTransaction(ctx context.Context, p InitializeParams) (*InitializeResult, error) {
-	body, err := json.Marshal(map[string]any{
+	if err := validateInitializeParams(p); err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{
 		"email":        p.Email,
 		"amount":       p.AmountPesewas,
 		"currency":     p.Currency,
 		"reference":    p.Reference,
 		"callback_url": p.CallbackURL,
-	})
+	}
+	if p.Subaccount != "" {
+		payload["subaccount"] = p.Subaccount
+		payload["transaction_charge"] = p.TransactionChargePesewas
+		// Deliberately omitted: "bearer". Its default ("account") means
+		// OrderxPay's main account absorbs Paystack's real processing
+		// fee — which is correct here, because that cost is already
+		// priced into the commission taken via transaction_charge (see
+		// pricing.CollectionFeeBps in invoice_engine.go). Setting
+		// bearer=subaccount would charge the merchant Paystack's fee a
+		// second time, on top of the commission that already accounts
+		// for it.
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +250,81 @@ func (c *Client) ResolveAccount(ctx context.Context, accountNumber, bankCode str
 	}
 	if !env.Status {
 		return nil, fmt.Errorf("paystack: resolve account failed: %s", env.Message)
+	}
+	return &env.Data, nil
+}
+
+// SubaccountParams is what CreateSubaccount and UpdateSubaccount send.
+// AccountNumber/SettlementBank should already be independently verified —
+// this codebase always passes the exact values already confirmed by
+// ResolveAccount (see payout_account.go), never anything freshly typed.
+type SubaccountParams struct {
+	BusinessName   string
+	SettlementBank string // bank/network code, same one used with ResolveAccount
+	AccountNumber  string
+	// PercentageCharge is the percentage Paystack's docs describe as
+	// "charged when receiving on behalf of this subaccount" — read here as
+	// the share the MAIN account (OrderxPay) keeps, corroborated by
+	// Paystack's own worked examples but not spelled out unambiguously in
+	// their reference docs. This field is NEVER what actually decides a
+	// real transaction's split in this codebase — every split payment
+	// passes an explicit TransactionChargePesewas instead (see
+	// InitializeParams), which always wins. Treat this purely as the
+	// subaccount's cosmetic default in Paystack's own dashboard, and
+	// confirm the direction against a live test-mode account before
+	// leaning on it for anything real.
+	PercentageCharge float64
+}
+
+type Subaccount struct {
+	SubaccountCode string `json:"subaccount_code"`
+	AccountName    string `json:"account_name"`
+}
+
+func (p SubaccountParams) body() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"business_name":     p.BusinessName,
+		"settlement_bank":   p.SettlementBank,
+		"account_number":    p.AccountNumber,
+		"percentage_charge": p.PercentageCharge,
+	})
+}
+
+// CreateSubaccount provisions the Paystack object a payment can later be
+// split into (Section 7's "Paystack subaccounts and split payments").
+// Creating one has no effect on how any existing or future payment is
+// routed by itself — only passing its SubaccountCode as
+// InitializeParams.Subaccount does that.
+func (c *Client) CreateSubaccount(ctx context.Context, p SubaccountParams) (*Subaccount, error) {
+	body, err := p.body()
+	if err != nil {
+		return nil, err
+	}
+	var env paystackEnvelope[Subaccount]
+	if err := c.do(ctx, http.MethodPost, "/subaccount", body, &env); err != nil {
+		return nil, err
+	}
+	if !env.Status {
+		return nil, fmt.Errorf("paystack: create subaccount failed: %s", env.Message)
+	}
+	return &env.Data, nil
+}
+
+// UpdateSubaccount repoints an existing subaccount at (possibly) different
+// settlement details — used when a merchant changes their verified payout
+// account after a subaccount already exists for them, so split proceeds
+// never keep flowing to a stale account.
+func (c *Client) UpdateSubaccount(ctx context.Context, subaccountCode string, p SubaccountParams) (*Subaccount, error) {
+	body, err := p.body()
+	if err != nil {
+		return nil, err
+	}
+	var env paystackEnvelope[Subaccount]
+	if err := c.do(ctx, http.MethodPut, "/subaccount/"+url.PathEscape(subaccountCode), body, &env); err != nil {
+		return nil, err
+	}
+	if !env.Status {
+		return nil, fmt.Errorf("paystack: update subaccount failed: %s", env.Message)
 	}
 	return &env.Data, nil
 }

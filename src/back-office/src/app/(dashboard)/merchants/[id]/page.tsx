@@ -157,6 +157,20 @@ export default async function MerchantDetailPage(
               is what Paystack resolved from the account number, not text the
               merchant typed.
             </p>
+            <p className="text-xs text-neutral-400">
+              {merchant.paystack_subaccount_code ? (
+                <>
+                  Paystack subaccount{" "}
+                  <span className="font-mono">{merchant.paystack_subaccount_code}</span>{" "}
+                  provisioned — ready for split payments once the{" "}
+                  <span className="font-mono">paystack_split_payments</span>{" "}
+                  flag is on for this merchant (Pricing page). Not the same as
+                  actually being switched on.
+                </>
+              ) : (
+                "No Paystack subaccount yet — one is created automatically the next time this payout account is verified."
+              )}
+            </p>
           </div>
         ) : (
           <p className="text-amber-700">

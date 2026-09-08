@@ -14,7 +14,7 @@ import (
 const addPaymentRefund = `-- name: AddPaymentRefund :one
 UPDATE payments SET refunded_amount_pesewas = refunded_amount_pesewas + $1
 WHERE id = $2
-RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas
+RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code
 `
 
 type AddPaymentRefundParams struct {
@@ -37,6 +37,7 @@ func (q *Queries) AddPaymentRefund(ctx context.Context, arg AddPaymentRefundPara
 		&i.PspFeePesewas,
 		&i.SettlementID,
 		&i.RefundedAmountPesewas,
+		&i.PaystackSubaccountCode,
 	)
 	return i, err
 }

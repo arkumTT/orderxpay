@@ -302,6 +302,11 @@ export type Merchant = {
   // set; the two always change together.
   payout_account_name: string | null;
   payout_account_verified_at: string | null;
+  // Set once a Paystack subaccount is provisioned (automatic, the first
+  // time payout_account_verified_at is set). Having one is a prerequisite
+  // for split payments, not the same as being switched on — that's gated
+  // separately by the paystack_split_payments feature flag.
+  paystack_subaccount_code: string | null;
   payout_schedule: "on_demand" | "scheduled";
   payout_min_threshold_pesewas: number;
   created_at: string;

@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -190,5 +193,57 @@ func (h *Handler) SetPayoutAccount(c *fiber.Ctx) error {
 	// auth.ActorUser — using it here would mislabel a merchant's own action
 	// as a Back Office user's in the audit trail, which is worse than not
 	// logging at all.
+
+	// Section 7's split-payments prerequisite: provision (or repoint) the
+	// merchant's Paystack subaccount now, so switching split payments on
+	// for them later needs zero additional setup and can't lag behind
+	// whichever payout account is actually current. Best-effort — a
+	// merchant is still correctly payout-verified for the ordinary manual-
+	// settlement path either way, and re-saving their payout account
+	// (e.g. on their next edit) retries this automatically.
+	if provisioned, err := h.provisionSubaccount(c.Context(), merchant, pspClient); err != nil {
+		log.Printf("paystack: failed to provision subaccount for merchant %s: %v", merchantID, err)
+	} else {
+		merchant = provisioned
+	}
 	return c.JSON(stripMerchantSecrets(merchant))
+}
+
+// provisionSubaccount creates the merchant's Paystack subaccount if they
+// don't have one, or repoints an existing one at their (possibly just-
+// changed) verified payout account — always the current
+// PayoutAccountRef/PayoutBankCode, since a subaccount pointed at a stale
+// account would silently keep sending a future split payment's merchant
+// share to money that's no longer theirs.
+//
+// The percentage_charge sent here is a fallback only — see
+// psp.SubaccountParams' doc comment on why it never actually decides a
+// transaction's split in this codebase.
+func (h *Handler) provisionSubaccount(ctx context.Context, merchant db.Merchant, pspClient *psp.Client) (db.Merchant, error) {
+	price, err := h.pricingForMerchant(ctx, merchant.ID)
+	if err != nil {
+		return db.Merchant{}, fmt.Errorf("load pricing: %w", err)
+	}
+
+	params := psp.SubaccountParams{
+		BusinessName:     merchant.BusinessName,
+		SettlementBank:   merchant.PayoutBankCode.String,
+		AccountNumber:    merchant.PayoutAccountRef.String,
+		PercentageCharge: float64(price.CollectionFeeBps+price.MarginBps) / 100,
+	}
+
+	var sub *psp.Subaccount
+	if merchant.PaystackSubaccountCode.Valid && merchant.PaystackSubaccountCode.String != "" {
+		sub, err = pspClient.UpdateSubaccount(ctx, merchant.PaystackSubaccountCode.String, params)
+	} else {
+		sub, err = pspClient.CreateSubaccount(ctx, params)
+	}
+	if err != nil {
+		return db.Merchant{}, err
+	}
+
+	return h.Queries.UpdateMerchantSubaccountCode(ctx, db.UpdateMerchantSubaccountCodeParams{
+		ID:                     merchant.ID,
+		PaystackSubaccountCode: pgtype.Text{String: sub.SubaccountCode, Valid: true},
+	})
 }

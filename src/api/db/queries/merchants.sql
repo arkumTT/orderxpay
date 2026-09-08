@@ -98,3 +98,12 @@ SET payout_account_type = sqlc.arg(payout_account_type),
     payout_account_verified_at = sqlc.arg(payout_account_verified_at)
 WHERE id = sqlc.arg(id)
 RETURNING *;
+
+-- name: UpdateMerchantSubaccountCode :one
+-- Provisioning-only: records the Paystack subaccount created/updated
+-- alongside a verified payout account (SetPayoutAccount in
+-- payout_account.go). Never changes how any payment routes by itself —
+-- see InitiateCheckoutPayment for the only place that reads this and
+-- actually splits a charge.
+UPDATE merchants SET paystack_subaccount_code = $2 WHERE id = $1
+RETURNING *;

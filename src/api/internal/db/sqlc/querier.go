@@ -53,6 +53,9 @@ type Querier interface {
 	CreateMerchantNote(ctx context.Context, arg CreateMerchantNoteParams) (MerchantNote, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error)
+	// paystack_subaccount_code is set only when this specific charge was split
+	// at initialize time — null (the default) is the ordinary path, unchanged
+	// from before split payments existed.
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	CreatePhoneOTP(ctx context.Context, arg CreatePhoneOTPParams) (PhoneOtp, error)
 	// Silently skipped when an identical open flag already exists
@@ -310,6 +313,12 @@ type Querier interface {
 	// rule that clears them back to null whenever the account itself changes.
 	UpdateMerchantPayoutAccount(ctx context.Context, arg UpdateMerchantPayoutAccountParams) (Merchant, error)
 	UpdateMerchantStatus(ctx context.Context, arg UpdateMerchantStatusParams) (Merchant, error)
+	// Provisioning-only: records the Paystack subaccount created/updated
+	// alongside a verified payout account (SetPayoutAccount in
+	// payout_account.go). Never changes how any payment routes by itself —
+	// see InitiateCheckoutPayment for the only place that reads this and
+	// actually splits a charge.
+	UpdateMerchantSubaccountCode(ctx context.Context, arg UpdateMerchantSubaccountCodeParams) (Merchant, error)
 	// Admin-only provisioning step (Section 6.2), same reasoning as
 	// UpdateMerchantWhatsAppPhoneNumberID: an admin creates the catalog in
 	// Meta Commerce Manager and connects it to the merchant's WhatsApp

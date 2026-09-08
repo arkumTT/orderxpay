@@ -1,6 +1,9 @@
 -- name: CreatePayment :one
-INSERT INTO payments (invoice_id, psp_reference, method, amount_pesewas, status)
-VALUES ($1, $2, $3, $4, $5)
+-- paystack_subaccount_code is set only when this specific charge was split
+-- at initialize time — null (the default) is the ordinary path, unchanged
+-- from before split payments existed.
+INSERT INTO payments (invoice_id, psp_reference, method, amount_pesewas, status, paystack_subaccount_code)
+VALUES (sqlc.arg(invoice_id), sqlc.arg(psp_reference), sqlc.arg(method), sqlc.arg(amount_pesewas), sqlc.arg(status), sqlc.arg(paystack_subaccount_code))
 RETURNING *;
 
 -- name: GetPayment :one
