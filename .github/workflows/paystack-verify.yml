@@ -1,0 +1,40 @@
+name: Verify Paystack Integration
+
+# Manual only — never on push/pull_request. This makes real calls against
+# Paystack's test-mode API (initializes a transaction, lists banks), which
+# is harmless test-mode noise but isn't something every commit should do,
+# and it needs the PAYSTACK_SECRET_KEY repo secret to do anything at all.
+#
+# Exists because the sandbox this codebase is normally developed in has no
+# route to the real internet (see internal/psp/paystack_smoke_test.go's own
+# doc comment for the full story) — this is how a PR that touches the
+# Paystack integration gets its live round trip verified, on a runner that
+# actually has network, without asking a human to run curl by hand.
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Paystack live round trip
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: src/api/go.sum
+      - name: Check PAYSTACK_SECRET_KEY is set
+        run: |
+          if [ -z "$PAYSTACK_SECRET_KEY" ]; then
+            echo "::error::PAYSTACK_SECRET_KEY repo secret is not set — add it under Settings > Secrets and variables > Actions, using a Paystack TEST secret key (sk_test_...), never a live one."
+            exit 1
+          fi
+        env:
+          PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+      - name: Run live Paystack checks
+        run: go test -tags paystack_smoke ./internal/psp/... -v
+        env:
+          PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
