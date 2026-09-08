@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/orderxpay/api/internal/auth"
 	db "github.com/orderxpay/api/internal/db/sqlc"
 )
 
@@ -281,15 +280,27 @@ func (h *Handler) UpdateSettlementStatus(c *fiber.Ctx) error {
 
 // writeAdminAuditLog records a Back Office action against the authenticated
 // admin user (Section 7.9) — separate from the "system" actor used for
-// PSP-webhook-driven changes in payments.go.
+// PSP-webhook-driven changes in payments.go. A thin wrapper over
+// writeActorAuditLog kept under its original name since every existing call
+// site is on an admin-only route.
 func writeAdminAuditLog(c *fiber.Ctx, h *Handler, action, targetEntity string, targetID pgtype.UUID, before, after []byte) error {
+	return writeActorAuditLog(c, h, action, targetEntity, targetID, before, after)
+}
+
+// writeActorAuditLog is writeAdminAuditLog generalized to attribute
+// correctly regardless of which kind of principal is authenticated — reads
+// ActorType off the token itself (auth.ActorUser/ActorMerchant/ActorStaff)
+// rather than assuming Back Office, so a merchant- or staff-initiated
+// action sensitive enough to want a real audit trail (e.g.
+// SetMerchantOwnFeeRule) never gets mislabeled as a Back Office user's.
+func writeActorAuditLog(c *fiber.Ctx, h *Handler, action, targetEntity string, targetID pgtype.UUID, before, after []byte) error {
 	payload, ok := actorPayload(c)
 	if !ok {
 		return fiber.NewError(fiber.StatusUnauthorized, "missing auth payload")
 	}
 	_, err := h.Queries.CreateAuditLogEntry(c.Context(), db.CreateAuditLogEntryParams{
 		ActorID:      toPgUUID(payload.ActorID),
-		ActorType:    string(auth.ActorUser),
+		ActorType:    string(payload.ActorType),
 		Action:       action,
 		TargetEntity: targetEntity,
 		TargetID:     targetID,

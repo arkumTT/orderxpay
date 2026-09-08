@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -200,6 +201,124 @@ func (h *Handler) UpsertMerchantFeeRule(c *fiber.Ctx) error {
 		"withdrawal_fee_waiver_pesewas": rule.WithdrawalFeeWaiverPesewas,
 	})
 	if err := writeAdminAuditLog(c, h, "fee_rule.merchant_override", "merchant", merchantID, beforeJSON, after); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
+	}
+
+	return c.JSON(rule)
+}
+
+// merchantSetRateCapBps hard-caps what a verified registered merchant can
+// set their own commission rate to (Section 4.8 / fee-architecture brief's
+// "Merchant-set rates"). 5% is a deliberate, conservative application-code
+// ceiling, not a figure derived from card-scheme rules or BoG guidance —
+// the risk it guards against is a merchant setting an outsized "service
+// charge" that becomes a surcharging problem on OrderxPay's own Paystack
+// merchant-of-record account, not theirs, since every merchant here is a
+// sub-merchant invisible to Visa/Mastercard's own rules.
+const merchantSetRateCapBps = 500
+
+type setMerchantOwnFeeRuleRequest struct {
+	// CommissionBps is the merchant's requested TOTAL blended rate — what
+	// GetMerchantFeeRuleOrGlobal already shows them as commission_bps.
+	// They're choosing an outcome ("customers see 3.5%"), not tuning
+	// collection_fee_bps/margin_bps as separate levers; SetMerchantOwnFeeRule
+	// derives the margin from whichever of those two this request implies.
+	CommissionBps int32 `json:"commission_bps"`
+}
+
+// deriveMerchantSetMarginBps is SetMerchantOwnFeeRule's validation, pulled
+// out as a pure function for testability (same pattern as
+// proratedCommissionPesewas in payments.go and withdrawalFee in
+// settlements.go). Rejects a requested total commission_bps above the hard
+// cap or below the real PSP pass-through cost — the merchant is choosing a
+// margin on top of that cost, never the cost itself — and otherwise
+// returns the margin that total implies.
+func deriveMerchantSetMarginBps(requestedCommissionBps, collectionFeeBps int32) (int32, error) {
+	if requestedCommissionBps < 0 {
+		return 0, errors.New("commission_bps must not be negative")
+	}
+	if requestedCommissionBps > merchantSetRateCapBps {
+		return 0, fmt.Errorf("commission_bps cannot exceed %d (%.2f%%)", merchantSetRateCapBps, float64(merchantSetRateCapBps)/100)
+	}
+	if requestedCommissionBps < collectionFeeBps {
+		return 0, fmt.Errorf(
+			"commission_bps cannot go below the %d bps (%.2f%%) collection fee, which is the payment provider's real cost, not OrderxPay's margin",
+			collectionFeeBps, float64(collectionFeeBps)/100)
+	}
+	return requestedCommissionBps - collectionFeeBps, nil
+}
+
+// SetMerchantOwnFeeRule lets a verified registered merchant set their own
+// commission rate, immediately and without a Back Office review step — the
+// merchantSetRateCapBps ceiling above is the safety control, not a human in
+// the loop. Gated on business_type == "registered" rather than kyc_tier
+// directly: Tier 2 always implies registered (ApproveMerchantKYC sets both
+// together), but a Back Office kyc_tier override (UpdateMerchantKYCTier)
+// deliberately does NOT touch business_type, and a tier bumped that way
+// without ever having supplied registration evidence shouldn't unlock this.
+//
+// collection_fee_bps, allocation_type, the margin floor/cap, and the
+// withdrawal fees are deliberately NOT settable here — those are either
+// real PSP-cost pass-through or operational mechanics, not "the merchant's
+// rate." They're carried forward unchanged from whatever fee rule already
+// applies to this merchant (their own prior override, or the platform
+// default), so only the requested commission_bps actually moves.
+func (h *Handler) SetMerchantOwnFeeRule(c *fiber.Ctx) error {
+	merchantID, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+
+	merchant, err := h.Queries.GetMerchant(c.Context(), merchantID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load merchant"})
+	}
+	if !merchant.BusinessType.Valid || merchant.BusinessType.String != "registered" {
+		return fiber.NewError(fiber.StatusForbidden, "setting your own rate is available to verified registered businesses only")
+	}
+
+	var req setMerchantOwnFeeRuleRequest
+	if err := c.BodyParser(&req); err != nil {
+		return badRequest(c, "invalid request body")
+	}
+	current, err := h.Queries.GetFeeRuleByMerchant(c.Context(), merchantID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		current, err = h.Queries.GetGlobalFeeRule(c.Context())
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load current fee rule"})
+	}
+
+	marginBps, err := deriveMerchantSetMarginBps(req.CommissionBps, current.CollectionFeeBps)
+	if err != nil {
+		return badRequest(c, err.Error())
+	}
+
+	rule, err := h.Queries.UpsertMerchantFeeRule(c.Context(), db.UpsertMerchantFeeRuleParams{
+		MerchantID:                 merchantID,
+		CollectionFeeBps:           current.CollectionFeeBps,
+		MarginBps:                  marginBps,
+		AllocationType:             current.AllocationType,
+		MarginFloorPesewas:         current.MarginFloorPesewas,
+		MarginCapPesewas:           current.MarginCapPesewas,
+		WithdrawalFeeMomoPesewas:   current.WithdrawalFeeMomoPesewas,
+		WithdrawalFeeBankPesewas:   current.WithdrawalFeeBankPesewas,
+		WithdrawalFeeWaiverPesewas: current.WithdrawalFeeWaiverPesewas,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to set your rate"})
+	}
+
+	// Unlike UpdateMerchantFeeSettings/UpdateMerchantWhatsAppSettings
+	// (ordinary merchant self-service, not audit-logged), a self-set
+	// pricing rate is consequential enough to want a real trail — and
+	// writeActorAuditLog attributes it correctly to the merchant/staff
+	// actor who actually made the change, not to a Back Office user.
+	before, _ := json.Marshal(fiber.Map{"commission_bps": current.CommissionBps})
+	after, _ := json.Marshal(fiber.Map{"commission_bps": rule.CommissionBps, "margin_bps": rule.MarginBps})
+	if err := writeActorAuditLog(c, h, "fee_rule.merchant_self_set", "merchant", merchantID, before, after); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
 	}
 

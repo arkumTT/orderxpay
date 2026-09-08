@@ -704,6 +704,23 @@ class ApiClient {
     return Merchant.fromJson(res as Map<String, dynamic>);
   }
 
+  /// Section 4.8 — sets a verified registered merchant's own commission
+  /// rate, immediately (no Back Office review — the API's hard cap is the
+  /// safety control). [commissionBps] is the TOTAL blended rate the
+  /// merchant wants customers to see, matching what FeeRule.commissionBps
+  /// already shows; the server derives the margin from it and rejects
+  /// anything above its cap or below the real payment-provider fee. Throws
+  /// [ApiException] with a 403 for a merchant who isn't a verified
+  /// registered business, or a 400 naming which bound was violated.
+  Future<FeeRule> setOwnFeeRule(String merchantId, {required int commissionBps}) async {
+    final res = await _send(
+      'PATCH',
+      '/api/v1/app/merchants/$merchantId/fee-rule',
+      body: {'commission_bps': commissionBps},
+    );
+    return FeeRule.fromJson(res as Map<String, dynamic>);
+  }
+
   /// Section 4.4/6.2 — real, persisted preferences; see the doc comment on
   /// UpdateMerchantWhatsAppSettings (src/api) for what they don't do yet.
   Future<Merchant> updateWhatsAppSettings(
