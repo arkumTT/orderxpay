@@ -36,7 +36,6 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
   bool _breakdownExpanded = false;
   String? _error;
   String _allocation = 'customer_only';
-  String _payoutFeeAbsorption = 'merchant_absorbed';
   FeeRule? _feeRule;
 
   @override
@@ -55,7 +54,6 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
       final merchant = results[0] as Merchant;
       setState(() {
         _allocation = merchant.serviceChargeAllocation;
-        _payoutFeeAbsorption = merchant.payoutFeeAbsorption;
         _feeRule = results[1] as FeeRule;
         _loading = false;
       });
@@ -77,7 +75,6 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
         Session.instance.merchantId!,
         allocation: _allocation,
         splitBps: _allocation == 'split' ? 5000 : null,
-        payoutFeeAbsorption: _payoutFeeAbsorption,
       );
       if (mounted) Navigator.pop(context);
     } on ApiException catch (e) {
@@ -96,7 +93,10 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
     const exampleSubtotal = 10000; // GH₵100.00, matches the design's example
     final amounts = computeInvoiceAmounts(
       subtotalPesewas: exampleSubtotal,
-      commissionBps: feeRule.commissionBps,
+      collectionFeeBps: feeRule.collectionFeeBps,
+      marginBps: feeRule.marginBps,
+      marginFloorPesewas: feeRule.marginFloorPesewas,
+      marginCapPesewas: feeRule.marginCapPesewas,
       allocation: _allocation,
       splitBps: 5000,
     );
@@ -154,9 +154,9 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _BreakdownRow('Collection fee (PSP)', '${_pct(feeRule.collectionFeeBps)}%'),
+                        _BreakdownRow('Payment provider fee', '${_pct(feeRule.collectionFeeBps)}%'),
                         const SizedBox(height: 8),
-                        _BreakdownRow('Payout fee (PSP)', '${_pct(feeRule.payoutFeeBps)}%'),
+                        _BreakdownRow('OrderxPay', '${_pct(feeRule.marginBps)}%'),
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 10),
                           child: Divider(height: 1, color: AppColors.border),
@@ -168,11 +168,12 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
                           bold: true,
                         ),
                         const SizedBox(height: 10),
-                        const Text(
-                          "Payout fee is charged per withdrawal batch, not per order, "
-                          "so we build it into one blended rate instead of a second "
-                          "checkout line.",
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
+                        Text(
+                          'Never less than ${formatPesewas(feeRule.marginFloorPesewas)} '
+                          'or more than ${formatPesewas(feeRule.marginCapPesewas)} to '
+                          'OrderxPay on a single order, so large orders cost you '
+                          'proportionally less.',
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
                         ),
                       ],
                     ),
@@ -208,45 +209,47 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          const Text(
+            'Withdrawals',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'What it costs to move money from OrderxPay to your wallet or bank.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
           OxpCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Absorb the payout fee myself',
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Deducted from your settlement, not added to what customers pay.',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: _payoutFeeAbsorption == 'merchant_absorbed',
-                      activeTrackColor: AppColors.statusPaid,
-                      onChanged: (v) => setState(
-                        () => _payoutFeeAbsorption = v ? 'merchant_absorbed' : 'blended_into_rate',
-                      ),
-                    ),
-                  ],
+                _BreakdownRow(
+                  'To Mobile Money',
+                  formatPesewas(feeRule.withdrawalFeeMomoPesewas),
                 ),
-                if (_payoutFeeAbsorption == 'blended_into_rate') ...[
-                  const SizedBox(height: 4),
-                  const Text(
-                    "Folded into your blended rate above instead — covered by the "
-                    "same Customer/Merchant/Split choice as your collection fee.",
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
-                  ),
-                ],
+                const SizedBox(height: 8),
+                _BreakdownRow(
+                  'To a bank account',
+                  formatPesewas(feeRule.withdrawalFeeBankPesewas),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Divider(height: 1, color: AppColors.border),
+                ),
+                _BreakdownRow(
+                  'Free above',
+                  formatPesewas(feeRule.withdrawalFeeWaiverPesewas),
+                  valueColor: AppColors.statusPaid,
+                  bold: true,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'This is a flat charge per withdrawal, not a percentage, so '
+                  'fewer larger withdrawals cost you less than many small ones. '
+                  'Withdraw ${formatPesewas(feeRule.withdrawalFeeWaiverPesewas)} '
+                  'or more and it is free.',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
+                ),
               ],
             ),
           ),

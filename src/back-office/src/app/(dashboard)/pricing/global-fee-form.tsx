@@ -10,20 +10,37 @@ const ALLOCATIONS = [
   { value: "split", label: "Split" },
 ];
 
-// Section 4.8 (revised): the blended platform rate is composed of three
-// separately-tunable components — collection fee, payout fee, margin — so a
-// PSP pricing change doesn't require hand-deriving a new blended figure.
-// commission_bps itself is derived server-side and shown read-only here.
+// Section 4.8, revised again in migration 000028. The blended rate is the
+// PSP's collection fee passed through plus OrderxPay's own margin, so a PSP
+// price change doesn't require hand-deriving a new blended figure.
+// commission_bps is derived server-side and shown read-only here.
+//
+// The payout side is not a rate: the PSP charges a flat amount per transfer,
+// so it is set here in cedis and waived above a threshold. The margin floor
+// and cap clamp OrderxPay's take per invoice — never the pass-through — so
+// small invoices stay worth carrying and large ones stay worth paying.
 export function GlobalFeeForm({ rule }: { rule: FeeRule | null }) {
   const router = useRouter();
   const [collectionPct, setCollectionPct] = useState(
-    rule ? (rule.collection_fee_bps / 100).toFixed(2) : "2.00",
-  );
-  const [payoutPct, setPayoutPct] = useState(
-    rule ? (rule.payout_fee_bps / 100).toFixed(2) : "1.00",
+    rule ? (rule.collection_fee_bps / 100).toFixed(2) : "1.95",
   );
   const [marginPct, setMarginPct] = useState(
-    rule ? (rule.margin_bps / 100).toFixed(2) : "1.00",
+    rule ? (rule.margin_bps / 100).toFixed(2) : "0.55",
+  );
+  const [marginFloorGhs, setMarginFloorGhs] = useState(
+    rule ? (rule.margin_floor_pesewas / 100).toFixed(2) : "0.20",
+  );
+  const [marginCapGhs, setMarginCapGhs] = useState(
+    rule ? (rule.margin_cap_pesewas / 100).toFixed(2) : "25.00",
+  );
+  const [momoFeeGhs, setMomoFeeGhs] = useState(
+    rule ? (rule.withdrawal_fee_momo_pesewas / 100).toFixed(2) : "1.00",
+  );
+  const [bankFeeGhs, setBankFeeGhs] = useState(
+    rule ? (rule.withdrawal_fee_bank_pesewas / 100).toFixed(2) : "8.00",
+  );
+  const [waiverGhs, setWaiverGhs] = useState(
+    rule ? (rule.withdrawal_fee_waiver_pesewas / 100).toFixed(2) : "500.00",
   );
   const [allocation, setAllocation] = useState<string>(
     rule?.allocation_type ?? "customer_only",
@@ -33,9 +50,7 @@ export function GlobalFeeForm({ rule }: { rule: FeeRule | null }) {
   const [saved, setSaved] = useState(false);
 
   const blendedPct = (
-    (parseFloat(collectionPct) || 0) +
-    (parseFloat(payoutPct) || 0) +
-    (parseFloat(marginPct) || 0)
+    (parseFloat(collectionPct) || 0) + (parseFloat(marginPct) || 0)
   ).toFixed(2);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -49,9 +64,13 @@ export function GlobalFeeForm({ rule }: { rule: FeeRule | null }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           collection_fee_bps: Math.round(parseFloat(collectionPct) * 100),
-          payout_fee_bps: Math.round(parseFloat(payoutPct) * 100),
           margin_bps: Math.round(parseFloat(marginPct) * 100),
           allocation_type: allocation,
+          margin_floor_pesewas: Math.round(parseFloat(marginFloorGhs) * 100),
+          margin_cap_pesewas: Math.round(parseFloat(marginCapGhs) * 100),
+          withdrawal_fee_momo_pesewas: Math.round(parseFloat(momoFeeGhs) * 100),
+          withdrawal_fee_bank_pesewas: Math.round(parseFloat(bankFeeGhs) * 100),
+          withdrawal_fee_waiver_pesewas: Math.round(parseFloat(waiverGhs) * 100),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -91,24 +110,6 @@ export function GlobalFeeForm({ rule }: { rule: FeeRule | null }) {
         />
       </div>
       <div className="space-y-1">
-        <label className="text-xs text-neutral-500" htmlFor="global-payout">
-          Payout fee (PSP) %
-        </label>
-        <input
-          id="global-payout"
-          type="number"
-          step="0.01"
-          min="0"
-          required
-          value={payoutPct}
-          onChange={(e) => {
-            setPayoutPct(e.target.value);
-            setSaved(false);
-          }}
-          className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
-        />
-      </div>
-      <div className="space-y-1">
         <label className="text-xs text-neutral-500" htmlFor="global-margin">
           Margin %
         </label>
@@ -125,6 +126,81 @@ export function GlobalFeeForm({ rule }: { rule: FeeRule | null }) {
           }}
           className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
         />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs text-neutral-500" htmlFor="global-floor">
+          Margin floor ₵
+          </label>
+        <input
+          id="global-floor"
+          type="number"
+          step="0.01"
+          min="0"
+          required
+          value={marginFloorGhs}
+          onChange={(e) => setMarginFloorGhs(e.target.value)}
+          className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs text-neutral-500" htmlFor="global-cap">
+          Margin cap ₵
+          </label>
+        <input
+          id="global-cap"
+          type="number"
+          step="0.01"
+          min="0"
+          required
+          value={marginCapGhs}
+          onChange={(e) => setMarginCapGhs(e.target.value)}
+          className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs text-neutral-500" htmlFor="global-momo">
+          MoMo payout ₵
+          </label>
+        <input
+          id="global-momo"
+          type="number"
+          step="0.01"
+          min="0"
+          required
+          value={momoFeeGhs}
+          onChange={(e) => setMomoFeeGhs(e.target.value)}
+          className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs text-neutral-500" htmlFor="global-bank">
+          Bank payout ₵
+          </label>
+        <input
+          id="global-bank"
+          type="number"
+          step="0.01"
+          min="0"
+          required
+          value={bankFeeGhs}
+          onChange={(e) => setBankFeeGhs(e.target.value)}
+          className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs text-neutral-500" htmlFor="global-waiver">
+          Payout free above ₵
+          </label>
+        <input
+          id="global-waiver"
+          type="number"
+          step="0.01"
+          min="0"
+          required
+          value={waiverGhs}
+          onChange={(e) => setWaiverGhs(e.target.value)}
+          className="w-28 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
       </div>
       <div className="space-y-1">
         <span className="text-xs text-neutral-500">Blended rate</span>

@@ -35,7 +35,7 @@ type resolvedLineItem struct {
 }
 
 // validationError marks an error as the caller's fault (400), as opposed to
-// an internal failure (500) — resolveLineItems/commissionForMerchant return
+// an internal failure (500) — resolveLineItems/pricingForMerchant return
 // a mix of both, so handlers need to tell them apart.
 type validationError struct{ msg string }
 
@@ -113,23 +113,43 @@ func (h *Handler) resolveLineItems(ctx context.Context, merchantID pgtype.UUID, 
 	return resolved, subtotal, nil
 }
 
+// pricing is a fee rule resolved down to what the invoice engine needs.
+// Splitting the PSP pass-through from OrderxPay's own margin is what makes
+// the clamps below safe: only the margin is ever floored or capped, so a
+// capped invoice can still never cost more to process than it charges.
+type pricing struct {
+	CollectionFeeBps int32 // paid on to the PSP
+	MarginBps        int32 // OrderxPay's take
+	MarginFloor      int64 // pesewas; 0 = no floor
+	MarginCap        int64 // pesewas; 0 = no cap
+}
+
+// commissionBps is the blended rate a merchant sees quoted.
+func (p pricing) commissionBps() int32 { return p.CollectionFeeBps + p.MarginBps }
+
 // invoiceAmounts is the Section 4.8 fee calculation.
 //
-// Two properties this has to hold, both found the hard way:
+// Three properties this has to hold:
 //
 //  1. The commission base is the full amount that actually moves through
 //     the PSP — goods plus any delivery fee bundled into the invoice — not
-//     the goods subtotal alone. Paystack charges its percentage on
+//     the goods subtotal alone. The PSP charges its percentage on
 //     everything it collects, so commissioning only the subtotal meant a
-//     bundled delivery fee cost OrderxPay a PSP fee it earned nothing back
-//     on: a ₵20 order carrying a ₵50 delivery fee settled at a real loss.
+//     bundled delivery fee cost OrderxPay a fee it earned nothing back on:
+//     a ₵20 order carrying a ₵50 delivery fee settled at a real loss.
 //
 //  2. The customer-borne share is grossed up, not added on top. Adding
 //     2.5% to ₵100 bills ₵102.50 — but the PSP then takes its cut of
 //     ₵102.50, so the realised margin lands under the configured rate.
-//     Solving total = base / (1 - rate) bills ₵102.56 instead, leaves the
-//     merchant exactly their asking price, and makes the platform margin
-//     exactly (commission rate - PSP rate) × total under every allocation.
+//     Solving total = base / (1 - rate) bills ₵102.56 instead, and leaves
+//     the merchant exactly their asking price.
+//
+//  3. The margin is clamped at both ends. A percentage of a ₵10 invoice is
+//     not worth carrying; a percentage of a ₵50,000 invoice is visible
+//     enough that the merchant takes the payment off-platform instead. The
+//     floor and cap apply to OrderxPay's margin only — the PSP portion is
+//     always passed through in full, so the platform's take can be squeezed
+//     to the cap but never below its own cost.
 //
 // ServiceChargePesewas keeps its original meaning: the amount disclosed to
 // and paid by the customer on top of the merchant's asking price — zero
@@ -141,11 +161,11 @@ type invoiceAmounts struct {
 	TotalPesewas         int64
 }
 
-// customerCommissionShareBps is how much of the commission the customer
-// pays on top of the merchant's asking price, in bps of the commission
-// (10000 = the customer pays all of it). An unrecognised allocation is
-// treated as merchant_only — the safe direction, since it never surprises
-// a customer with an undisclosed charge.
+// customerCommissionShareBps is how much of the commission the customer pays
+// on top of the merchant's asking price, in bps of the commission (10000 =
+// the customer pays all of it). An unrecognised allocation is treated as
+// merchant_only — the safe direction, since it never surprises a customer
+// with an undisclosed charge.
 func customerCommissionShareBps(allocation string, splitBps pgtype.Int4) int64 {
 	switch allocation {
 	case "customer_only":
@@ -167,37 +187,67 @@ func customerCommissionShareBps(allocation string, splitBps pgtype.Int4) int64 {
 	}
 }
 
-// computeInvoiceAmounts is pure and total: it assumes commissionBps has
-// already been range-checked by commissionForMerchant, which rejects rates
-// at or above 100% (those make the gross-up below unsolvable).
-func computeInvoiceAmounts(subtotal int64, commissionBps int32, allocation string, splitBps pgtype.Int4, deliveryFeePesewas int64, deliveryBundled bool) invoiceAmounts {
-	// base is what the merchant is asking to receive: goods, plus a
-	// bundled delivery fee (collected on their behalf and paid out to
-	// them, see ComputeSettlementAggregate). An "external" delivery fee is
-	// settled directly between customer and courier and never reaches the
-	// invoice total, so it is not part of the base.
+// grossUp solves total = amount / (1 - effectiveBps), rounding to the
+// nearest pesewa so the merchant is left exactly whole rather than a pesewa
+// short. An effective rate of zero (or, defensively, one at or above 100%)
+// leaves the amount untouched.
+func grossUp(amount int64, effectiveBps int64) int64 {
+	denominator := 10000 - effectiveBps
+	if denominator <= 0 || denominator >= 10000 {
+		return amount
+	}
+	return (amount*10000 + denominator/2) / denominator
+}
+
+func computeInvoiceAmounts(subtotal int64, p pricing, allocation string, splitBps pgtype.Int4, deliveryFeePesewas int64, deliveryBundled bool) invoiceAmounts {
+	// base is what the merchant is asking to receive: goods, plus a bundled
+	// delivery fee (collected on their behalf and paid out to them, see
+	// ComputeSettlementAggregate). An "external" delivery fee is settled
+	// directly between customer and courier and never reaches the invoice
+	// total, so it is not part of the base.
 	base := subtotal
 	if deliveryBundled {
 		base += deliveryFeePesewas
 	}
-
-	// Gross-up: total = base / (1 - rate x customerShare). Held in bps
-	// throughout so no float ever touches a money value.
-	effectiveBps := int64(commissionBps) * customerCommissionShareBps(allocation, splitBps) / 10000
-	denominator := 10000 - effectiveBps
-
-	total := base
-	if denominator > 0 && denominator < 10000 {
-		// Round to the nearest pesewa, not up: the merchant then receives
-		// exactly their asking price back out of the grossed-up total, which
-		// is the promise the customer-pays-the-fee setting makes.
-		total = (base*10000 + denominator/2) / denominator
+	if base <= 0 {
+		return invoiceAmounts{}
 	}
 
-	// Commission is a share of everything collected, matching how the PSP
-	// charges. Truncating rather than rounding up leaves the sub-pesewa
+	shareBps := customerCommissionShareBps(allocation, splitBps)
+
+	// The gross-up depends on which side of the clamps the margin lands, and
+	// that depends on the total the gross-up produces. Solve the unclamped
+	// case first, then re-solve against whichever clamp it turns out to hit:
+	// with the margin pinned to a constant, the remaining rate is just the
+	// pass-through, and the pinned amount grosses up alongside the base.
+	total := grossUp(base, int64(p.commissionBps())*shareBps/10000)
+	collectionOnlyBps := int64(p.CollectionFeeBps) * shareBps / 10000
+
+	switch margin := total * int64(p.MarginBps) / 10000; {
+	case margin < p.MarginFloor:
+		total = grossUp(base+p.MarginFloor*shareBps/10000, collectionOnlyBps)
+	case p.MarginCap > 0 && margin > p.MarginCap:
+		total = grossUp(base+p.MarginCap*shareBps/10000, collectionOnlyBps)
+	}
+
+	margin := total * int64(p.MarginBps) / 10000
+	if margin < p.MarginFloor {
+		margin = p.MarginFloor
+	}
+	if p.MarginCap > 0 && margin > p.MarginCap {
+		margin = p.MarginCap
+	}
+
+	// The PSP share truncates rather than rounding up, leaving the sub-pesewa
 	// remainder with OrderxPay instead of shaving the merchant payout.
-	commission := total * int64(commissionBps) / 10000
+	commission := total*int64(p.CollectionFeeBps)/10000 + margin
+	if commission > total {
+		// Only reachable on an invoice small enough that the margin floor
+		// exceeds the whole thing (a ₵0.10 sale against a ₵0.20 floor).
+		// Taking more than was collected would push the merchant payout
+		// negative, so the floor gives way instead.
+		commission = total
+	}
 
 	return invoiceAmounts{
 		CommissionPesewas:    commission,
@@ -206,28 +256,33 @@ func computeInvoiceAmounts(subtotal int64, commissionBps int32, allocation strin
 	}
 }
 
-// commissionForMerchant resolves the applicable commission rate: a
-// merchant-specific override if one exists, else the platform default
-// (Section 7.4).
-func (h *Handler) commissionForMerchant(ctx context.Context, merchantID pgtype.UUID) (int32, error) {
+// pricingForMerchant resolves the applicable fee rule: a merchant-specific
+// override if one exists, else the platform default (Section 7.4).
+func (h *Handler) pricingForMerchant(ctx context.Context, merchantID pgtype.UUID) (pricing, error) {
 	rule, err := h.Queries.GetFeeRuleByMerchant(ctx, merchantID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		rule, err = h.Queries.GetGlobalFeeRule(ctx)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, errors.New("no fee rule configured — set a global default via POST /api/v1/admin/fee-rules/global")
+			return pricing{}, errors.New("no fee rule configured — set a global default via POST /api/v1/admin/fee-rules/global")
 		}
 	}
 	if err != nil {
-		return 0, err
+		return pricing{}, err
 	}
-	// A rate at or above 100% makes the customer-borne gross-up in
-	// computeInvoiceAmounts unsolvable, and is a configuration mistake
-	// rather than a pricing choice — the fee_rules CHECK constraint only
-	// enforces a lower bound.
-	if rule.CommissionBps < 0 || rule.CommissionBps >= 10000 {
-		return 0, fmt.Errorf("fee rule commission of %d bps is out of range — it must be under 10000 bps (100%%)", rule.CommissionBps)
+	// A blended rate at or above 100% makes the customer-borne gross-up
+	// unsolvable, and is a configuration mistake rather than a pricing
+	// choice — the fee_rules CHECK constraints only enforce lower bounds.
+	if rule.CollectionFeeBps < 0 || rule.MarginBps < 0 ||
+		rule.CollectionFeeBps+rule.MarginBps >= 10000 {
+		return pricing{}, fmt.Errorf("fee rule is out of range: collection %d bps + margin %d bps must be non-negative and under 10000 bps (100%%)",
+			rule.CollectionFeeBps, rule.MarginBps)
 	}
-	return rule.CommissionBps, nil
+	return pricing{
+		CollectionFeeBps: rule.CollectionFeeBps,
+		MarginBps:        rule.MarginBps,
+		MarginFloor:      rule.MarginFloorPesewas,
+		MarginCap:        rule.MarginCapPesewas,
+	}, nil
 }
 
 // invoiceReferenceAlphabet excludes 0/O and 1/I to avoid ambiguity when a
@@ -282,13 +337,13 @@ func (h *Handler) createInvoiceCore(ctx context.Context, p createInvoiceCorePara
 		return db.Invoice{}, nil, err
 	}
 
-	commissionBps, err := h.commissionForMerchant(ctx, p.MerchantID)
+	price, err := h.pricingForMerchant(ctx, p.MerchantID)
 	if err != nil {
 		return db.Invoice{}, nil, err
 	}
 
 	deliveryBundled := p.DeliveryFeeHandling == "bundled"
-	amounts := computeInvoiceAmounts(subtotal, commissionBps, merchant.ServiceChargeAllocation, merchant.ServiceChargeSplitBps, p.DeliveryFeePesewas, deliveryBundled)
+	amounts := computeInvoiceAmounts(subtotal, price, merchant.ServiceChargeAllocation, merchant.ServiceChargeSplitBps, p.DeliveryFeePesewas, deliveryBundled)
 
 	var lastErr error
 	for attempt := 0; attempt < maxReferenceAttempts; attempt++ {

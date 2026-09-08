@@ -13,14 +13,13 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (
     body?.collection_fee_bps == null ||
-    body?.payout_fee_bps == null ||
     body?.margin_bps == null ||
     !body?.allocation_type
   ) {
     return Response.json(
       {
         error:
-          "collection_fee_bps, payout_fee_bps, margin_bps, and allocation_type are required",
+          "collection_fee_bps, margin_bps, and allocation_type are required",
       },
       { status: 400 },
     );

@@ -119,15 +119,19 @@ type FeatureFlagMerchant struct {
 }
 
 type FeeRule struct {
-	ID               pgtype.UUID        `json:"id"`
-	MerchantID       pgtype.UUID        `json:"merchant_id"`
-	CommissionBps    int32              `json:"commission_bps"`
-	AllocationType   string             `json:"allocation_type"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	CollectionFeeBps int32              `json:"collection_fee_bps"`
-	PayoutFeeBps     int32              `json:"payout_fee_bps"`
-	MarginBps        int32              `json:"margin_bps"`
+	ID                         pgtype.UUID        `json:"id"`
+	MerchantID                 pgtype.UUID        `json:"merchant_id"`
+	CommissionBps              int32              `json:"commission_bps"`
+	AllocationType             string             `json:"allocation_type"`
+	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
+	CollectionFeeBps           int32              `json:"collection_fee_bps"`
+	MarginBps                  int32              `json:"margin_bps"`
+	MarginFloorPesewas         int64              `json:"margin_floor_pesewas"`
+	MarginCapPesewas           int64              `json:"margin_cap_pesewas"`
+	WithdrawalFeeMomoPesewas   int64              `json:"withdrawal_fee_momo_pesewas"`
+	WithdrawalFeeBankPesewas   int64              `json:"withdrawal_fee_bank_pesewas"`
+	WithdrawalFeeWaiverPesewas int64              `json:"withdrawal_fee_waiver_pesewas"`
 }
 
 type Integration struct {
@@ -231,7 +235,6 @@ type Merchant struct {
 	PayoutMinThresholdPesewas int64              `json:"payout_min_threshold_pesewas"`
 	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
-	PayoutFeeAbsorption       string             `json:"payout_fee_absorption"`
 	WhatsappAutoReplyEnabled  bool               `json:"whatsapp_auto_reply_enabled"`
 	WhatsappGreetingMessage   pgtype.Text        `json:"whatsapp_greeting_message"`
 	DeliveryEnabled           bool               `json:"delivery_enabled"`
@@ -372,6 +375,7 @@ type Settlement struct {
 	Status                  string             `json:"status"`
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+	WithdrawalFeePesewas    int64              `json:"withdrawal_fee_pesewas"`
 }
 
 type Staff struct {

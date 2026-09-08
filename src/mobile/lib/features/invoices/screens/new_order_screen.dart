@@ -49,7 +49,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   final List<_CustomLine> _customLines = [];
 
   Merchant? _merchant;
-  int _commissionBps = 0;
+  FeeRule? _feeRule;
   List<DeliveryOption> _deliveryOptions = [];
   List<MerchantLocation> _locations = [];
 
@@ -87,14 +87,14 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       final results = await Future.wait([
         _api.listItems(merchantId),
         _api.getMerchant(merchantId),
-        _api.getCommissionBps(merchantId),
+        _api.getFeeRule(merchantId),
         _api.listDeliveryOptions(merchantId),
         _api.listMerchantLocations(merchantId),
       ]);
       setState(() {
         _items = results[0] as List<Item>;
         _merchant = results[1] as Merchant;
-        _commissionBps = results[2] as int;
+        _feeRule = results[2] as FeeRule;
         _deliveryOptions = results[3] as List<DeliveryOption>;
         _locations = results[4] as List<MerchantLocation>;
         for (final location in _locations) {
@@ -208,7 +208,10 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   InvoiceAmounts get _amounts => computeInvoiceAmounts(
     subtotalPesewas: _subtotalPesewas,
-    commissionBps: _commissionBps,
+    collectionFeeBps: _feeRule?.collectionFeeBps ?? 0,
+    marginBps: _feeRule?.marginBps ?? 0,
+    marginFloorPesewas: _feeRule?.marginFloorPesewas ?? 0,
+    marginCapPesewas: _feeRule?.marginCapPesewas ?? 0,
     allocation: _merchant?.serviceChargeAllocation ?? 'customer_only',
     splitBps: _merchant?.serviceChargeSplitBps,
     deliveryFeePesewas: _deliveryFeePesewas,

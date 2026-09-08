@@ -17,7 +17,6 @@ class Merchant {
     required this.status,
     required this.serviceChargeAllocation,
     required this.serviceChargeSplitBps,
-    required this.payoutFeeAbsorption,
     required this.whatsappAutoReplyEnabled,
     required this.whatsappGreetingMessage,
     required this.whatsappCatalogId,
@@ -33,7 +32,6 @@ class Merchant {
   final String status;
   final String serviceChargeAllocation;
   final int? serviceChargeSplitBps;
-  final String payoutFeeAbsorption; // merchant_absorbed | blended_into_rate
   final bool whatsappAutoReplyEnabled;
   final String? whatsappGreetingMessage; // null = use the app's generated default
   final String? whatsappCatalogId; // null = no Meta catalog connected yet (Section 6.2, admin-provisioned)
@@ -49,9 +47,6 @@ class Merchant {
     status: _str(j['status']),
     serviceChargeAllocation: _str(j['service_charge_allocation']),
     serviceChargeSplitBps: _intOrNull(j['service_charge_split_bps']),
-    payoutFeeAbsorption: j['payout_fee_absorption'] == null
-        ? 'merchant_absorbed'
-        : _str(j['payout_fee_absorption']),
     whatsappAutoReplyEnabled: j['whatsapp_auto_reply_enabled'] as bool? ?? true,
     whatsappGreetingMessage: _strOrNull(j['whatsapp_greeting_message']),
     whatsappCatalogId: _strOrNull(j['whatsapp_catalog_id']),
@@ -60,31 +55,56 @@ class Merchant {
   );
 }
 
-/// Section 4.8 (revised): the blended commission_bps the invoice engine and
-/// checkout read is always collectionFeeBps + payoutFeeBps + marginBps,
-/// enforced server-side — the breakdown here is what the merchant-facing
-/// "How this is calculated" card explains.
+/// Section 4.8 (revised): the blended commissionBps the invoice engine and
+/// checkout read is always collectionFeeBps + marginBps, enforced
+/// server-side. Payouts are priced separately and flat, because the payment
+/// provider charges a flat amount per transfer rather than a percentage.
+/// The breakdown here is what the merchant-facing "How this is calculated"
+/// card explains.
 class FeeRule {
   FeeRule({
     required this.commissionBps,
     required this.collectionFeeBps,
-    required this.payoutFeeBps,
     required this.marginBps,
     required this.allocationType,
+    required this.marginFloorPesewas,
+    required this.marginCapPesewas,
+    required this.withdrawalFeeMomoPesewas,
+    required this.withdrawalFeeBankPesewas,
+    required this.withdrawalFeeWaiverPesewas,
   });
 
+  /// The blended rate quoted to the merchant: collection + margin.
   final int commissionBps;
+
+  /// Passed straight through to the payment provider.
   final int collectionFeeBps;
-  final int payoutFeeBps;
+
+  /// OrderxPay's own take, clamped per invoice by the floor and cap below
+  /// (0 on either means unclamped). Only the margin is ever clamped — the
+  /// provider's share is always passed through in full.
   final int marginBps;
+  final int marginFloorPesewas;
+  final int marginCapPesewas;
+
   final String allocationType;
+
+  /// Withdrawals are priced flat, matching what the provider actually
+  /// charges per transfer, and waived above the waiver threshold.
+  final int withdrawalFeeMomoPesewas;
+  final int withdrawalFeeBankPesewas;
+  final int withdrawalFeeWaiverPesewas;
 
   factory FeeRule.fromJson(Map<String, dynamic> j) => FeeRule(
     commissionBps: _int(j['commission_bps']),
     collectionFeeBps: _int(j['collection_fee_bps']),
-    payoutFeeBps: _int(j['payout_fee_bps']),
     marginBps: _int(j['margin_bps']),
     allocationType: _str(j['allocation_type']),
+    marginFloorPesewas: _int(j['margin_floor_pesewas']),
+    marginCapPesewas: _int(j['margin_cap_pesewas']),
+    withdrawalFeeMomoPesewas: _int(j['withdrawal_fee_momo_pesewas']),
+    withdrawalFeeBankPesewas: _int(j['withdrawal_fee_bank_pesewas']),
+    withdrawalFeeWaiverPesewas: _int(j['withdrawal_fee_waiver_pesewas']),
   );
 }
 

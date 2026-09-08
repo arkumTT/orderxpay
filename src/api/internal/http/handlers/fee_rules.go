@@ -21,21 +21,49 @@ func (h *Handler) GetGlobalFeeRule(c *fiber.Ctx) error {
 	return c.JSON(rule)
 }
 
-// Section 4.8 (revised): admins tune the three components that make up the
-// blended platform rate — collection fee, payout fee, margin — instead of
-// typing the blended commission_bps figure directly. commission_bps is
-// derived server-side (see fee_rules.sql) so it can never drift from the
-// sum of its parts.
+// Section 4.8, revised again in migration 000028: admins tune what the
+// platform actually pays out and what it keeps — the PSP collection fee it
+// passes through, its own margin, and the floor and cap that keep that
+// margin viable at both ends of the ticket range. commission_bps is derived
+// server-side (see fee_rules.sql) so it can never drift from collection +
+// margin.
+//
+// The payout side is deliberately not a percentage any more: the PSP charges
+// a flat amount per transfer, so it is priced as a flat withdrawal fee,
+// waived above a threshold to nudge merchants into batching.
 type upsertFeeRuleRequest struct {
 	CollectionFeeBps int32  `json:"collection_fee_bps"`
-	PayoutFeeBps     int32  `json:"payout_fee_bps"`
 	MarginBps        int32  `json:"margin_bps"`
 	AllocationType   string `json:"allocation_type"`
+
+	// Clamps on the platform's own margin per invoice, never on the PSP
+	// pass-through — so a capped invoice can still never cost more to
+	// process than it charges. Zero means unclamped on either end.
+	MarginFloorPesewas int64 `json:"margin_floor_pesewas"`
+	MarginCapPesewas   int64 `json:"margin_cap_pesewas"`
+
+	WithdrawalFeeMomoPesewas   int64 `json:"withdrawal_fee_momo_pesewas"`
+	WithdrawalFeeBankPesewas   int64 `json:"withdrawal_fee_bank_pesewas"`
+	WithdrawalFeeWaiverPesewas int64 `json:"withdrawal_fee_waiver_pesewas"`
 }
 
 func (r upsertFeeRuleRequest) validate() error {
-	if r.CollectionFeeBps < 0 || r.PayoutFeeBps < 0 || r.MarginBps < 0 {
-		return errors.New("collection_fee_bps, payout_fee_bps, and margin_bps must not be negative")
+	if r.CollectionFeeBps < 0 || r.MarginBps < 0 {
+		return errors.New("collection_fee_bps and margin_bps must not be negative")
+	}
+	// At or above 100% the customer-borne gross-up in computeInvoiceAmounts
+	// has no solution — the customer would owe infinity.
+	if r.CollectionFeeBps+r.MarginBps >= 10000 {
+		return errors.New("collection_fee_bps + margin_bps must be under 10000 bps (100%)")
+	}
+	if r.MarginFloorPesewas < 0 || r.MarginCapPesewas < 0 {
+		return errors.New("margin_floor_pesewas and margin_cap_pesewas must not be negative")
+	}
+	if r.MarginCapPesewas > 0 && r.MarginCapPesewas < r.MarginFloorPesewas {
+		return errors.New("margin_cap_pesewas must not be below margin_floor_pesewas")
+	}
+	if r.WithdrawalFeeMomoPesewas < 0 || r.WithdrawalFeeBankPesewas < 0 || r.WithdrawalFeeWaiverPesewas < 0 {
+		return errors.New("withdrawal fees must not be negative")
 	}
 	switch r.AllocationType {
 	case "customer_only", "merchant_only", "split":
@@ -58,10 +86,14 @@ func (h *Handler) UpsertGlobalFeeRule(c *fiber.Ctx) error {
 	before, beforeErr := h.Queries.GetGlobalFeeRule(c.Context())
 
 	rule, err := h.Queries.UpsertGlobalFeeRule(c.Context(), db.UpsertGlobalFeeRuleParams{
-		CollectionFeeBps: req.CollectionFeeBps,
-		PayoutFeeBps:     req.PayoutFeeBps,
-		MarginBps:        req.MarginBps,
-		AllocationType:   req.AllocationType,
+		CollectionFeeBps:           req.CollectionFeeBps,
+		MarginFloorPesewas:         req.MarginFloorPesewas,
+		MarginCapPesewas:           req.MarginCapPesewas,
+		WithdrawalFeeMomoPesewas:   req.WithdrawalFeeMomoPesewas,
+		WithdrawalFeeBankPesewas:   req.WithdrawalFeeBankPesewas,
+		WithdrawalFeeWaiverPesewas: req.WithdrawalFeeWaiverPesewas,
+		MarginBps:                  req.MarginBps,
+		AllocationType:             req.AllocationType,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to upsert global fee rule"})
@@ -70,13 +102,21 @@ func (h *Handler) UpsertGlobalFeeRule(c *fiber.Ctx) error {
 	var beforeJSON []byte
 	if beforeErr == nil {
 		beforeJSON, _ = json.Marshal(fiber.Map{
-			"collection_fee_bps": before.CollectionFeeBps, "payout_fee_bps": before.PayoutFeeBps,
-			"margin_bps": before.MarginBps, "commission_bps": before.CommissionBps, "allocation_type": before.AllocationType,
+			"collection_fee_bps": before.CollectionFeeBps, "margin_bps": before.MarginBps,
+			"commission_bps": before.CommissionBps, "allocation_type": before.AllocationType,
+			"margin_floor_pesewas": before.MarginFloorPesewas, "margin_cap_pesewas": before.MarginCapPesewas,
+			"withdrawal_fee_momo_pesewas":   before.WithdrawalFeeMomoPesewas,
+			"withdrawal_fee_bank_pesewas":   before.WithdrawalFeeBankPesewas,
+			"withdrawal_fee_waiver_pesewas": before.WithdrawalFeeWaiverPesewas,
 		})
 	}
 	after, _ := json.Marshal(fiber.Map{
-		"collection_fee_bps": rule.CollectionFeeBps, "payout_fee_bps": rule.PayoutFeeBps,
-		"margin_bps": rule.MarginBps, "commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType,
+		"collection_fee_bps": rule.CollectionFeeBps, "margin_bps": rule.MarginBps,
+		"commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType,
+		"margin_floor_pesewas": rule.MarginFloorPesewas, "margin_cap_pesewas": rule.MarginCapPesewas,
+		"withdrawal_fee_momo_pesewas":   rule.WithdrawalFeeMomoPesewas,
+		"withdrawal_fee_bank_pesewas":   rule.WithdrawalFeeBankPesewas,
+		"withdrawal_fee_waiver_pesewas": rule.WithdrawalFeeWaiverPesewas,
 	})
 	if err := writeAdminAuditLog(c, h, "fee_rule.global_update", "fee_rule", rule.ID, beforeJSON, after); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})
@@ -126,11 +166,15 @@ func (h *Handler) UpsertMerchantFeeRule(c *fiber.Ctx) error {
 	before, beforeErr := h.Queries.GetFeeRuleByMerchant(c.Context(), merchantID)
 
 	rule, err := h.Queries.UpsertMerchantFeeRule(c.Context(), db.UpsertMerchantFeeRuleParams{
-		MerchantID:       merchantID,
-		CollectionFeeBps: req.CollectionFeeBps,
-		PayoutFeeBps:     req.PayoutFeeBps,
-		MarginBps:        req.MarginBps,
-		AllocationType:   req.AllocationType,
+		MerchantID:                 merchantID,
+		CollectionFeeBps:           req.CollectionFeeBps,
+		MarginFloorPesewas:         req.MarginFloorPesewas,
+		MarginCapPesewas:           req.MarginCapPesewas,
+		WithdrawalFeeMomoPesewas:   req.WithdrawalFeeMomoPesewas,
+		WithdrawalFeeBankPesewas:   req.WithdrawalFeeBankPesewas,
+		WithdrawalFeeWaiverPesewas: req.WithdrawalFeeWaiverPesewas,
+		MarginBps:                  req.MarginBps,
+		AllocationType:             req.AllocationType,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to upsert merchant fee rule"})
@@ -139,13 +183,21 @@ func (h *Handler) UpsertMerchantFeeRule(c *fiber.Ctx) error {
 	var beforeJSON []byte
 	if beforeErr == nil {
 		beforeJSON, _ = json.Marshal(fiber.Map{
-			"collection_fee_bps": before.CollectionFeeBps, "payout_fee_bps": before.PayoutFeeBps,
-			"margin_bps": before.MarginBps, "commission_bps": before.CommissionBps, "allocation_type": before.AllocationType,
+			"collection_fee_bps": before.CollectionFeeBps, "margin_bps": before.MarginBps,
+			"commission_bps": before.CommissionBps, "allocation_type": before.AllocationType,
+			"margin_floor_pesewas": before.MarginFloorPesewas, "margin_cap_pesewas": before.MarginCapPesewas,
+			"withdrawal_fee_momo_pesewas":   before.WithdrawalFeeMomoPesewas,
+			"withdrawal_fee_bank_pesewas":   before.WithdrawalFeeBankPesewas,
+			"withdrawal_fee_waiver_pesewas": before.WithdrawalFeeWaiverPesewas,
 		})
 	}
 	after, _ := json.Marshal(fiber.Map{
-		"collection_fee_bps": rule.CollectionFeeBps, "payout_fee_bps": rule.PayoutFeeBps,
-		"margin_bps": rule.MarginBps, "commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType,
+		"collection_fee_bps": rule.CollectionFeeBps, "margin_bps": rule.MarginBps,
+		"commission_bps": rule.CommissionBps, "allocation_type": rule.AllocationType,
+		"margin_floor_pesewas": rule.MarginFloorPesewas, "margin_cap_pesewas": rule.MarginCapPesewas,
+		"withdrawal_fee_momo_pesewas":   rule.WithdrawalFeeMomoPesewas,
+		"withdrawal_fee_bank_pesewas":   rule.WithdrawalFeeBankPesewas,
+		"withdrawal_fee_waiver_pesewas": rule.WithdrawalFeeWaiverPesewas,
 	})
 	if err := writeAdminAuditLog(c, h, "fee_rule.merchant_override", "merchant", merchantID, beforeJSON, after); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write audit log"})

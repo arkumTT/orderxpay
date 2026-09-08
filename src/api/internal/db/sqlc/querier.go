@@ -300,9 +300,9 @@ type Querier interface {
 	// token that moved to a different merchant (see migration comment) is
 	// repointed rather than rejected.
 	UpsertDeviceToken(ctx context.Context, arg UpsertDeviceTokenParams) (DeviceToken, error)
-	// commission_bps is derived server-side (sum of the three components) so it
-	// can never drift from what the components actually add up to — every other
-	// reader (invoice engine, checkout) still just reads the one blended number.
+	// commission_bps is derived server-side (collection + margin) so it can never
+	// drift from what the components actually add up to — every other reader
+	// (invoice engine, checkout) still just reads the one blended number.
 	UpsertGlobalFeeRule(ctx context.Context, arg UpsertGlobalFeeRuleParams) (FeeRule, error)
 	UpsertMerchantFeeRule(ctx context.Context, arg UpsertMerchantFeeRuleParams) (FeeRule, error)
 }

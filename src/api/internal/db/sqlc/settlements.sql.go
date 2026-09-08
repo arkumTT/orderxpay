@@ -67,9 +67,9 @@ func (q *Queries) ComputeSettlementAggregate(ctx context.Context, arg ComputeSet
 }
 
 const createSettlement = `-- name: CreateSettlement :one
-INSERT INTO settlements (merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at
+INSERT INTO settlements (merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, withdrawal_fee_pesewas, net_payout_pesewas)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas
 `
 
 type CreateSettlementParams struct {
@@ -79,6 +79,7 @@ type CreateSettlementParams struct {
 	GrossCollectionsPesewas int64       `json:"gross_collections_pesewas"`
 	PspFeesPesewas          int64       `json:"psp_fees_pesewas"`
 	CommissionPesewas       int64       `json:"commission_pesewas"`
+	WithdrawalFeePesewas    int64       `json:"withdrawal_fee_pesewas"`
 	NetPayoutPesewas        int64       `json:"net_payout_pesewas"`
 }
 
@@ -90,6 +91,7 @@ func (q *Queries) CreateSettlement(ctx context.Context, arg CreateSettlementPara
 		arg.GrossCollectionsPesewas,
 		arg.PspFeesPesewas,
 		arg.CommissionPesewas,
+		arg.WithdrawalFeePesewas,
 		arg.NetPayoutPesewas,
 	)
 	var i Settlement
@@ -105,12 +107,13 @@ func (q *Queries) CreateSettlement(ctx context.Context, arg CreateSettlementPara
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WithdrawalFeePesewas,
 	)
 	return i, err
 }
 
 const getSettlement = `-- name: GetSettlement :one
-SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at FROM settlements WHERE id = $1
+SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas FROM settlements WHERE id = $1
 `
 
 func (q *Queries) GetSettlement(ctx context.Context, id pgtype.UUID) (Settlement, error) {
@@ -128,12 +131,13 @@ func (q *Queries) GetSettlement(ctx context.Context, id pgtype.UUID) (Settlement
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WithdrawalFeePesewas,
 	)
 	return i, err
 }
 
 const listSettlementsAdmin = `-- name: ListSettlementsAdmin :many
-SELECT s.id, s.merchant_id, s.period_start, s.period_end, s.gross_collections_pesewas, s.psp_fees_pesewas, s.commission_pesewas, s.net_payout_pesewas, s.status, s.created_at, s.updated_at, m.business_name AS merchant_business_name
+SELECT s.id, s.merchant_id, s.period_start, s.period_end, s.gross_collections_pesewas, s.psp_fees_pesewas, s.commission_pesewas, s.net_payout_pesewas, s.status, s.created_at, s.updated_at, s.withdrawal_fee_pesewas, m.business_name AS merchant_business_name
 FROM settlements s
 JOIN merchants m ON m.id = s.merchant_id
 WHERE ($1::text = '' OR s.status = $1::text)
@@ -159,6 +163,7 @@ type ListSettlementsAdminRow struct {
 	Status                  string             `json:"status"`
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+	WithdrawalFeePesewas    int64              `json:"withdrawal_fee_pesewas"`
 	MerchantBusinessName    string             `json:"merchant_business_name"`
 }
 
@@ -186,6 +191,7 @@ func (q *Queries) ListSettlementsAdmin(ctx context.Context, arg ListSettlementsA
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WithdrawalFeePesewas,
 			&i.MerchantBusinessName,
 		); err != nil {
 			return nil, err
@@ -199,7 +205,7 @@ func (q *Queries) ListSettlementsAdmin(ctx context.Context, arg ListSettlementsA
 }
 
 const listSettlementsByMerchant = `-- name: ListSettlementsByMerchant :many
-SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at FROM settlements WHERE merchant_id = $1 ORDER BY period_start DESC
+SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas FROM settlements WHERE merchant_id = $1 ORDER BY period_start DESC
 `
 
 func (q *Queries) ListSettlementsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Settlement, error) {
@@ -223,6 +229,7 @@ func (q *Queries) ListSettlementsByMerchant(ctx context.Context, merchantID pgty
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WithdrawalFeePesewas,
 		); err != nil {
 			return nil, err
 		}
@@ -268,7 +275,7 @@ func (q *Queries) MarkPaymentsSettled(ctx context.Context, arg MarkPaymentsSettl
 
 const setSettlementStatus = `-- name: SetSettlementStatus :one
 UPDATE settlements SET status = $2 WHERE id = $1
-RETURNING id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at
+RETURNING id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas
 `
 
 type SetSettlementStatusParams struct {
@@ -291,6 +298,7 @@ func (q *Queries) SetSettlementStatus(ctx context.Context, arg SetSettlementStat
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WithdrawalFeePesewas,
 	)
 	return i, err
 }

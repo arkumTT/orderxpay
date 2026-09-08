@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -118,6 +119,21 @@ func (h *Handler) GenerateSettlement(c *fiber.Ctx) error {
 		return badRequest(c, "no unsettled successful payments for this merchant in the given period")
 	}
 
+	// Section 7.2: a merchant can hold payouts back until they are worth
+	// taking. The withdrawal fee below is flat, so paying out ₵20 a day costs
+	// proportionally far more than paying out ₵300 once a week — the
+	// threshold is how a merchant opts into the cheaper shape.
+	if agg.NetPayoutPesewas < merchant.PayoutMinThresholdPesewas {
+		return badRequest(c, fmt.Sprintf(
+			"net payout of %s is below this merchant's minimum payout threshold of %s",
+			formatPesewas(agg.NetPayoutPesewas), formatPesewas(merchant.PayoutMinThresholdPesewas)))
+	}
+
+	withdrawalFee, err := h.withdrawalFeeFor(c.Context(), merchantID, merchant.PayoutAccountType, agg.NetPayoutPesewas)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to resolve withdrawal fee"})
+	}
+
 	settlement, err := qtx.CreateSettlement(c.Context(), db.CreateSettlementParams{
 		MerchantID:              merchantID,
 		PeriodStart:             pgtype.Date{Time: periodStart, Valid: true},
@@ -125,7 +141,8 @@ func (h *Handler) GenerateSettlement(c *fiber.Ctx) error {
 		GrossCollectionsPesewas: agg.GrossCollectionsPesewas,
 		PspFeesPesewas:          agg.PspFeesPesewas,
 		CommissionPesewas:       agg.CommissionPesewas,
-		NetPayoutPesewas:        agg.NetPayoutPesewas,
+		WithdrawalFeePesewas:    withdrawalFee,
+		NetPayoutPesewas:        agg.NetPayoutPesewas - withdrawalFee,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create settlement"})
@@ -145,6 +162,7 @@ func (h *Handler) GenerateSettlement(c *fiber.Ctx) error {
 		"gross_collections_pesewas": settlement.GrossCollectionsPesewas,
 		"psp_fees_pesewas":          settlement.PspFeesPesewas,
 		"commission_pesewas":        settlement.CommissionPesewas,
+		"withdrawal_fee_pesewas":    settlement.WithdrawalFeePesewas,
 		"net_payout_pesewas":        settlement.NetPayoutPesewas,
 		"payment_count":             agg.PaymentCount,
 		"period_start":              req.PeriodStart,
@@ -270,4 +288,49 @@ func writeAdminAuditLog(c *fiber.Ctx, h *Handler, action, targetEntity string, t
 		AfterState:   after,
 	})
 	return err
+}
+
+// withdrawalFeeFor prices a single payout. The PSP charges a flat amount per
+// transfer — not a percentage — so this is passed through flat rather than
+// folded into the blended collection rate, which is what fee_rules'
+// long-retired payout_fee_bps tried and could not do at any scale.
+//
+// The fee is waived entirely once a payout is large enough to carry it
+// comfortably: at the default ₵500 waiver the collection margin on that
+// volume is several times the ₵1 transfer cost, so the waiver funds itself
+// while pushing merchants towards the batching that makes payouts cheap for
+// everyone.
+//
+// A merchant with no payout account on file yet is priced as mobile money —
+// the overwhelming default in Ghana, and the cheaper of the two, so an
+// unset account can never overcharge.
+func (h *Handler) withdrawalFeeFor(ctx context.Context, merchantID pgtype.UUID, accountType pgtype.Text, netPayoutPesewas int64) (int64, error) {
+	rule, err := h.Queries.GetFeeRuleByMerchant(ctx, merchantID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		rule, err = h.Queries.GetGlobalFeeRule(ctx)
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	return withdrawalFee(rule.WithdrawalFeeMomoPesewas, rule.WithdrawalFeeBankPesewas,
+		rule.WithdrawalFeeWaiverPesewas, accountType, netPayoutPesewas), nil
+}
+
+func withdrawalFee(momoFee, bankFee, waiver int64, accountType pgtype.Text, netPayoutPesewas int64) int64 {
+	if waiver > 0 && netPayoutPesewas >= waiver {
+		return 0
+	}
+
+	fee := momoFee
+	if accountType.Valid && accountType.String == "bank" {
+		fee = bankFee
+	}
+
+	// Never hand back a negative payout: a fee larger than the payout it is
+	// charged on takes the whole payout and no more.
+	if fee > netPayoutPesewas {
+		fee = netPayoutPesewas
+	}
+	return fee
 }
