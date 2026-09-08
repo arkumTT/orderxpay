@@ -8,6 +8,12 @@ import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
 
+/// Mirrors merchantSetRateCapBps in fee_rules.go. Client-side only for a
+/// responsive error message before the round trip — the server enforces
+/// the real limit and this must never be trusted as the authoritative
+/// check.
+const _ownRateCapBps = 500;
+
 const _allocations = [
   ('customer_only', 'Customer Only', 'Default — added on top of the price'),
   ('merchant_only', 'Merchant Only', 'Absorbed from your sale price'),
@@ -22,6 +28,12 @@ String _pct(int bps) => (bps / 100).toStringAsFixed(1);
 /// screen only explains what it's built from (collection + payout + margin)
 /// and lets the merchant choose who covers the collection fee and whether
 /// they absorb the payout-fee component themselves.
+///
+/// A verified registered business additionally sees "Your rate": a
+/// self-service override of commission_bps itself, hard-capped at
+/// [_ownRateCapBps] in application code, matching the same cap the API
+/// enforces server-side (never trust the client copy — see
+/// SetMerchantOwnFeeRule in fee_rules.go for the authoritative check).
 class FeeSettingsScreen extends StatefulWidget {
   const FeeSettingsScreen({super.key});
 
@@ -37,11 +49,22 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
   String? _error;
   String _allocation = 'customer_only';
   FeeRule? _feeRule;
+  String? _businessType;
+  late final _ownRateController = TextEditingController();
+  String? _ownRateError;
+  bool _savingOwnRate = false;
+  String? _ownRateSaved;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _ownRateController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -52,11 +75,14 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
         _api.getFeeRule(merchantId),
       ]);
       final merchant = results[0] as Merchant;
+      final feeRule = results[1] as FeeRule;
       setState(() {
         _allocation = merchant.serviceChargeAllocation;
-        _feeRule = results[1] as FeeRule;
+        _feeRule = feeRule;
+        _businessType = merchant.businessType;
         _loading = false;
       });
+      _ownRateController.text = _pct(feeRule.commissionBps);
     } on ApiException catch (e) {
       setState(() {
         _error = e.message;
@@ -81,6 +107,46 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
       setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// Separate Save action from the allocation settings above: this changes
+  /// what the merchant is CHARGED, not who covers an existing charge, and
+  /// getting instant per-field feedback (which bound was violated) matters
+  /// more here than bundling it into one combined save.
+  Future<void> _saveOwnRate() async {
+    final pct = double.tryParse(_ownRateController.text.trim());
+    if (pct == null) {
+      setState(() => _ownRateError = 'Enter a rate, e.g. 3.00');
+      return;
+    }
+    final bps = (pct * 100).round();
+    if (bps < 0 || bps > _ownRateCapBps) {
+      setState(
+        () => _ownRateError =
+            'Must be between 0.00% and ${_pct(_ownRateCapBps)}%',
+      );
+      return;
+    }
+    setState(() {
+      _savingOwnRate = true;
+      _ownRateError = null;
+      _ownRateSaved = null;
+    });
+    try {
+      final updated = await _api.setOwnFeeRule(
+        Session.instance.merchantId!,
+        commissionBps: bps,
+      );
+      setState(() {
+        _feeRule = updated;
+        _ownRateController.text = _pct(updated.commissionBps);
+        _ownRateSaved = 'Saved — now ${_pct(updated.commissionBps)}%';
+      });
+    } on ApiException catch (e) {
+      setState(() => _ownRateError = e.message);
+    } finally {
+      if (mounted) setState(() => _savingOwnRate = false);
     }
   }
 
@@ -208,6 +274,74 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
               ],
             ),
           ),
+          if (_businessType == 'registered') ...[
+            const SizedBox(height: 16),
+            const Text(
+              'Your rate',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'As a verified registered business, you can set your own '
+              'blended rate — up to ${_pct(_ownRateCapBps)}%. This applies '
+              'right away.',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            OxpCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: OxpField(
+                          label: 'Blended rate (%)',
+                          controller: _ownRateController,
+                          hintText: '3.00',
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 22),
+                        child: OxpButton(
+                          label: _savingOwnRate ? 'Saving…' : 'Set rate',
+                          loading: _savingOwnRate,
+                          variant: OxpButtonVariant.secondary,
+                          onPressed: _savingOwnRate ? null : _saveOwnRate,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_ownRateError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _ownRateError!,
+                      style: const TextStyle(color: AppColors.statusDeclined, fontSize: 12),
+                    ),
+                  ],
+                  if (_ownRateSaved != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _ownRateSaved!,
+                      style: const TextStyle(color: AppColors.statusPaid, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Text(
+                    'Cannot go below the ${_pct(feeRule.collectionFeeBps)}% '
+                    'payment provider fee — that part is a real cost, not '
+                    'OrderxPay\'s margin, so it is never yours to set.',
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           const Text(
             'Withdrawals',
