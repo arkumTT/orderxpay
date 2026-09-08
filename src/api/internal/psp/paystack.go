@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -132,6 +133,70 @@ func (c *Client) RefundTransaction(ctx context.Context, reference string, amount
 	}
 	if !env.Status {
 		return nil, fmt.Errorf("paystack: refund failed: %s", env.Message)
+	}
+	return &env.Data, nil
+}
+
+// Bank is one entry from ListBanks — a bank or, in Ghana, a mobile money
+// network (MTN, Telecel Cash, AirtelTigo Money), which Paystack exposes
+// through the same endpoint distinguished by Type. Only Name and Code are
+// used by this codebase; other fields Paystack returns are ignored rather
+// than modeled.
+type Bank struct {
+	Name string `json:"name"`
+	Code string `json:"code"`
+	Type string `json:"type"` // "ghipss" (bank) | "mobile_money", for GHS
+}
+
+// BankType values for ListBanks' typeFilter and ResolveAccount's bankCode
+// namespace — Paystack Ghana's two payout rails.
+const (
+	BankTypeGhipss      = "ghipss"
+	BankTypeMobileMoney = "mobile_money"
+)
+
+// ListBanks returns the banks or mobile money networks Paystack supports
+// for currency (use "GHS"), filtered to typeFilter (BankTypeGhipss or
+// BankTypeMobileMoney) — this is the picker a merchant chooses their
+// network/bank from before entering an account number.
+func (c *Client) ListBanks(ctx context.Context, currency, typeFilter string) ([]Bank, error) {
+	path := fmt.Sprintf("/bank?currency=%s&type=%s", currency, typeFilter)
+	var env paystackEnvelope[[]Bank]
+	if err := c.do(ctx, http.MethodGet, path, nil, &env); err != nil {
+		return nil, err
+	}
+	if !env.Status {
+		return nil, fmt.Errorf("paystack: list banks failed: %s", env.Message)
+	}
+	return env.Data, nil
+}
+
+type ResolveAccountResult struct {
+	AccountNumber string `json:"account_number"`
+	// AccountName is the name Paystack has on file for this account —
+	// resolved from the bank/mobile network, never from anything the
+	// caller supplied. This is the entire point of the call: comparing an
+	// independently-resolved name against what the merchant expects is
+	// what catches a mistyped account number before money moves, per
+	// Paystack's account verification API (available for Nigeria and
+	// Ghana, free to call).
+	AccountName string `json:"account_name"`
+}
+
+// ResolveAccount verifies accountNumber against bankCode (a code from
+// ListBanks — either a GHIPSS bank code or a mobile money network code) and
+// returns the account holder's name on file. Read-only: unlike creating a
+// transfer recipient, this has no side effect on the Paystack side, so it's
+// safe to call speculatively while a merchant is still typing/correcting
+// their account number.
+func (c *Client) ResolveAccount(ctx context.Context, accountNumber, bankCode string) (*ResolveAccountResult, error) {
+	path := fmt.Sprintf("/bank/resolve?account_number=%s&bank_code=%s", url.QueryEscape(accountNumber), url.QueryEscape(bankCode))
+	var env paystackEnvelope[ResolveAccountResult]
+	if err := c.do(ctx, http.MethodGet, path, nil, &env); err != nil {
+		return nil, err
+	}
+	if !env.Status {
+		return nil, fmt.Errorf("paystack: resolve account failed: %s", env.Message)
 	}
 	return &env.Data, nil
 }

@@ -18,6 +18,11 @@ class Merchant {
     required this.status,
     required this.serviceChargeAllocation,
     required this.serviceChargeSplitBps,
+    required this.payoutAccountType,
+    required this.payoutAccountRef,
+    required this.payoutBankCode,
+    required this.payoutAccountName,
+    required this.payoutAccountVerifiedAt,
     required this.whatsappAutoReplyEnabled,
     required this.whatsappGreetingMessage,
     required this.whatsappCatalogId,
@@ -36,6 +41,20 @@ class Merchant {
   final String status;
   final String serviceChargeAllocation;
   final int? serviceChargeSplitBps;
+
+  /// Section 4.1: momo | bank, or null until a payout account is verified.
+  final String? payoutAccountType;
+  /// The wallet/account number — set together with payoutAccountType.
+  final String? payoutAccountRef;
+  /// The network/bank code from ApiClient.listPayoutBanks.
+  final String? payoutBankCode;
+  /// The name Paystack resolved for this account — never merchant-typed
+  /// text. Set (and cleared) together with payoutAccountVerifiedAt.
+  final String? payoutAccountName;
+  final DateTime? payoutAccountVerifiedAt;
+
+  bool get hasVerifiedPayoutAccount => payoutAccountVerifiedAt != null;
+
   final bool whatsappAutoReplyEnabled;
   final String? whatsappGreetingMessage; // null = use the app's generated default
   final String? whatsappCatalogId; // null = no Meta catalog connected yet (Section 6.2, admin-provisioned)
@@ -52,12 +71,30 @@ class Merchant {
     status: _str(j['status']),
     serviceChargeAllocation: _str(j['service_charge_allocation']),
     serviceChargeSplitBps: _intOrNull(j['service_charge_split_bps']),
+    payoutAccountType: _strOrNull(j['payout_account_type']),
+    payoutAccountRef: _strOrNull(j['payout_account_ref']),
+    payoutBankCode: _strOrNull(j['payout_bank_code']),
+    payoutAccountName: _strOrNull(j['payout_account_name']),
+    payoutAccountVerifiedAt: j['payout_account_verified_at'] == null
+        ? null
+        : DateTime.tryParse(_str(j['payout_account_verified_at'])),
     whatsappAutoReplyEnabled: j['whatsapp_auto_reply_enabled'] as bool? ?? true,
     whatsappGreetingMessage: _strOrNull(j['whatsapp_greeting_message']),
     whatsappCatalogId: _strOrNull(j['whatsapp_catalog_id']),
     whatsappPhoneNumberId: _strOrNull(j['whatsapp_phone_number_id']),
     deliveryEnabled: j['delivery_enabled'] as bool? ?? true,
   );
+}
+
+/// Section 4.1: one entry from ApiClient.listPayoutBanks — a bank or, for
+/// momo, a mobile money network (MTN, Telecel Cash, AirtelTigo Money).
+class PayoutBank {
+  PayoutBank({required this.name, required this.code});
+  final String name;
+  final String code;
+
+  factory PayoutBank.fromJson(Map<String, dynamic> j) =>
+      PayoutBank(name: _str(j['name']), code: _str(j['code']));
 }
 
 /// Section 4.8 (revised): the blended commissionBps the invoice engine and

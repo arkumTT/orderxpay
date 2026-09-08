@@ -258,6 +258,9 @@ type Merchant struct {
 	StorageUsedBytes          int64              `json:"storage_used_bytes"`
 	WhatsappCatalogID         pgtype.Text        `json:"whatsapp_catalog_id"`
 	BusinessType              pgtype.Text        `json:"business_type"`
+	PayoutBankCode            pgtype.Text        `json:"payout_bank_code"`
+	PayoutAccountName         pgtype.Text        `json:"payout_account_name"`
+	PayoutAccountVerifiedAt   pgtype.Timestamptz `json:"payout_account_verified_at"`
 }
 
 type MerchantLocation struct {

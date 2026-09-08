@@ -296,6 +296,12 @@ export type Merchant = {
   service_charge_split_bps: number | null;
   payout_account_type: "momo" | "bank" | null;
   payout_account_ref: string | null;
+  payout_bank_code: string | null;
+  // Resolved from the PSP against payout_account_ref/payout_bank_code —
+  // never merchant-supplied text. null until payout_account_verified_at is
+  // set; the two always change together.
+  payout_account_name: string | null;
+  payout_account_verified_at: string | null;
   payout_schedule: "on_demand" | "scheduled";
   payout_min_threshold_pesewas: number;
   created_at: string;

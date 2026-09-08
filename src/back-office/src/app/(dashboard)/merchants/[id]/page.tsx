@@ -142,6 +142,31 @@ export default async function MerchantDetailPage(
       </dl>
 
       <div className="rounded-lg border border-neutral-200 p-4 text-sm">
+        <h2 className="mb-1 font-medium text-neutral-900">Payout account</h2>
+        {merchant.payout_account_verified_at ? (
+          <div className="space-y-0.5">
+            <p className="text-neutral-900">
+              <span className="font-medium">{merchant.payout_account_name}</span>
+              <span className="ml-1 text-neutral-500">
+                — {merchant.payout_account_type === "bank" ? "Bank" : "Mobile Money"}{" "}
+                ({merchant.payout_bank_code}) {merchant.payout_account_ref}
+              </span>
+            </p>
+            <p className="text-xs text-neutral-400">
+              Verified {formatDate(merchant.payout_account_verified_at)} — the name above
+              is what Paystack resolved from the account number, not text the
+              merchant typed.
+            </p>
+          </div>
+        ) : (
+          <p className="text-amber-700">
+            Not verified — this merchant cannot receive a generated settlement
+            until they add and verify a payout account in the app.
+          </p>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-neutral-200 p-4 text-sm">
         <h2 className="mb-1 font-medium text-neutral-900">Fee allocation</h2>
         <p className="text-neutral-600">
           {ALLOCATION_LABEL[merchant.service_charge_allocation]}

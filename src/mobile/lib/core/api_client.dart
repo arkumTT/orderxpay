@@ -518,6 +518,66 @@ class ApiClient {
     return Merchant.fromJson(res as Map<String, dynamic>);
   }
 
+  /// Section 4.1 — the network/bank picker for payout account setup.
+  /// [accountType] is 'momo' or 'bank'.
+  Future<List<PayoutBank>> listPayoutBanks(
+    String merchantId,
+    String accountType,
+  ) async {
+    final res = await _send(
+      'GET',
+      '/api/v1/app/merchants/$merchantId/payout-account/banks?account_type=$accountType',
+    );
+    return (res as List)
+        .map((e) => PayoutBank.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Section 4.1 — previews the account holder's name Paystack has on file
+  /// for [accountNumber]/[bankCode], without saving anything. Throws
+  /// [ApiException] when the account can't be resolved (wrong number,
+  /// wrong network — the caller should let the merchant correct and retry,
+  /// not treat this as a server error).
+  Future<String> resolvePayoutAccount(
+    String merchantId, {
+    required String accountType,
+    required String accountNumber,
+    required String bankCode,
+  }) async {
+    final res = await _send(
+      'POST',
+      '/api/v1/app/merchants/$merchantId/payout-account/resolve',
+      body: {
+        'account_type': accountType,
+        'account_number': accountNumber,
+        'bank_code': bankCode,
+      },
+    );
+    return (res as Map<String, dynamic>)['account_name'] as String;
+  }
+
+  /// Section 4.1 — attaches a payout account after the merchant has
+  /// confirmed the resolved name from [resolvePayoutAccount]. The server
+  /// re-resolves independently before saving; nothing about the resolved
+  /// name is sent from the client on this call.
+  Future<Merchant> setPayoutAccount(
+    String merchantId, {
+    required String accountType,
+    required String accountNumber,
+    required String bankCode,
+  }) async {
+    final res = await _send(
+      'PATCH',
+      '/api/v1/app/merchants/$merchantId/payout-account',
+      body: {
+        'account_type': accountType,
+        'account_number': accountNumber,
+        'bank_code': bankCode,
+      },
+    );
+    return Merchant.fromJson(res as Map<String, dynamic>);
+  }
+
   /// commission_bps for this merchant (their own override, else the global
   /// default) — used to preview the invoice total client-side before
   /// submitting; the server recomputes authoritatively either way.
