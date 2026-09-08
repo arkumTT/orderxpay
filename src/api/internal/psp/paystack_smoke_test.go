@@ -98,7 +98,14 @@ func TestLiveInitializeTransaction(t *testing.T) {
 	}
 
 	result, err := c.InitializeTransaction(ctx, InitializeParams{
-		Email:         "paystack-smoke-test@orderxpay.test",
+		// Matches syntheticCustomerEmail's real domain in payments.go
+		// (checkout.orderxpay.app) rather than inventing one: the RFC 2606
+		// reserved .test TLD used here originally got a hard 400 from
+		// Paystack ("Invalid Email Address Passed") on the first live run
+		// of this test — Paystack validates the domain can plausibly
+		// resolve, and .test never can. That failure was this fixture's
+		// bug, not production's: production never uses .test.
+		Email:         "paystack-smoke-test@checkout.orderxpay.app",
 		AmountPesewas: 100, // GH₵1.00 — never actually charged, this only initializes
 		Currency:      "GHS",
 		Reference:     reference,
