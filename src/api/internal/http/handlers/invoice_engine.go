@@ -345,6 +345,22 @@ func (h *Handler) createInvoiceCore(ctx context.Context, p createInvoiceCorePara
 	deliveryBundled := p.DeliveryFeeHandling == "bundled"
 	amounts := computeInvoiceAmounts(subtotal, price, merchant.ServiceChargeAllocation, merchant.ServiceChargeSplitBps, p.DeliveryFeePesewas, deliveryBundled)
 
+	// KYC tier limits (Section 4.1), checked on the computed total rather
+	// than the caller's numbers, and before anything is inserted so there
+	// is no half-made invoice to clean up. Sitting here rather than in
+	// CreateInvoice covers every path that raises an invoice — the app, an
+	// accepted order request, WhatsApp — instead of only the HTTP one.
+	//
+	// This is the merchant-facing half of the check: they hear about the
+	// limit while the invoice is still theirs to change. The binding check
+	// is in InitiateCheckoutPayment, since an invoice can be raised under
+	// the cap and paid after other collections have consumed it.
+	if msg, err := h.enforceTierLimitFor(ctx, p.MerchantID, merchant.KycTier, amounts.TotalPesewas); err != nil {
+		return db.Invoice{}, nil, fmt.Errorf("check kyc tier limits: %w", err)
+	} else if msg != "" {
+		return db.Invoice{}, nil, newValidationError("%s", msg)
+	}
+
 	var lastErr error
 	for attempt := 0; attempt < maxReferenceAttempts; attempt++ {
 		invoice, lineItems, err := h.insertInvoice(ctx, p, resolvedLines, subtotal, merchant.ServiceChargeAllocation, amounts)

@@ -288,8 +288,8 @@ func (h *Handler) UpdateMerchantKYCTier(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return badRequest(c, "invalid request body")
 	}
-	if req.KYCTier != 0 && req.KYCTier != 1 {
-		return badRequest(c, "kyc_tier must be 0 or 1")
+	if req.KYCTier < 0 || req.KYCTier > 2 {
+		return badRequest(c, "kyc_tier must be 0, 1 or 2")
 	}
 
 	before, err := h.Queries.GetMerchant(c.Context(), id)

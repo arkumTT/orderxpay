@@ -1,6 +1,6 @@
 import "server-only";
 import { apiFetchServer } from "./session";
-import type { KYCSubmissionWithMerchant } from "./types";
+import type { KYCSubmissionWithMerchant, KYCTierLimit } from "./types";
 
 export function listKYCSubmissions(params?: {
   status?: string;
@@ -11,4 +11,8 @@ export function listKYCSubmissions(params?: {
   return apiFetchServer<KYCSubmissionWithMerchant[]>(
     `/api/v1/admin/kyc-submissions${query}`,
   );
+}
+
+export function listKYCTierLimits(): Promise<KYCTierLimit[]> {
+  return apiFetchServer<KYCTierLimit[]>("/api/v1/admin/kyc-tier-limits");
 }

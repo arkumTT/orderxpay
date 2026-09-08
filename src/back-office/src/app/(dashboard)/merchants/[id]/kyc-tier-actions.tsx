@@ -14,7 +14,7 @@ export function MerchantKYCTierActions({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function setTier(tier: 0 | 1) {
+  async function setTier(tier: 0 | 1 | 2) {
     setLoading(true);
     setError(null);
     try {
@@ -35,12 +35,12 @@ export function MerchantKYCTierActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {[0, 1].map((tier) => (
+      {[0, 1, 2].map((tier) => (
         <button
           key={tier}
           type="button"
           disabled={loading || kycTier === tier}
-          onClick={() => setTier(tier as 0 | 1)}
+          onClick={() => setTier(tier as 0 | 1 | 2)}
           className={`rounded-md border px-3 py-2 text-sm font-medium disabled:opacity-50 ${
             kycTier === tier
               ? "border-neutral-900 bg-neutral-900 text-white"

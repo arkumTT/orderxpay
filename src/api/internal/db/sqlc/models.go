@@ -193,19 +193,31 @@ type Item struct {
 }
 
 type KycSubmission struct {
-	ID                pgtype.UUID        `json:"id"`
-	MerchantID        pgtype.UUID        `json:"merchant_id"`
-	RequestedTier     int16              `json:"requested_tier"`
-	GhanaCardNumber   string             `json:"ghana_card_number"`
-	BusinessRegNumber pgtype.Text        `json:"business_reg_number"`
-	Notes             pgtype.Text        `json:"notes"`
-	Status            string             `json:"status"`
-	ReviewerNotes     pgtype.Text        `json:"reviewer_notes"`
-	ReviewedBy        pgtype.UUID        `json:"reviewed_by"`
-	ReviewedAt        pgtype.Timestamptz `json:"reviewed_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	SelfiePhotoPath   pgtype.Text        `json:"selfie_photo_path"`
+	ID                   pgtype.UUID        `json:"id"`
+	MerchantID           pgtype.UUID        `json:"merchant_id"`
+	RequestedTier        int16              `json:"requested_tier"`
+	GhanaCardNumber      string             `json:"ghana_card_number"`
+	BusinessRegNumber    pgtype.Text        `json:"business_reg_number"`
+	Notes                pgtype.Text        `json:"notes"`
+	Status               string             `json:"status"`
+	ReviewerNotes        pgtype.Text        `json:"reviewer_notes"`
+	ReviewedBy           pgtype.UUID        `json:"reviewed_by"`
+	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	SelfiePhotoPath      pgtype.Text        `json:"selfie_photo_path"`
+	BusinessType         string             `json:"business_type"`
+	Tin                  pgtype.Text        `json:"tin"`
+	EntityType           pgtype.Text        `json:"entity_type"`
+	RegistrationCertPath pgtype.Text        `json:"registration_cert_path"`
+}
+
+type KycTierLimit struct {
+	Tier                  int16              `json:"tier"`
+	PerTransactionPesewas pgtype.Int8        `json:"per_transaction_pesewas"`
+	DailyPesewas          pgtype.Int8        `json:"daily_pesewas"`
+	CumulativePesewas     pgtype.Int8        `json:"cumulative_pesewas"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Menu struct {
@@ -245,6 +257,7 @@ type Merchant struct {
 	WhatsappPhoneNumberID     pgtype.Text        `json:"whatsapp_phone_number_id"`
 	StorageUsedBytes          int64              `json:"storage_used_bytes"`
 	WhatsappCatalogID         pgtype.Text        `json:"whatsapp_catalog_id"`
+	BusinessType              pgtype.Text        `json:"business_type"`
 }
 
 type MerchantLocation struct {

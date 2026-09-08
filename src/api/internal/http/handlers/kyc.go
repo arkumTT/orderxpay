@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,16 +13,114 @@ import (
 	db "github.com/orderxpay/api/internal/db/sqlc"
 )
 
+// entityTypes are the Ghanaian business forms a registered merchant can
+// declare. Kept in lockstep with the kyc_submissions.entity_type CHECK — a
+// value the schema rejects should never reach the database as a 500.
+var entityTypes = map[string]bool{
+	"sole_proprietorship":          true,
+	"partnership":                  true,
+	"company_limited_by_shares":    true,
+	"company_limited_by_guarantee": true,
+	"ngo":                          true,
+}
+
 type submitKYCRequest struct {
-	GhanaCardNumber   string `json:"ghana_card_number"`
-	BusinessRegNumber string `json:"business_reg_number"`
-	Notes             string `json:"notes"`
+	// BusinessType forks the whole submission (Section 4.1):
+	//
+	//   informal    a trader with no registered entity — Ghana Card number
+	//               plus liveness, and nothing more. Approves to Tier 1.
+	//   registered  a registered business — the same identity evidence plus
+	//               a TIN, registration number, entity type and a scan of
+	//               the registration certificate. Approves to Tier 2.
+	//
+	// The requested tier is derived from this, never sent by the client:
+	// the schema pins informal to 1 and registered to 2 so the tier a
+	// merchant ends up with always matches the evidence a reviewer saw.
+	BusinessType string `json:"business_type"`
+
+	// Both forks. The Ghana Card is captured as a number plus a liveness
+	// check and nothing else — no image of the card is requested, uploaded
+	// or stored anywhere in this codebase, in line with the restriction on
+	// copying and scanning Ghana Card IDs. Do not add one.
+	GhanaCardNumber string `json:"ghana_card_number"`
 	// SelfiePhotoPath is the bare filename returned by a prior call to
 	// POST .../kyc-submissions/selfie (see UploadKYCSelfie) — the final
 	// frame of the on-device liveness challenge, not a freely-chosen
-	// gallery photo. Required: Section 4.1/7.1 makes the liveness check a
-	// requisite part of Tier 1 verification, not an optional add-on.
+	// gallery photo. Required on both forks: Section 4.1/7.1 makes the
+	// liveness check a requisite part of verification, not an add-on.
 	SelfiePhotoPath string `json:"selfie_photo_path"`
+
+	// Registered fork only, all four required together. Unlike the Ghana
+	// Card, a business registration certificate is an ordinary commercial
+	// document, so RegistrationCertPath holds a real uploaded file (see
+	// UploadKYCRegistrationCert) stored the same private, permission-gated
+	// way the liveness selfie is.
+	BusinessRegNumber    string `json:"business_reg_number"`
+	Tin                  string `json:"tin"`
+	EntityType           string `json:"entity_type"`
+	RegistrationCertPath string `json:"registration_cert_path"`
+
+	Notes string `json:"notes"`
+}
+
+// normalize trims every field and, on the informal fork, clears the
+// registered-only evidence rather than storing it. An informal submission
+// carrying a half-filled TIN would give a reviewer something to weigh that
+// the fork says is not part of this decision.
+func (r *submitKYCRequest) normalize() {
+	r.BusinessType = strings.TrimSpace(r.BusinessType)
+	r.GhanaCardNumber = strings.TrimSpace(r.GhanaCardNumber)
+	r.SelfiePhotoPath = strings.TrimSpace(r.SelfiePhotoPath)
+	r.BusinessRegNumber = strings.TrimSpace(r.BusinessRegNumber)
+	r.Tin = strings.TrimSpace(r.Tin)
+	r.EntityType = strings.TrimSpace(r.EntityType)
+	r.RegistrationCertPath = strings.TrimSpace(r.RegistrationCertPath)
+	r.Notes = strings.TrimSpace(r.Notes)
+
+	if r.BusinessType == "informal" {
+		r.Tin = ""
+		r.EntityType = ""
+		r.RegistrationCertPath = ""
+	}
+}
+
+// validate mirrors the kyc_submissions_registered_evidence CHECK, so the
+// merchant gets a sentence naming the missing field instead of a constraint
+// violation surfacing as a 500.
+func (r submitKYCRequest) validate() error {
+	if r.BusinessType != "informal" && r.BusinessType != "registered" {
+		return errors.New("business_type must be informal or registered")
+	}
+	if r.GhanaCardNumber == "" {
+		return errors.New("ghana_card_number is required")
+	}
+	if r.SelfiePhotoPath == "" {
+		return errors.New("selfie_photo_path is required — complete the liveness check first")
+	}
+	if r.BusinessType != "registered" {
+		return nil
+	}
+	if r.BusinessRegNumber == "" {
+		return errors.New("business_reg_number is required for a registered business")
+	}
+	if r.Tin == "" {
+		return errors.New("tin is required for a registered business")
+	}
+	if !entityTypes[r.EntityType] {
+		return errors.New("entity_type must be one of sole_proprietorship, partnership, company_limited_by_shares, company_limited_by_guarantee, ngo")
+	}
+	if r.RegistrationCertPath == "" {
+		return errors.New("registration_cert_path is required — upload your registration certificate first")
+	}
+	return nil
+}
+
+// requestedTier is derived, never taken from the client.
+func (r submitKYCRequest) requestedTier() int16 {
+	if r.BusinessType == "registered" {
+		return 2
+	}
+	return 1
 }
 
 // CreateKYCSubmission is the merchant-app entry point for a Tier 1 upgrade
@@ -40,11 +139,9 @@ func (h *Handler) CreateKYCSubmission(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return badRequest(c, "invalid request body")
 	}
-	if req.GhanaCardNumber == "" {
-		return badRequest(c, "ghana_card_number is required")
-	}
-	if req.SelfiePhotoPath == "" {
-		return badRequest(c, "selfie_photo_path is required — complete the liveness check first")
+	req.normalize()
+	if err := req.validate(); err != nil {
+		return badRequest(c, err.Error())
 	}
 
 	merchant, err := h.Queries.GetMerchant(c.Context(), merchantID)
@@ -53,8 +150,12 @@ func (h *Handler) CreateKYCSubmission(c *fiber.Ctx) error {
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load merchant"})
 	}
-	if merchant.KycTier >= 1 {
-		return badRequest(c, "merchant is already Tier 1 verified")
+	// Compared against the requested tier, not against 1: a Tier 1 informal
+	// trader who later registers their business must be able to submit
+	// again for Tier 2. Only a submission that would not move them forward
+	// is refused.
+	if merchant.KycTier >= req.requestedTier() {
+		return badRequest(c, fmt.Sprintf("merchant is already Tier %d verified", merchant.KycTier))
 	}
 
 	existing, err := h.Queries.GetOpenKYCSubmissionByMerchant(c.Context(), merchantID)
@@ -69,11 +170,15 @@ func (h *Handler) CreateKYCSubmission(c *fiber.Ctx) error {
 		}
 		// status == "more_info_requested" — resubmit onto the same row.
 		updated, err := h.Queries.ResubmitKYCSubmission(c.Context(), db.ResubmitKYCSubmissionParams{
-			ID:                existing.ID,
-			GhanaCardNumber:   req.GhanaCardNumber,
-			BusinessRegNumber: textOrNull(req.BusinessRegNumber),
-			Notes:             textOrNull(req.Notes),
-			SelfiePhotoPath:   textOrNull(req.SelfiePhotoPath),
+			ID:                   existing.ID,
+			BusinessType:         req.BusinessType,
+			GhanaCardNumber:      req.GhanaCardNumber,
+			SelfiePhotoPath:      textOrNull(req.SelfiePhotoPath),
+			BusinessRegNumber:    textOrNull(req.BusinessRegNumber),
+			Tin:                  textOrNull(req.Tin),
+			EntityType:           textOrNull(req.EntityType),
+			RegistrationCertPath: textOrNull(req.RegistrationCertPath),
+			Notes:                textOrNull(req.Notes),
 		})
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to resubmit KYC"})
@@ -82,12 +187,15 @@ func (h *Handler) CreateKYCSubmission(c *fiber.Ctx) error {
 	}
 
 	submission, err := h.Queries.CreateKYCSubmission(c.Context(), db.CreateKYCSubmissionParams{
-		MerchantID:        merchantID,
-		RequestedTier:     1,
-		GhanaCardNumber:   req.GhanaCardNumber,
-		BusinessRegNumber: textOrNull(req.BusinessRegNumber),
-		Notes:             textOrNull(req.Notes),
-		SelfiePhotoPath:   textOrNull(req.SelfiePhotoPath),
+		MerchantID:           merchantID,
+		BusinessType:         req.BusinessType,
+		GhanaCardNumber:      req.GhanaCardNumber,
+		SelfiePhotoPath:      textOrNull(req.SelfiePhotoPath),
+		BusinessRegNumber:    textOrNull(req.BusinessRegNumber),
+		Tin:                  textOrNull(req.Tin),
+		EntityType:           textOrNull(req.EntityType),
+		RegistrationCertPath: textOrNull(req.RegistrationCertPath),
+		Notes:                textOrNull(req.Notes),
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create KYC submission"})
@@ -205,9 +313,12 @@ func (h *Handler) ReviewKYCSubmission(c *fiber.Ctx) error {
 	}
 
 	if req.Status == "approved" {
-		if _, err := qtx.UpdateMerchantKYCTier(c.Context(), db.UpdateMerchantKYCTierParams{
-			ID:      submission.MerchantID,
-			KycTier: submission.RequestedTier,
+		// Tier and fork land together so a Tier 2 merchant always carries
+		// business_type 'registered' — the two cannot drift apart.
+		if _, err := qtx.ApproveMerchantKYC(c.Context(), db.ApproveMerchantKYCParams{
+			ID:           submission.MerchantID,
+			KycTier:      submission.RequestedTier,
+			BusinessType: textOrNull(submission.BusinessType),
 		}); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update merchant KYC tier"})
 		}
@@ -225,7 +336,7 @@ func (h *Handler) ReviewKYCSubmission(c *fiber.Ctx) error {
 	body := "Your verification submission was rejected: " + req.ReviewerNotes
 	switch updated.Status {
 	case "approved":
-		body = "Your verification was approved — you can now withdraw."
+		body = fmt.Sprintf("Your verification was approved — you're now Tier %d.", submission.RequestedTier)
 	case "more_info_requested":
 		body = "More information is needed for your verification: " + req.ReviewerNotes
 	}
