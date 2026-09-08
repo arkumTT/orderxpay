@@ -129,12 +129,24 @@ func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate payment reference"})
 	}
 
+	// Section 7's split payments — off for a merchant unless both a
+	// subaccount is provisioned AND the paystack_split_payments feature
+	// flag is on for them (see splitParamsFor's own comment). Neither
+	// being true is the ordinary path, unchanged: everything below is
+	// exactly what ran before split payments existed.
+	subaccountCode, transactionCharge, err := h.splitParamsFor(c.Context(), invoice, chargeAmount)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to resolve split payment routing"})
+	}
+
 	result, err := pspClient.InitializeTransaction(c.Context(), psp.InitializeParams{
-		Email:         syntheticCustomerEmail(invoice.CustomerContact),
-		AmountPesewas: chargeAmount,
-		Currency:      "GHS",
-		Reference:     pspReference,
-		CallbackURL:   fmt.Sprintf("%s/checkout/%s", h.WebBaseURL, invoice.Reference),
+		Email:                    syntheticCustomerEmail(invoice.CustomerContact),
+		AmountPesewas:            chargeAmount,
+		Currency:                 "GHS",
+		Reference:                pspReference,
+		CallbackURL:              fmt.Sprintf("%s/checkout/%s", h.WebBaseURL, invoice.Reference),
+		Subaccount:               subaccountCode,
+		TransactionChargePesewas: transactionCharge,
 	})
 	if err != nil {
 		log.Printf("paystack: initialize transaction failed: %v", err)
@@ -142,11 +154,12 @@ func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
 	}
 
 	if _, err := h.Queries.CreatePayment(c.Context(), db.CreatePaymentParams{
-		InvoiceID:     invoice.ID,
-		PspReference:  pspReference,
-		Method:        method,
-		AmountPesewas: chargeAmount,
-		Status:        "pending",
+		InvoiceID:              invoice.ID,
+		PspReference:           pspReference,
+		Method:                 method,
+		AmountPesewas:          chargeAmount,
+		Status:                 "pending",
+		PaystackSubaccountCode: textOrNull(subaccountCode),
 	}); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record payment attempt"})
 	}
@@ -361,6 +374,74 @@ func (h *Handler) creditSuccessfulPayment(ctx context.Context, pspReference, cha
 	})
 
 	return nil
+}
+
+// splitParamsFor decides whether this charge should be split at Paystack
+// (Section 7's "Paystack subaccounts and split payments") and, if so, the
+// exact flat commission to take. Returns ("", 0, nil) — meaning "don't
+// split" — whenever any of the following isn't true, which is also the
+// complete off-by-default state this shipped in:
+//
+//   - the merchant has a provisioned subaccount (set by SetPayoutAccount
+//     the first time a payout account is verified)
+//   - the paystack_split_payments feature flag is on for this merchant
+//     (globally, or via the per-merchant rollout list — Section 7.4)
+//
+// The commission is prorated to chargeAmount rather than the invoice's
+// full commission_pesewas, matching ComputeSettlementAggregate's math for
+// a part payment: a ₵30 payment on a ₵100 invoice should carry 30% of that
+// invoice's commission, not all of it. Integer division floors, so summing
+// transaction_charge across every partial payment on one invoice can land
+// a pesewa or two under the invoice's true commission — the same rounding
+// tolerance the settlement aggregate already accepts elsewhere.
+func (h *Handler) splitParamsFor(ctx context.Context, invoice db.Invoice, chargeAmount int64) (subaccountCode string, transactionChargePesewas int64, err error) {
+	merchant, err := h.Queries.GetMerchant(ctx, invoice.MerchantID)
+	if err != nil {
+		return "", 0, err
+	}
+	if !merchant.PaystackSubaccountCode.Valid || merchant.PaystackSubaccountCode.String == "" {
+		return "", 0, nil
+	}
+
+	enabled, err := h.Queries.GetFeatureFlagStatusForMerchant(ctx, db.GetFeatureFlagStatusForMerchantParams{
+		MerchantID: invoice.MerchantID,
+		Key:        "paystack_split_payments",
+	})
+	if err != nil {
+		return "", 0, err
+	}
+	if !enabled {
+		return "", 0, nil
+	}
+
+	charge := proratedCommissionPesewas(invoice.CommissionPesewas, invoice.TotalPesewas, chargeAmount)
+	if charge <= 0 {
+		// A commission this small only happens on a tiny partial payment
+		// against a floor-priced invoice, where integer division floors
+		// the prorated share to nothing. Rather than send Paystack a
+		// transaction_charge of exactly 0 — whose acceptance isn't
+		// confirmed, and InitializeTransaction's own guardrail refuses it
+		// regardless — this one charge simply isn't split; it lands in
+		// OrderxPay's balance and is later reconciled with the ordinary
+		// (unsplit) manual-settlement path, same as before split payments
+		// existed. Immaterial either way at this size.
+		return "", 0, nil
+	}
+	return merchant.PaystackSubaccountCode.String, charge, nil
+}
+
+// proratedCommissionPesewas is the pure arithmetic splitParamsFor uses,
+// pulled out for testability (same pattern as withdrawalFee in
+// settlements.go) — a full invoice's commission, scaled down to whatever
+// share of the invoice chargeAmount actually pays. Matches
+// ComputeSettlementAggregate's SQL exactly (same integer-division
+// truncation, same NULLIF-style zero guard), so a payment routed through
+// this and one aggregated by that query agree on what OrderxPay is owed.
+func proratedCommissionPesewas(invoiceCommissionPesewas, invoiceTotalPesewas, chargeAmountPesewas int64) int64 {
+	if invoiceTotalPesewas <= 0 {
+		return 0
+	}
+	return invoiceCommissionPesewas * chargeAmountPesewas / invoiceTotalPesewas
 }
 
 var errInvoiceNotPayable = errors.New("invoice is not in a payable state")

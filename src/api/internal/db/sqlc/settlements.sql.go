@@ -28,6 +28,11 @@ JOIN invoices i ON i.id = p.invoice_id
 WHERE i.merchant_id = $1
   AND p.status = 'success'
   AND p.settlement_id IS NULL
+  -- A split payment's merchant share never touched OrderxPay's balance —
+  -- Paystack already sent it straight to the merchant's own subaccount at
+  -- charge time (Section 7's split payments). Counting it here would have
+  -- OrderxPay pay the merchant a second time for money that already left.
+  AND p.paystack_subaccount_code IS NULL
   AND p.paid_at >= $2::timestamptz
   AND p.paid_at < $3::timestamptz
 `
@@ -249,6 +254,10 @@ WHERE p.invoice_id = i.id
   AND i.merchant_id = $2
   AND p.status = 'success'
   AND p.settlement_id IS NULL
+  -- Same filter as ComputeSettlementAggregate above, and must stay
+  -- identical — see that query's comment on split payments, and this
+  -- file's existing comment on why the two filters must always match.
+  AND p.paystack_subaccount_code IS NULL
   AND p.paid_at >= $3::timestamptz
   AND p.paid_at < $4::timestamptz
 `

@@ -261,6 +261,7 @@ type Merchant struct {
 	PayoutBankCode            pgtype.Text        `json:"payout_bank_code"`
 	PayoutAccountName         pgtype.Text        `json:"payout_account_name"`
 	PayoutAccountVerifiedAt   pgtype.Timestamptz `json:"payout_account_verified_at"`
+	PaystackSubaccountCode    pgtype.Text        `json:"paystack_subaccount_code"`
 }
 
 type MerchantLocation struct {
@@ -310,17 +311,18 @@ type OrderRequest struct {
 }
 
 type Payment struct {
-	ID                    pgtype.UUID        `json:"id"`
-	InvoiceID             pgtype.UUID        `json:"invoice_id"`
-	PspReference          string             `json:"psp_reference"`
-	Method                string             `json:"method"`
-	AmountPesewas         int64              `json:"amount_pesewas"`
-	Status                string             `json:"status"`
-	PaidAt                pgtype.Timestamptz `json:"paid_at"`
-	CreatedAt             pgtype.Timestamptz `json:"created_at"`
-	PspFeePesewas         int64              `json:"psp_fee_pesewas"`
-	SettlementID          pgtype.UUID        `json:"settlement_id"`
-	RefundedAmountPesewas int64              `json:"refunded_amount_pesewas"`
+	ID                     pgtype.UUID        `json:"id"`
+	InvoiceID              pgtype.UUID        `json:"invoice_id"`
+	PspReference           string             `json:"psp_reference"`
+	Method                 string             `json:"method"`
+	AmountPesewas          int64              `json:"amount_pesewas"`
+	Status                 string             `json:"status"`
+	PaidAt                 pgtype.Timestamptz `json:"paid_at"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	PspFeePesewas          int64              `json:"psp_fee_pesewas"`
+	SettlementID           pgtype.UUID        `json:"settlement_id"`
+	RefundedAmountPesewas  int64              `json:"refunded_amount_pesewas"`
+	PaystackSubaccountCode pgtype.Text        `json:"paystack_subaccount_code"`
 }
 
 type Permission struct {
