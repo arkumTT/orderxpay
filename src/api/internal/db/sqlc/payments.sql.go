@@ -12,9 +12,9 @@ import (
 )
 
 const createPayment = `-- name: CreatePayment :one
-INSERT INTO payments (invoice_id, psp_reference, method, amount_pesewas, status, paystack_subaccount_code)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code
+INSERT INTO payments (invoice_id, psp_reference, method, amount_pesewas, status, paystack_subaccount_code, provider)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code, provider
 `
 
 type CreatePaymentParams struct {
@@ -24,11 +24,15 @@ type CreatePaymentParams struct {
 	AmountPesewas          int64       `json:"amount_pesewas"`
 	Status                 string      `json:"status"`
 	PaystackSubaccountCode pgtype.Text `json:"paystack_subaccount_code"`
+	Provider               string      `json:"provider"`
 }
 
 // paystack_subaccount_code is set only when this specific charge was split
 // at initialize time — null (the default) is the ordinary path, unchanged
-// from before split payments existed.
+// from before split payments existed. provider defaults to 'paystack' at
+// the schema level (Paystack was the only provider before Hubtel USSD
+// existed) but is passed explicitly here so a Hubtel-initiated payment can
+// say so.
 func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error) {
 	row := q.db.QueryRow(ctx, createPayment,
 		arg.InvoiceID,
@@ -37,6 +41,7 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 		arg.AmountPesewas,
 		arg.Status,
 		arg.PaystackSubaccountCode,
+		arg.Provider,
 	)
 	var i Payment
 	err := row.Scan(
@@ -52,12 +57,13 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 		&i.SettlementID,
 		&i.RefundedAmountPesewas,
 		&i.PaystackSubaccountCode,
+		&i.Provider,
 	)
 	return i, err
 }
 
 const getPayment = `-- name: GetPayment :one
-SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code FROM payments WHERE id = $1
+SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code, provider FROM payments WHERE id = $1
 `
 
 func (q *Queries) GetPayment(ctx context.Context, id pgtype.UUID) (Payment, error) {
@@ -76,12 +82,13 @@ func (q *Queries) GetPayment(ctx context.Context, id pgtype.UUID) (Payment, erro
 		&i.SettlementID,
 		&i.RefundedAmountPesewas,
 		&i.PaystackSubaccountCode,
+		&i.Provider,
 	)
 	return i, err
 }
 
 const getPaymentByPSPReference = `-- name: GetPaymentByPSPReference :one
-SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code FROM payments WHERE psp_reference = $1
+SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code, provider FROM payments WHERE psp_reference = $1
 `
 
 func (q *Queries) GetPaymentByPSPReference(ctx context.Context, pspReference string) (Payment, error) {
@@ -100,12 +107,13 @@ func (q *Queries) GetPaymentByPSPReference(ctx context.Context, pspReference str
 		&i.SettlementID,
 		&i.RefundedAmountPesewas,
 		&i.PaystackSubaccountCode,
+		&i.Provider,
 	)
 	return i, err
 }
 
 const listPaymentsByInvoice = `-- name: ListPaymentsByInvoice :many
-SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code FROM payments WHERE invoice_id = $1 ORDER BY created_at
+SELECT id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code, provider FROM payments WHERE invoice_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) ([]Payment, error) {
@@ -130,6 +138,7 @@ func (q *Queries) ListPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UU
 			&i.SettlementID,
 			&i.RefundedAmountPesewas,
 			&i.PaystackSubaccountCode,
+			&i.Provider,
 		); err != nil {
 			return nil, err
 		}
@@ -145,7 +154,7 @@ const setPaymentStatus = `-- name: SetPaymentStatus :one
 UPDATE payments
 SET status = $2, psp_fee_pesewas = $3, method = $4, paid_at = CASE WHEN $2 = 'success' THEN now() ELSE paid_at END
 WHERE id = $1
-RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code
+RETURNING id, invoice_id, psp_reference, method, amount_pesewas, status, paid_at, created_at, psp_fee_pesewas, settlement_id, refunded_amount_pesewas, paystack_subaccount_code, provider
 `
 
 type SetPaymentStatusParams struct {
@@ -176,6 +185,7 @@ func (q *Queries) SetPaymentStatus(ctx context.Context, arg SetPaymentStatusPara
 		&i.SettlementID,
 		&i.RefundedAmountPesewas,
 		&i.PaystackSubaccountCode,
+		&i.Provider,
 	)
 	return i, err
 }

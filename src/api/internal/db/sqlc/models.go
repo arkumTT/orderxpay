@@ -323,6 +323,7 @@ type Payment struct {
 	SettlementID           pgtype.UUID        `json:"settlement_id"`
 	RefundedAmountPesewas  int64              `json:"refunded_amount_pesewas"`
 	PaystackSubaccountCode pgtype.Text        `json:"paystack_subaccount_code"`
+	Provider               string             `json:"provider"`
 }
 
 type Permission struct {

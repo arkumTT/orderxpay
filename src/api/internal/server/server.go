@@ -37,6 +37,10 @@ type Options struct {
 	SMTPFromEmail string
 	SMTPFromName  string
 
+	HubtelClientID     string
+	HubtelClientSecret string
+	HubtelPOSSalesID   string
+
 	FirebaseServiceAccountJSON string
 }
 
@@ -73,6 +77,10 @@ func New(opts Options) *fiber.App {
 		SMTPPassword:  opts.SMTPPassword,
 		SMTPFromEmail: opts.SMTPFromEmail,
 		SMTPFromName:  opts.SMTPFromName,
+
+		HubtelClientID:     opts.HubtelClientID,
+		HubtelClientSecret: opts.HubtelClientSecret,
+		HubtelPOSSalesID:   opts.HubtelPOSSalesID,
 
 		FirebaseServiceAccountJSON: opts.FirebaseServiceAccountJSON,
 	})
