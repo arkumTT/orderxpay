@@ -113,43 +113,95 @@ func (h *Handler) resolveLineItems(ctx context.Context, merchantID pgtype.UUID, 
 	return resolved, subtotal, nil
 }
 
-// invoiceAmounts is the Section 4.8 fee calculation. ServiceChargePesewas is
-// always the amount disclosed to and paid by the customer on top of the
-// subtotal: under merchant_only it's zero (the merchant absorbs the full
-// commission at settlement instead); under split,
-// merchants.service_charge_split_bps is the percentage of the commission
-// charged to the customer, the remainder absorbed by the merchant.
+// invoiceAmounts is the Section 4.8 fee calculation.
+//
+// Two properties this has to hold, both found the hard way:
+//
+//  1. The commission base is the full amount that actually moves through
+//     the PSP — goods plus any delivery fee bundled into the invoice — not
+//     the goods subtotal alone. Paystack charges its percentage on
+//     everything it collects, so commissioning only the subtotal meant a
+//     bundled delivery fee cost OrderxPay a PSP fee it earned nothing back
+//     on: a ₵20 order carrying a ₵50 delivery fee settled at a real loss.
+//
+//  2. The customer-borne share is grossed up, not added on top. Adding
+//     2.5% to ₵100 bills ₵102.50 — but the PSP then takes its cut of
+//     ₵102.50, so the realised margin lands under the configured rate.
+//     Solving total = base / (1 - rate) bills ₵102.56 instead, leaves the
+//     merchant exactly their asking price, and makes the platform margin
+//     exactly (commission rate - PSP rate) × total under every allocation.
+//
+// ServiceChargePesewas keeps its original meaning: the amount disclosed to
+// and paid by the customer on top of the merchant's asking price — zero
+// under merchant_only, the whole commission under customer_only, and
+// merchants.service_charge_split_bps of it under split.
 type invoiceAmounts struct {
 	CommissionPesewas    int64
 	ServiceChargePesewas int64
 	TotalPesewas         int64
 }
 
-func computeInvoiceAmounts(subtotal int64, commissionBps int32, allocation string, splitBps pgtype.Int4, deliveryFeePesewas int64, deliveryBundled bool) invoiceAmounts {
-	commission := subtotal * int64(commissionBps) / 10000
-
-	var serviceCharge int64
+// customerCommissionShareBps is how much of the commission the customer
+// pays on top of the merchant's asking price, in bps of the commission
+// (10000 = the customer pays all of it). An unrecognised allocation is
+// treated as merchant_only — the safe direction, since it never surprises
+// a customer with an undisclosed charge.
+func customerCommissionShareBps(allocation string, splitBps pgtype.Int4) int64 {
 	switch allocation {
 	case "customer_only":
-		serviceCharge = commission
-	case "merchant_only":
-		serviceCharge = 0
+		return 10000
 	case "split":
-		var bps int64
-		if splitBps.Valid {
-			bps = int64(splitBps.Int32)
+		if !splitBps.Valid {
+			return 0
 		}
-		serviceCharge = commission * bps / 10000
+		share := int64(splitBps.Int32)
+		if share < 0 {
+			return 0
+		}
+		if share > 10000 {
+			return 10000
+		}
+		return share
+	default:
+		return 0
+	}
+}
+
+// computeInvoiceAmounts is pure and total: it assumes commissionBps has
+// already been range-checked by commissionForMerchant, which rejects rates
+// at or above 100% (those make the gross-up below unsolvable).
+func computeInvoiceAmounts(subtotal int64, commissionBps int32, allocation string, splitBps pgtype.Int4, deliveryFeePesewas int64, deliveryBundled bool) invoiceAmounts {
+	// base is what the merchant is asking to receive: goods, plus a
+	// bundled delivery fee (collected on their behalf and paid out to
+	// them, see ComputeSettlementAggregate). An "external" delivery fee is
+	// settled directly between customer and courier and never reaches the
+	// invoice total, so it is not part of the base.
+	base := subtotal
+	if deliveryBundled {
+		base += deliveryFeePesewas
 	}
 
-	total := subtotal + serviceCharge
-	if deliveryBundled {
-		total += deliveryFeePesewas
+	// Gross-up: total = base / (1 - rate x customerShare). Held in bps
+	// throughout so no float ever touches a money value.
+	effectiveBps := int64(commissionBps) * customerCommissionShareBps(allocation, splitBps) / 10000
+	denominator := 10000 - effectiveBps
+
+	total := base
+	if denominator > 0 && denominator < 10000 {
+		// Round to the nearest pesewa, not up: the merchant then receives
+		// exactly their asking price back out of the grossed-up total, which
+		// is the promise the customer-pays-the-fee setting makes.
+		total = (base*10000 + denominator/2) / denominator
 	}
+
+	// Commission is a share of everything collected, matching how the PSP
+	// charges. Truncating rather than rounding up leaves the sub-pesewa
+	// remainder with OrderxPay instead of shaving the merchant payout.
+	commission := total * int64(commissionBps) / 10000
 
 	return invoiceAmounts{
 		CommissionPesewas:    commission,
-		ServiceChargePesewas: serviceCharge,
+		ServiceChargePesewas: total - base,
 		TotalPesewas:         total,
 	}
 }
@@ -167,6 +219,13 @@ func (h *Handler) commissionForMerchant(ctx context.Context, merchantID pgtype.U
 	}
 	if err != nil {
 		return 0, err
+	}
+	// A rate at or above 100% makes the customer-borne gross-up in
+	// computeInvoiceAmounts unsolvable, and is a configuration mistake
+	// rather than a pricing choice — the fee_rules CHECK constraint only
+	// enforces a lower bound.
+	if rule.CommissionBps < 0 || rule.CommissionBps >= 10000 {
+		return 0, fmt.Errorf("fee rule commission of %d bps is out of range — it must be under 10000 bps (100%%)", rule.CommissionBps)
 	}
 	return rule.CommissionBps, nil
 }
