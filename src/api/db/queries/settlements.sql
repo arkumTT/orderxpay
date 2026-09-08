@@ -1,6 +1,6 @@
 -- name: CreateSettlement :one
-INSERT INTO settlements (merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO settlements (merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, withdrawal_fee_pesewas, net_payout_pesewas)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: ListSettlementsByMerchant :many

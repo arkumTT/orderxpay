@@ -29,8 +29,7 @@ RETURNING *;
 -- name: UpdateMerchantFeeSettings :one
 UPDATE merchants
 SET service_charge_allocation = $2,
-    service_charge_split_bps = $3,
-    payout_fee_absorption = $4
+    service_charge_split_bps = $3
 WHERE id = $1
 RETURNING *;
 

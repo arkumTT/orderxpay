@@ -521,11 +521,6 @@ class ApiClient {
   /// commission_bps for this merchant (their own override, else the global
   /// default) — used to preview the invoice total client-side before
   /// submitting; the server recomputes authoritatively either way.
-  Future<int> getCommissionBps(String merchantId) async {
-    final res = await _send('GET', '/api/v1/app/merchants/$merchantId/fee-rule');
-    return (res as Map<String, dynamic>)['commission_bps'] as int;
-  }
-
   /// Full fee-rule breakdown (Section 4.8, revised) for the Service Charge
   /// settings screen's "How this is calculated" card.
   Future<FeeRule> getFeeRule(String merchantId) async {
@@ -582,7 +577,6 @@ class ApiClient {
     String merchantId, {
     required String allocation,
     int? splitBps,
-    String? payoutFeeAbsorption,
   }) async {
     final res = await _send(
       'PATCH',
@@ -590,7 +584,6 @@ class ApiClient {
       body: {
         'service_charge_allocation': allocation,
         if (splitBps != null) 'service_charge_split_bps': splitBps,
-        if (payoutFeeAbsorption != null) 'payout_fee_absorption': payoutFeeAbsorption,
       },
     );
     return Merchant.fromJson(res as Map<String, dynamic>);

@@ -27,17 +27,19 @@ export function MerchantOverrides({
 }) {
   const router = useRouter();
   const [merchantId, setMerchantId] = useState("");
-  const [collectionPct, setCollectionPct] = useState("2.00");
-  const [payoutPct, setPayoutPct] = useState("1.00");
-  const [marginPct, setMarginPct] = useState("1.00");
+  const [collectionPct, setCollectionPct] = useState("1.95");
+  const [marginPct, setMarginPct] = useState("0.55");
+  const [marginFloorGhs, setMarginFloorGhs] = useState("0.20");
+  const [marginCapGhs, setMarginCapGhs] = useState("25.00");
+  const [momoFeeGhs, setMomoFeeGhs] = useState("1.00");
+  const [bankFeeGhs, setBankFeeGhs] = useState("8.00");
+  const [waiverGhs, setWaiverGhs] = useState("500.00");
   const [allocation, setAllocation] = useState("customer_only");
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const blendedPct = (
-    (parseFloat(collectionPct) || 0) +
-    (parseFloat(payoutPct) || 0) +
-    (parseFloat(marginPct) || 0)
+    (parseFloat(collectionPct) || 0) + (parseFloat(marginPct) || 0)
   ).toFixed(2);
 
   async function addOverride(e: React.FormEvent) {
@@ -51,9 +53,13 @@ export function MerchantOverrides({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           collection_fee_bps: Math.round(parseFloat(collectionPct) * 100),
-          payout_fee_bps: Math.round(parseFloat(payoutPct) * 100),
           margin_bps: Math.round(parseFloat(marginPct) * 100),
           allocation_type: allocation,
+          margin_floor_pesewas: Math.round(parseFloat(marginFloorGhs) * 100),
+          margin_cap_pesewas: Math.round(parseFloat(marginCapGhs) * 100),
+          withdrawal_fee_momo_pesewas: Math.round(parseFloat(momoFeeGhs) * 100),
+          withdrawal_fee_bank_pesewas: Math.round(parseFloat(bankFeeGhs) * 100),
+          withdrawal_fee_waiver_pesewas: Math.round(parseFloat(waiverGhs) * 100),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -127,17 +133,77 @@ export function MerchantOverrides({
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-neutral-500" htmlFor="override-payout">
-            Payout fee %
+          <label className="text-xs text-neutral-500" htmlFor="override-floor">
+            Margin floor ₵
           </label>
           <input
-            id="override-payout"
+            id="override-floor"
             type="number"
             step="0.01"
             min="0"
             required
-            value={payoutPct}
-            onChange={(e) => setPayoutPct(e.target.value)}
+            value={marginFloorGhs}
+            onChange={(e) => setMarginFloorGhs(e.target.value)}
+            className="w-24 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-neutral-500" htmlFor="override-cap">
+            Margin cap ₵
+          </label>
+          <input
+            id="override-cap"
+            type="number"
+            step="0.01"
+            min="0"
+            required
+            value={marginCapGhs}
+            onChange={(e) => setMarginCapGhs(e.target.value)}
+            className="w-24 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-neutral-500" htmlFor="override-momo">
+            MoMo payout ₵
+          </label>
+          <input
+            id="override-momo"
+            type="number"
+            step="0.01"
+            min="0"
+            required
+            value={momoFeeGhs}
+            onChange={(e) => setMomoFeeGhs(e.target.value)}
+            className="w-24 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-neutral-500" htmlFor="override-bank">
+            Bank payout ₵
+          </label>
+          <input
+            id="override-bank"
+            type="number"
+            step="0.01"
+            min="0"
+            required
+            value={bankFeeGhs}
+            onChange={(e) => setBankFeeGhs(e.target.value)}
+            className="w-24 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-neutral-500" htmlFor="override-waiver">
+            Payout free above ₵
+          </label>
+          <input
+            id="override-waiver"
+            type="number"
+            step="0.01"
+            min="0"
+            required
+            value={waiverGhs}
+            onChange={(e) => setWaiverGhs(e.target.value)}
             className="w-24 rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
         </div>

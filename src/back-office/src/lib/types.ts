@@ -9,6 +9,9 @@ export type Settlement = {
   gross_collections_pesewas: number;
   psp_fees_pesewas: number;
   commission_pesewas: number;
+  // Flat fee charged for moving this batch out to the merchant's wallet or
+  // bank, already deducted from net_payout_pesewas.
+  withdrawal_fee_pesewas: number;
   net_payout_pesewas: number;
   status: "pending" | "processing" | "paid" | "failed";
   created_at: string;
@@ -149,8 +152,16 @@ export type FeeRule = {
   merchant_id: string | null;
   commission_bps: number;
   collection_fee_bps: number;
-  payout_fee_bps: number;
   margin_bps: number;
+  // Clamps on OrderxPay's own margin per invoice, never on the PSP
+  // pass-through. 0 on either end means unclamped.
+  margin_floor_pesewas: number;
+  margin_cap_pesewas: number;
+  // Payouts are priced flat, matching what the PSP charges per transfer,
+  // and waived above the waiver threshold.
+  withdrawal_fee_momo_pesewas: number;
+  withdrawal_fee_bank_pesewas: number;
+  withdrawal_fee_waiver_pesewas: number;
   allocation_type: "customer_only" | "merchant_only" | "split";
   created_at: string;
   updated_at: string;
@@ -261,7 +272,6 @@ export type Merchant = {
   status: "pending" | "active" | "restricted" | "suspended";
   service_charge_allocation: "customer_only" | "merchant_only" | "split";
   service_charge_split_bps: number | null;
-  payout_fee_absorption: "merchant_absorbed" | "blended_into_rate";
   payout_account_type: "momo" | "bank" | null;
   payout_account_ref: string | null;
   payout_schedule: "on_demand" | "scheduled";
