@@ -14,6 +14,7 @@ class Merchant {
     required this.category,
     required this.phone,
     required this.kycTier,
+    required this.businessType,
     required this.status,
     required this.serviceChargeAllocation,
     required this.serviceChargeSplitBps,
@@ -29,6 +30,9 @@ class Merchant {
   final String? category;
   final String phone;
   final int kycTier;
+  /// informal | registered, or null until a submission is approved — an
+  /// unverified merchant hasn't told us which kind of business they are.
+  final String? businessType;
   final String status;
   final String serviceChargeAllocation;
   final int? serviceChargeSplitBps;
@@ -44,6 +48,7 @@ class Merchant {
     category: _strOrNull(j['category']),
     phone: _str(j['phone']),
     kycTier: _int(j['kyc_tier']),
+    businessType: _strOrNull(j['business_type']),
     status: _str(j['status']),
     serviceChargeAllocation: _str(j['service_charge_allocation']),
     serviceChargeSplitBps: _intOrNull(j['service_charge_split_bps']),
@@ -292,12 +297,41 @@ class OrderRequest {
   );
 }
 
+/// Section 4.1: the two verification paths. An informal trader submits a
+/// Ghana Card number and a liveness check and reaches Tier 1; a registered
+/// business submits the same plus a TIN, registration number, entity type
+/// and certificate, and reaches Tier 2. The requested tier follows the
+/// business type server-side — the app never sends one.
+///
+/// No image of the Ghana Card is captured on either path. The card is
+/// verified by number plus liveness check only, because copying or scanning
+/// Ghana Card IDs is restricted. A business registration certificate is an
+/// ordinary commercial document and is uploaded normally.
+class BusinessTypes {
+  static const informal = 'informal';
+  static const registered = 'registered';
+}
+
+/// Ghanaian business forms, matching the kyc_submissions.entity_type CHECK.
+const kEntityTypes = <String, String>{
+  'sole_proprietorship': 'Sole proprietorship',
+  'partnership': 'Partnership',
+  'company_limited_by_shares': 'Company limited by shares',
+  'company_limited_by_guarantee': 'Company limited by guarantee',
+  'ngo': 'NGO',
+};
+
 class KYCSubmission {
   KYCSubmission({
     required this.id,
     required this.status,
+    required this.businessType,
+    required this.requestedTier,
     required this.ghanaCardNumber,
     required this.businessRegNumber,
+    required this.tin,
+    required this.entityType,
+    required this.registrationCertPath,
     required this.notes,
     required this.reviewerNotes,
     required this.createdAt,
@@ -305,20 +339,79 @@ class KYCSubmission {
 
   final String id;
   final String status; // pending | approved | rejected | more_info_requested
+  final String businessType; // informal | registered
+  final int requestedTier;
   final String ghanaCardNumber;
   final String? businessRegNumber;
+  final String? tin;
+  final String? entityType;
+  final String? registrationCertPath;
   final String? notes;
   final String? reviewerNotes;
   final DateTime createdAt;
 
+  bool get isRegistered => businessType == BusinessTypes.registered;
+
   factory KYCSubmission.fromJson(Map<String, dynamic> j) => KYCSubmission(
     id: _str(j['id']),
     status: _str(j['status']),
+    businessType: _str(j['business_type']),
+    requestedTier: _int(j['requested_tier']),
     ghanaCardNumber: _str(j['ghana_card_number']),
     businessRegNumber: _strOrNull(j['business_reg_number']),
+    tin: _strOrNull(j['tin']),
+    entityType: _strOrNull(j['entity_type']),
+    registrationCertPath: _strOrNull(j['registration_cert_path']),
     notes: _strOrNull(j['notes']),
     reviewerNotes: _strOrNull(j['reviewer_notes']),
     createdAt: DateTime.tryParse(_str(j['created_at'])) ?? DateTime.now(),
+  );
+}
+
+/// Section 4.1: what this merchant's tier allows them to collect, and how
+/// much of it they've used. Every limit is 0 when uncapped, matching the
+/// API — the tier limits ship unset because the thresholds are governed by
+/// Bank of Ghana guidance and are entered in Back Office once confirmed.
+class MerchantLimits {
+  MerchantLimits({
+    required this.kycTier,
+    required this.businessType,
+    required this.perTransactionLimitPesewas,
+    required this.dailyLimitPesewas,
+    required this.cumulativeLimitPesewas,
+    required this.todayPesewas,
+    required this.cumulativePesewas,
+    required this.dailyRemainingPesewas,
+    required this.cumulativeRemainingPesewas,
+  });
+
+  final int kycTier;
+  final String? businessType;
+  final int perTransactionLimitPesewas;
+  final int dailyLimitPesewas;
+  final int cumulativeLimitPesewas;
+  final int todayPesewas;
+  final int cumulativePesewas;
+  final int dailyRemainingPesewas;
+  final int cumulativeRemainingPesewas;
+
+  /// True when nothing is capped at this tier, which is the shipped state.
+  /// The app says so plainly rather than drawing three empty progress bars.
+  bool get isUncapped =>
+      perTransactionLimitPesewas == 0 &&
+      dailyLimitPesewas == 0 &&
+      cumulativeLimitPesewas == 0;
+
+  factory MerchantLimits.fromJson(Map<String, dynamic> j) => MerchantLimits(
+    kycTier: _int(j['kyc_tier']),
+    businessType: _strOrNull(j['business_type']),
+    perTransactionLimitPesewas: _int(j['per_transaction_limit_pesewas']),
+    dailyLimitPesewas: _int(j['daily_limit_pesewas']),
+    cumulativeLimitPesewas: _int(j['cumulative_limit_pesewas']),
+    todayPesewas: _int(j['today_pesewas']),
+    cumulativePesewas: _int(j['cumulative_pesewas']),
+    dailyRemainingPesewas: _int(j['daily_remaining_pesewas']),
+    cumulativeRemainingPesewas: _int(j['cumulative_remaining_pesewas']),
   );
 }
 

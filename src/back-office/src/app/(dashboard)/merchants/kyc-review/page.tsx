@@ -1,15 +1,28 @@
 import Link from "next/link";
-import { listKYCSubmissions } from "@/lib/kyc";
+import { listKYCSubmissions, listKYCTierLimits } from "@/lib/kyc";
 import { ApiError } from "@/lib/session";
-import type { KYCSubmissionWithMerchant } from "@/lib/types";
+import type {
+  EntityType,
+  KYCSubmissionWithMerchant,
+  KYCTierLimit,
+} from "@/lib/types";
 import { KYCReviewActions } from "./review-actions";
 import { CsvExportButton } from "./csv-export-button";
+import { TierLimits } from "./tier-limits";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
   more_info_requested: "bg-blue-100 text-blue-800",
   approved: "bg-green-100 text-green-800",
   rejected: "bg-red-100 text-red-800",
+};
+
+const ENTITY_LABELS: Record<EntityType, string> = {
+  sole_proprietorship: "Sole proprietorship",
+  partnership: "Partnership",
+  company_limited_by_shares: "Company limited by shares",
+  company_limited_by_guarantee: "Company limited by guarantee",
+  ngo: "NGO",
 };
 
 function formatDate(d: string) {
@@ -36,11 +49,45 @@ function SubmissionRow({
         >
           {s.merchant_business_name}
         </Link>
+        <div className="mt-1 flex items-center gap-1.5">
+          <span
+            className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+              s.business_type === "registered"
+                ? "bg-violet-100 text-violet-800"
+                : "bg-neutral-100 text-neutral-700"
+            }`}
+          >
+            {s.business_type === "registered" ? "Registered" : "Informal"}
+          </span>
+          <span className="text-xs text-neutral-500">
+            → Tier {s.requested_tier}
+          </span>
+        </div>
         <div className="text-xs text-neutral-400">{formatDate(s.created_at)}</div>
       </td>
       <td className="px-4 py-3 align-top text-neutral-600">
         <div>Ghana Card: {s.ghana_card_number}</div>
         {s.business_reg_number && <div>Biz reg: {s.business_reg_number}</div>}
+        {s.tin && <div>TIN: {s.tin}</div>}
+        {s.entity_type && <div>{ENTITY_LABELS[s.entity_type]}</div>}
+        {s.business_type === "registered" && (
+          <div className="mt-1">
+            {s.registration_cert_path ? (
+              <a
+                href={`/api/kyc-submissions/${s.id}/registration-cert`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-blue-700 hover:underline"
+              >
+                View registration certificate
+              </a>
+            ) : (
+              <span className="text-xs text-red-600">
+                No certificate attached
+              </span>
+            )}
+          </div>
+        )}
         {s.notes && <div className="text-xs text-neutral-400">{s.notes}</div>}
       </td>
       <td className="px-4 py-3 align-top">
@@ -93,8 +140,12 @@ function SubmissionRow({
 
 export default async function KycReviewPage() {
   let submissions: KYCSubmissionWithMerchant[];
+  let limits: KYCTierLimit[];
   try {
-    submissions = await listKYCSubmissions();
+    [submissions, limits] = await Promise.all([
+      listKYCSubmissions(),
+      listKYCTierLimits(),
+    ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 403) {
       return (
@@ -126,14 +177,23 @@ export default async function KycReviewPage() {
           </span>
         </div>
         <p className="text-sm text-neutral-500">
-          Ghana Card and business registration details submitted for Tier 1
-          verification, alongside a liveness-check selfie captured on-device
-          (blink + head-turn challenge — see the merchant app). This stops a
-          static printed/screen photo, not a sophisticated pre-recorded
-          video; weigh that when a selfie looks off. Approving immediately
-          unlocks payouts for that merchant.
+          Verification submissions on both forks. An{" "}
+          <strong>informal</strong> trader submits a Ghana Card number and a
+          liveness-check selfie and approves to Tier 1; a{" "}
+          <strong>registered</strong> business submits the same plus a TIN,
+          registration number, entity type and certificate, and approves to
+          Tier 2. The tier follows the fork automatically — you are deciding
+          whether the evidence holds up, not which tier to grant.
+        </p>
+        <p className="mt-2 text-sm text-neutral-500">
+          The selfie comes from an on-device blink + head-turn challenge. It
+          stops a static printed or on-screen photo, not a sophisticated
+          pre-recorded video — weigh that when one looks off. No image of
+          the Ghana Card itself is ever collected, by design.
         </p>
       </div>
+
+      <TierLimits limits={limits} />
 
       <div className="flex justify-end">
         <CsvExportButton submissions={submissions} />

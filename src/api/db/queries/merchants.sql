@@ -19,7 +19,18 @@ ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
 -- name: UpdateMerchantKYCTier :one
+-- Used by the Back Office tier override, which moves the tier without a
+-- submission behind it and so leaves business_type alone.
 UPDATE merchants SET kyc_tier = $2 WHERE id = $1
+RETURNING *;
+
+-- name: ApproveMerchantKYC :one
+-- Used when a submission is approved: the tier and the fork that earned it
+-- land together, so a Tier 2 merchant always carries business_type
+-- 'registered' and the two can never drift apart.
+UPDATE merchants
+SET kyc_tier = sqlc.arg(kyc_tier), business_type = sqlc.arg(business_type)
+WHERE id = sqlc.arg(id)
 RETURNING *;
 
 -- name: UpdateMerchantStatus :one

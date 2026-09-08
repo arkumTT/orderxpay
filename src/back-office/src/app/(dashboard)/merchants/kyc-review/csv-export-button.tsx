@@ -27,9 +27,13 @@ export function CsvExportButton({
     const lines = [
       [
         "Merchant",
+        "Business type",
         "Requested tier",
         "Ghana Card number",
         "Business reg. number",
+        "TIN",
+        "Entity type",
+        "Certificate on file",
         "Notes",
         "Status",
         "Reviewer notes",
@@ -38,9 +42,15 @@ export function CsvExportButton({
       ],
       ...submissions.map((s) => [
         s.merchant_business_name,
+        s.business_type,
         s.requested_tier,
         s.ghana_card_number,
         s.business_reg_number ?? "",
+        s.tin ?? "",
+        s.entity_type ?? "",
+        // The filename itself is private and useless outside the app —
+        // export whether one exists, not where it lives.
+        s.registration_cert_path ? "yes" : "no",
         s.notes ?? "",
         s.status,
         s.reviewer_notes ?? "",

@@ -536,24 +536,50 @@ class ApiClient {
     return (res as List).map((e) => KYCSubmission.fromJson(e)).toList();
   }
 
+  /// Section 4.1 — submits a verification request on one of the two forks.
+  /// [businessType] is informal or registered; the requested tier is derived
+  /// from it server-side (informal → Tier 1, registered → Tier 2), so this
+  /// deliberately has no tier parameter to get wrong.
+  ///
+  /// The registered fork requires all four of businessRegNumber, tin,
+  /// entityType and registrationCertPath. The API rejects a partial set with
+  /// a message naming the missing field, so the app doesn't duplicate that
+  /// rule beyond what the form itself enforces.
   Future<KYCSubmission> submitKYC(
     String merchantId, {
+    required String businessType,
     required String ghanaCardNumber,
     required String selfiePhotoPath,
     String? businessRegNumber,
+    String? tin,
+    String? entityType,
+    String? registrationCertPath,
     String? notes,
   }) async {
     final res = await _send(
       'POST',
       '/api/v1/app/merchants/$merchantId/kyc-submissions',
       body: {
+        'business_type': businessType,
         'ghana_card_number': ghanaCardNumber,
         'selfie_photo_path': selfiePhotoPath,
         if (businessRegNumber != null) 'business_reg_number': businessRegNumber,
+        if (tin != null) 'tin': tin,
+        if (entityType != null) 'entity_type': entityType,
+        if (registrationCertPath != null)
+          'registration_cert_path': registrationCertPath,
         if (notes != null) 'notes': notes,
       },
     );
     return KYCSubmission.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Section 4.1 — what this merchant's tier lets them collect and how much
+  /// they've used. Returned even when nothing is capped, so the app can say
+  /// so rather than render an empty widget.
+  Future<MerchantLimits> getMerchantLimits(String merchantId) async {
+    final res = await _send('GET', '/api/v1/app/merchants/$merchantId/limits');
+    return MerchantLimits.fromJson(res as Map<String, dynamic>);
   }
 
   /// Section 4.1/7.1 — uploads the frame captured at the end of the
@@ -571,6 +597,35 @@ class ApiClient {
     final response = await http.Response.fromStream(streamed);
     final decoded = _decode(response) as Map<String, dynamic>;
     return decoded['selfie_photo_path'] as String;
+  }
+
+  /// Section 4.1 — uploads a business registration certificate on the
+  /// registered fork. Accepts a PDF as readily as a photo, since that is how
+  /// the document usually arrives. Returns a bare filename to pass as
+  /// submitKYC's registrationCertPath.
+  ///
+  /// This exists for the registration certificate specifically. There is no
+  /// equivalent for the Ghana Card and there must not be one: the card is
+  /// verified by number plus liveness check because copying or scanning
+  /// Ghana Card IDs is restricted.
+  Future<String> uploadKYCRegistrationCert(
+    String merchantId,
+    String filePath,
+  ) async {
+    final uri = _base.resolve(
+      '/api/v1/app/merchants/$merchantId/kyc-submissions/registration-cert',
+    );
+    final request = http.MultipartRequest('POST', uri);
+    if (Session.instance.token != null) {
+      request.headers['Authorization'] = 'Bearer ${Session.instance.token}';
+    }
+    request.files.add(
+      await http.MultipartFile.fromPath('certificate', filePath),
+    );
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    final decoded = _decode(response) as Map<String, dynamic>;
+    return decoded['registration_cert_path'] as String;
   }
 
   Future<Merchant> updateFeeSettings(

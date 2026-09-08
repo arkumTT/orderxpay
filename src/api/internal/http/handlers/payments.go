@@ -111,6 +111,19 @@ func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
 		chargeAmount = req.AmountPesewas
 	}
 
+	// KYC tier limits, checked against the amount about to move rather
+	// than the invoice total — a part payment consumes only what it
+	// collects. This is the binding check: CreateInvoice's equivalent runs
+	// earlier for the merchant's benefit, but collections between the two
+	// can consume the headroom that existed then.
+	if msg, limErr := h.enforceTierLimit(c.Context(), invoice.MerchantID, chargeAmount); limErr != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to check KYC tier limits"})
+	} else if msg != "" {
+		// The customer did nothing wrong here, so the message names the
+		// merchant rather than reading as the customer's own failure.
+		return badRequest(c, "this business cannot accept the payment right now: "+msg)
+	}
+
 	pspReference, err := generatePaymentReference(invoice.Reference)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate payment reference"})

@@ -13,6 +13,10 @@ import (
 type Querier interface {
 	AddFeatureFlagMerchant(ctx context.Context, arg AddFeatureFlagMerchantParams) error
 	AddPaymentRefund(ctx context.Context, arg AddPaymentRefundParams) (Payment, error)
+	// Used when a submission is approved: the tier and the fork that earned it
+	// land together, so a Tier 2 merchant always carries business_type
+	// 'registered' and the two can never drift apart.
+	ApproveMerchantKYC(ctx context.Context, arg ApproveMerchantKYCParams) (Merchant, error)
 	ArchiveItem(ctx context.Context, arg ArchiveItemParams) (int64, error)
 	AssignUserRole(ctx context.Context, arg AssignUserRoleParams) error
 	// Step 1 of "set this location as default" — unset whatever the current
@@ -40,6 +44,8 @@ type Querier interface {
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLineItemParams) (InvoiceLineItem, error)
 	CreateItem(ctx context.Context, arg CreateItemParams) (Item, error)
+	// requested_tier is not caller-chosen: the schema pins informal to 1 and
+	// registered to 2, so the tier always matches the evidence reviewed.
 	CreateKYCSubmission(ctx context.Context, arg CreateKYCSubmissionParams) (KycSubmission, error)
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
 	CreateMerchant(ctx context.Context, arg CreateMerchantParams) (Merchant, error)
@@ -101,6 +107,7 @@ type Querier interface {
 	GetItem(ctx context.Context, id pgtype.UUID) (Item, error)
 	GetItemOwnedByMerchant(ctx context.Context, arg GetItemOwnedByMerchantParams) (Item, error)
 	GetKYCSubmission(ctx context.Context, id pgtype.UUID) (KycSubmission, error)
+	GetKYCTierLimit(ctx context.Context, tier int16) (KycTierLimit, error)
 	GetLatestPhoneOTP(ctx context.Context, phone string) (PhoneOtp, error)
 	GetMenu(ctx context.Context, id pgtype.UUID) (Menu, error)
 	GetMerchant(ctx context.Context, id pgtype.UUID) (Merchant, error)
@@ -130,6 +137,15 @@ type Querier interface {
 	// by how much of each invoice was actually collected in the period, the
 	// same pattern as the settlement engine's ComputeSettlementAggregate.
 	GetMerchantRevenueBreakdown(ctx context.Context, arg GetMerchantRevenueBreakdownParams) ([]GetMerchantRevenueBreakdownRow, error)
+	// Collected volume for limit checks, measured on successful payments rather
+	// than invoice totals: an invoice that was raised but never paid moved no
+	// money and must not consume a merchant's headroom.
+	//
+	// Deliberately gross, not net of refunds — otherwise a merchant could
+	// refund their way back under a cap and transact the same money twice. The
+	// daily window is a plain UTC calendar day, which is Ghana local time
+	// year-round (UTC+0, no DST).
+	GetMerchantVolume(ctx context.Context, merchantID pgtype.UUID) (GetMerchantVolumeRow, error)
 	GetOpenKYCSubmissionByMerchant(ctx context.Context, merchantID pgtype.UUID) (KycSubmission, error)
 	GetOrderRequest(ctx context.Context, id pgtype.UUID) (OrderRequest, error)
 	GetPayment(ctx context.Context, id pgtype.UUID) (Payment, error)
@@ -183,6 +199,7 @@ type Querier interface {
 	ListItemsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Item, error)
 	ListKYCSubmissionsAdmin(ctx context.Context, arg ListKYCSubmissionsAdminParams) ([]ListKYCSubmissionsAdminRow, error)
 	ListKYCSubmissionsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]KycSubmission, error)
+	ListKYCTierLimits(ctx context.Context) ([]KycTierLimit, error)
 	ListMenus(ctx context.Context) ([]Menu, error)
 	// ListMenusForUser returns every menu with no permission requirement, every
 	// menu whose permission is among the caller's effective permissions (via
@@ -235,6 +252,9 @@ type Querier interface {
 	// inserting a second one — kyc_submissions_one_open_per_merchant would
 	// reject a second open row anyway, and this is the correct UX: the
 	// reviewer's original notes/decision get replaced by the fresh review cycle.
+	// A resubmission may also switch fork — an informal trader who registers
+	// their business between review cycles resubmits as 'registered', and
+	// requested_tier moves with it.
 	ResubmitKYCSubmission(ctx context.Context, arg ResubmitKYCSubmissionParams) (KycSubmission, error)
 	ReviewKYCSubmission(ctx context.Context, arg ReviewKYCSubmissionParams) (KycSubmission, error)
 	RevokeUserPermission(ctx context.Context, arg RevokeUserPermissionParams) error
@@ -270,9 +290,14 @@ type Querier interface {
 	UpdateDeliveryProvider(ctx context.Context, arg UpdateDeliveryProviderParams) (DeliveryProvider, error)
 	UpdateIntegrationNotes(ctx context.Context, arg UpdateIntegrationNotesParams) (Integration, error)
 	UpdateItem(ctx context.Context, arg UpdateItemParams) (Item, error)
+	// NULL on any column means "no cap" — the enforcement path skips an unset
+	// limit rather than treating it as zero.
+	UpdateKYCTierLimit(ctx context.Context, arg UpdateKYCTierLimitParams) (KycTierLimit, error)
 	UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error)
 	UpdateMerchantDeliveryEnabled(ctx context.Context, arg UpdateMerchantDeliveryEnabledParams) (Merchant, error)
 	UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerchantFeeSettingsParams) (Merchant, error)
+	// Used by the Back Office tier override, which moves the tier without a
+	// submission behind it and so leaves business_type alone.
 	UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantKYCTierParams) (Merchant, error)
 	// Ownership enforced in the WHERE clause, same pattern as
 	// UpdateDeliveryOption — the route path only carries the location's own

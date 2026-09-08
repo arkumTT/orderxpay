@@ -110,7 +110,18 @@ export default async function MerchantDetailPage(
         </div>
         <div>
           <dt className="text-neutral-400">KYC Tier</dt>
-          <dd className="font-medium text-neutral-900">Tier {merchant.kyc_tier}</dd>
+          <dd className="font-medium text-neutral-900">
+            Tier {merchant.kyc_tier}
+            {merchant.business_type && (
+              <span className="ml-1 font-normal text-neutral-500">
+                (
+                {merchant.business_type === "registered"
+                  ? "registered business"
+                  : "informal trader"}
+                )
+              </span>
+            )}
+          </dd>
         </div>
         <div>
           <dt className="text-neutral-400">Phone</dt>

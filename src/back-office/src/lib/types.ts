@@ -24,12 +24,31 @@ export type SettlementWithMerchant = Settlement & {
   merchant_business_name: string;
 };
 
+export type BusinessType = "informal" | "registered";
+
+export type EntityType =
+  | "sole_proprietorship"
+  | "partnership"
+  | "company_limited_by_shares"
+  | "company_limited_by_guarantee"
+  | "ngo";
+
 export type KYCSubmission = {
   id: string;
   merchant_id: string;
+  // The fork (Section 4.1). informal always requests Tier 1 and carries
+  // identity evidence only; registered always requests Tier 2 and carries
+  // tin/entity_type/registration_cert_path as well. The pairing is enforced
+  // by a schema CHECK, so requested_tier can be trusted to match.
+  business_type: BusinessType;
   requested_tier: number;
   ghana_card_number: string;
   business_reg_number: string | null;
+  tin: string | null;
+  entity_type: EntityType | null;
+  // Bare filename like selfie_photo_path — private, fetched through
+  // GET /api/kyc-submissions/[id]/registration-cert. Never link directly.
+  registration_cert_path: string | null;
   notes: string | null;
   status: "pending" | "approved" | "rejected" | "more_info_requested";
   reviewer_notes: string | null;
@@ -269,6 +288,9 @@ export type Merchant = {
   category: string | null;
   phone: string;
   kyc_tier: number;
+  // null until a submission is approved — an unverified merchant has not
+  // told us which kind of business they are.
+  business_type: BusinessType | null;
   status: "pending" | "active" | "restricted" | "suspended";
   service_charge_allocation: "customer_only" | "merchant_only" | "split";
   service_charge_split_bps: number | null;
@@ -393,4 +415,16 @@ export type AuditLogResponse = {
   period_end: string;
   entries: AuditLogEntry[];
   target_entities: string[];
+};
+
+// Section 4.1: the volume caps that give a KYC tier meaning. Every field is
+// nullable and every row ships null, meaning "no cap" — these are Bank of
+// Ghana-governed thresholds and are deliberately not pre-filled with
+// invented figures.
+export type KYCTierLimit = {
+  tier: number;
+  per_transaction_pesewas: number | null;
+  daily_pesewas: number | null;
+  cumulative_pesewas: number | null;
+  updated_at: string;
 };

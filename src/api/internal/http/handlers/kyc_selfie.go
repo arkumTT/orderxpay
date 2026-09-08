@@ -2,9 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"io"
-	"net/http"
-	"os"
 	"path/filepath"
 
 	"github.com/gofiber/fiber/v2"
@@ -21,69 +18,20 @@ import (
 // pre-recorded video replay could still pass — the same caveat given to the
 // merchant when this shipped.
 //
-// Deliberately mirrors UploadItemPhoto's validation (sniff real bytes via
-// http.DetectContentType, cap size, uuid+ext filename) but diverges on
-// storage and response: files land under KYCUploadDir (never app.Static-
-// mounted — see KYCUploadDir's doc comment) and the response returns only
-// the bare filename, never a URL, since nothing should construct a public
-// link to it. The caller attaches that filename to a submission via the
-// selfie_photo_path field on POST .../kyc-submissions.
+// Storage and validation live in storeKYCUpload, shared with the
+// registration-certificate upload: the file lands under KYCUploadDir
+// (never app.Static-mounted — see KYCUploadDir's doc comment) and the
+// response returns only the bare filename, never a URL, since nothing
+// should construct a public link to it. The caller attaches that filename
+// to a submission via the selfie_photo_path field on POST
+// .../kyc-submissions.
 func (h *Handler) UploadKYCSelfie(c *fiber.Ctx) error {
-	merchantIDStr := c.Params("id")
-	merchantID, err := parseUUID(merchantIDStr)
+	filename, err := h.storeKYCUpload(c, "selfie",
+		"only JPEG, PNG, or WebP images are allowed",
+		allowedImageContentTypes)
 	if err != nil {
-		return badRequest(c, "invalid merchant id")
+		return err
 	}
-
-	fileHeader, err := c.FormFile("selfie")
-	if err != nil {
-		return badRequest(c, "selfie file is required (multipart field \"selfie\")")
-	}
-	if fileHeader.Size > maxUploadBytes {
-		return badRequest(c, "selfie must be under 3MB")
-	}
-
-	if _, err := h.Queries.GetMerchant(c.Context(), merchantID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return notFound(c)
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load merchant"})
-	}
-
-	file, err := fileHeader.Open()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read upload"})
-	}
-	defer file.Close()
-
-	head := make([]byte, 512)
-	n, err := file.Read(head)
-	if err != nil && err != io.EOF {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read upload"})
-	}
-	contentType := http.DetectContentType(head[:n])
-	ext, ok := allowedImageContentTypes[contentType]
-	if !ok {
-		return badRequest(c, "only JPEG, PNG, or WebP images are allowed")
-	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read upload"})
-	}
-
-	dir := filepath.Join(h.KYCUploadDir, merchantIDStr)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to store upload"})
-	}
-	filename := uuid.NewString() + ext
-	dest, err := os.Create(filepath.Join(dir, filename))
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to store upload"})
-	}
-	defer dest.Close()
-	if _, err := io.Copy(dest, file); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to store upload"})
-	}
-
 	return c.JSON(fiber.Map{"selfie_photo_path": filename})
 }
 

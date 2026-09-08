@@ -107,8 +107,10 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Delete("/device-tokens", h.UnregisterDeviceToken)
 
 	own.Post("/kyc-submissions/selfie", h.UploadKYCSelfie)
+	own.Post("/kyc-submissions/registration-cert", h.UploadKYCRegistrationCert)
 	own.Post("/kyc-submissions", h.CreateKYCSubmission)
 	own.Get("/kyc-submissions", h.ListKYCSubmissionsByMerchant)
+	own.Get("/limits", h.GetMerchantLimits)
 
 	own.Post("/conversations", h.LogConversation)
 	own.Get("/conversations", h.ListConversations)
@@ -145,7 +147,12 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 
 	r.Get("/kyc-submissions", perm("merchants.kyc_review"), h.ListKYCSubmissionsAdmin)
 	r.Get("/kyc-submissions/:id/selfie-photo", perm("merchants.kyc_review"), h.GetKYCSelfiePhoto)
+	r.Get("/kyc-submissions/:id/registration-cert", perm("merchants.kyc_review"), h.GetKYCRegistrationCert)
 	r.Patch("/kyc-submissions/:id/status", perm("merchants.kyc_review"), h.ReviewKYCSubmission)
+	// Deciding what a tier is allowed to move sits behind the same
+	// permission as deciding who gets that tier.
+	r.Get("/kyc-tier-limits", perm("merchants.kyc_review"), h.ListKYCTierLimits)
+	r.Patch("/kyc-tier-limits/:tier", perm("merchants.kyc_review"), h.UpdateKYCTierLimit)
 
 	r.Get("/disputes", perm("disputes.view"), h.ListDisputesAdmin)
 	r.Post("/disputes", perm("disputes.manage"), h.CreateDispute)
