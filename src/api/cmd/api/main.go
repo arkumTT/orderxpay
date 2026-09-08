@@ -59,6 +59,10 @@ func main() {
 		SMTPFromEmail: cfg.SMTPFromEmail,
 		SMTPFromName:  cfg.SMTPFromName,
 
+		HubtelClientID:     cfg.HubtelClientID,
+		HubtelClientSecret: cfg.HubtelClientSecret,
+		HubtelPOSSalesID:   cfg.HubtelPOSSalesID,
+
 		FirebaseServiceAccountJSON: cfg.FirebaseServiceAccountJSON,
 	})
 

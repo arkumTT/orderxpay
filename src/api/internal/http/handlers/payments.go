@@ -160,6 +160,7 @@ func (h *Handler) InitiateCheckoutPayment(c *fiber.Ctx) error {
 		AmountPesewas:          chargeAmount,
 		Status:                 "pending",
 		PaystackSubaccountCode: textOrNull(subaccountCode),
+		Provider:               "paystack",
 	}); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record payment attempt"})
 	}

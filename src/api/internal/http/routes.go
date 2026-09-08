@@ -33,11 +33,13 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handler) {
 	public.Post("/dev/token", h.DevIssueMerchantToken) // ENV=development only — see auth.go
 	public.Get("/checkout/:reference", h.GetInvoiceByReference)
 	public.Post("/checkout/:reference/pay", h.InitiateCheckoutPayment)
+	public.Post("/checkout/:reference/pay-ussd", h.InitiateUSSDPayment) // Hubtel fallback — see internal/hubtel's doc comment
 	public.Get("/checkout/:reference/verify", h.VerifyCheckoutPayment)
 	public.Get("/merchants/:id", h.GetMerchantPublicProfile) // Section 4.6 hosted catalog page
 	public.Get("/merchants/:id/items", h.ListItems)          // same — catalog data is meant to be public
 	public.Post("/merchants/:id/order-requests", h.CreateOrderRequest)
 	public.Post("/webhooks/psp", h.HandlePSPWebhook)
+	public.Post("/webhooks/hubtel", h.HandleHubtelWebhook)
 	public.Get("/webhooks/whatsapp", h.VerifyWhatsAppWebhook)
 	public.Post("/webhooks/whatsapp", h.HandleWhatsAppWebhook)
 

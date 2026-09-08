@@ -1,9 +1,12 @@
 -- name: CreatePayment :one
 -- paystack_subaccount_code is set only when this specific charge was split
 -- at initialize time — null (the default) is the ordinary path, unchanged
--- from before split payments existed.
-INSERT INTO payments (invoice_id, psp_reference, method, amount_pesewas, status, paystack_subaccount_code)
-VALUES (sqlc.arg(invoice_id), sqlc.arg(psp_reference), sqlc.arg(method), sqlc.arg(amount_pesewas), sqlc.arg(status), sqlc.arg(paystack_subaccount_code))
+-- from before split payments existed. provider defaults to 'paystack' at
+-- the schema level (Paystack was the only provider before Hubtel USSD
+-- existed) but is passed explicitly here so a Hubtel-initiated payment can
+-- say so.
+INSERT INTO payments (invoice_id, psp_reference, method, amount_pesewas, status, paystack_subaccount_code, provider)
+VALUES (sqlc.arg(invoice_id), sqlc.arg(psp_reference), sqlc.arg(method), sqlc.arg(amount_pesewas), sqlc.arg(status), sqlc.arg(paystack_subaccount_code), sqlc.arg(provider))
 RETURNING *;
 
 -- name: GetPayment :one

@@ -57,6 +57,15 @@ type Config struct {
 	SMTPPassword  string
 	SMTPFromEmail string
 	SMTPFromName  string
+
+	// Hubtel USSD fallback (Section 4.5/9) — three values, not one
+	// rotatable secret, so env-configured only, same posture as SMTP
+	// above (see internal/hubtel's doc comment for what's unverified).
+	// All three empty means the integration silently doesn't fire, same
+	// as PaystackSecretKey/WhatsAppAccessToken/SMSAPIKey.
+	HubtelClientID     string
+	HubtelClientSecret string
+	HubtelPOSSalesID   string
 }
 
 func Load() (Config, error) {
@@ -89,6 +98,10 @@ func Load() (Config, error) {
 		SMTPPassword:  os.Getenv("SMTP_PASSWORD"),
 		SMTPFromEmail: os.Getenv("SMTP_FROM_EMAIL"),
 		SMTPFromName:  getEnv("SMTP_FROM_NAME", "OrderxPay"),
+
+		HubtelClientID:     os.Getenv("HUBTEL_CLIENT_ID"),
+		HubtelClientSecret: os.Getenv("HUBTEL_CLIENT_SECRET"),
+		HubtelPOSSalesID:   os.Getenv("HUBTEL_POS_SALES_ID"),
 	}
 
 	if cfg.DatabaseURL == "" {

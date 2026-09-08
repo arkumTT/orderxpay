@@ -13,6 +13,7 @@ import (
 	db "github.com/orderxpay/api/internal/db/sqlc"
 	"github.com/orderxpay/api/internal/email"
 	"github.com/orderxpay/api/internal/fcm"
+	"github.com/orderxpay/api/internal/hubtel"
 	"github.com/orderxpay/api/internal/psp"
 	"github.com/orderxpay/api/internal/sms"
 	"github.com/orderxpay/api/internal/whatsapp"
@@ -52,6 +53,11 @@ type Handler struct {
 	// FCM is nil-safe, same posture as PSP/WhatsApp/SMS — Section 4.10
 	// Phase 2 push notifications, Android only (see internal/fcm).
 	FCM *fcm.Client
+	// Hubtel is nil-safe, same posture as PSP/WhatsApp/SMS/FCM — Section
+	// 4.5/9's USSD fallback. See internal/hubtel's doc comment: unlike
+	// every other client here, this one has never been checked against a
+	// real account, since none exists yet.
+	Hubtel *hubtel.Client
 }
 
 type Options struct {
@@ -79,6 +85,10 @@ type Options struct {
 	SMTPFromEmail string
 	SMTPFromName  string
 
+	HubtelClientID     string
+	HubtelClientSecret string
+	HubtelPOSSalesID   string
+
 	FirebaseServiceAccountJSON string
 }
 
@@ -101,6 +111,7 @@ func New(opts Options) *Handler {
 			opts.SMTPHost, opts.SMTPPort, opts.SMTPUsername, opts.SMTPPassword,
 			opts.SMTPFromEmail, opts.SMTPFromName,
 		),
-		FCM: fcm.NewClient(opts.FirebaseServiceAccountJSON),
+		FCM:    fcm.NewClient(opts.FirebaseServiceAccountJSON),
+		Hubtel: hubtel.NewClient(opts.HubtelClientID, opts.HubtelClientSecret, opts.HubtelPOSSalesID),
 	}
 }

@@ -55,7 +55,10 @@ type Querier interface {
 	CreateOrderRequest(ctx context.Context, arg CreateOrderRequestParams) (OrderRequest, error)
 	// paystack_subaccount_code is set only when this specific charge was split
 	// at initialize time — null (the default) is the ordinary path, unchanged
-	// from before split payments existed.
+	// from before split payments existed. provider defaults to 'paystack' at
+	// the schema level (Paystack was the only provider before Hubtel USSD
+	// existed) but is passed explicitly here so a Hubtel-initiated payment can
+	// say so.
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	CreatePhoneOTP(ctx context.Context, arg CreatePhoneOTPParams) (PhoneOtp, error)
 	// Silently skipped when an identical open flag already exists
