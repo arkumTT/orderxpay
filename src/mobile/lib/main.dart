@@ -18,6 +18,7 @@ import 'features/records/screens/records_screen.dart';
 import 'features/settings/screens/fee_settings_screen.dart';
 import 'features/settings/screens/notifications_screen.dart';
 import 'features/settings/screens/security_screen.dart';
+import 'features/settings/screens/add_email_screen.dart';
 import 'features/staff/screens/staff_screen.dart';
 import 'features/delivery/screens/delivery_screen.dart';
 import 'features/locations/screens/locations_screen.dart';
@@ -120,6 +121,7 @@ class _OrderxPayAppState extends State<OrderxPayApp> with WidgetsBindingObserver
         '/customers': (context) => const CustomersScreen(),
         '/verify': (context) => const VerifyScreen(),
         '/security': (context) => const SecurityScreen(),
+        '/add-email': (context) => const AddEmailScreen(),
         '/more': (context) => const MoreScreen(),
       },
     );

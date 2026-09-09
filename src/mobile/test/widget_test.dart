@@ -8,7 +8,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const OrderxPayApp(initialRoute: '/login'));
 
-    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Phone or email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Log In'), findsOneWidget);
     expect(find.textContaining('Register'), findsOneWidget);

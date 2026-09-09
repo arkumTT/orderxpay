@@ -8,10 +8,17 @@ import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
 
-/// Real email+password login (Section 4.1/4.9) — the app's default
-/// signed-out landing page, ahead of onboarding. Shared by merchant owners
-/// and staff; the backend (MerchantLogin) figures out which one an email
+/// Real password login (Section 4.1/4.9) — the app's default signed-out
+/// landing page, ahead of onboarding. Shared by merchant owners and staff;
+/// the backend (MerchantLogin) figures out which actor an identifier
 /// belongs to and returns the right actor_type.
+///
+/// One identifier field, not separate email/phone fields — ApiClient.login
+/// sniffs an "@" to decide which key to send it under. A merchant who
+/// registered phone-first (see OnboardingScreen — signup no longer
+/// requires an email) types their phone here exactly like a merchant who
+/// added an email later types that instead; the field doesn't need to
+/// know which one it's holding.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -21,7 +28,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   final _api = ApiClient();
 
@@ -31,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -43,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      final res = await _api.login(_emailController.text.trim(), _passwordController.text);
+      final res = await _api.login(_identifierController.text.trim(), _passwordController.text);
       await Session.instance.save(
         token: res['access_token'] as String,
         merchantId: res['merchant_id'] as String,
@@ -103,9 +110,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 18),
                       OxpField(
-                        label: 'Email',
-                        controller: _emailController,
-                        hintText: 'you@business.com',
+                        label: 'Phone or email',
+                        controller: _identifierController,
+                        hintText: '20 553 7712 or you@business.com',
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
                       ),

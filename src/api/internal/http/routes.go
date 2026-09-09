@@ -91,6 +91,7 @@ func registerMerchantScopedRoutes(r fiber.Router, h *handlers.Handler) {
 	own.Put("/delivery-options/:optionId", h.UpdateDeliveryOption)
 	own.Get("/delivery-providers", h.ListActiveDeliveryProviders)
 	own.Patch("/delivery-settings", h.UpdateMerchantDeliveryEnabled)
+	own.Patch("/email", h.UpdateMerchantEmail)
 
 	own.Post("/locations", h.CreateMerchantLocation)
 	own.Get("/locations", h.ListMerchantLocations)

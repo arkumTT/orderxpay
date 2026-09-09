@@ -3,12 +3,21 @@ import '../../../core/api_client.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
-import 'register_credentials_screen.dart';
+import '../../../core/phone_format.dart';
 
-/// Registration Page 1 (Section 4.1, Tier 0 KYC): business name/category/
-/// phone, then a real phone-OTP verification loop. Only once VerifyPhoneOTP
-/// succeeds does Page 2 (username/email/password) become reachable — see
-/// RegisterCredentialsScreen.
+/// Registration (Section 4.1, Tier 0 KYC) — one screen, phone-first.
+/// Business info, phone, and a password are all collected up front; "Send
+/// OTP" validates the whole form before a code ever goes out, and the
+/// merchant account is created the instant VerifyPhoneOTP succeeds — no
+/// second screen, no re-entering anything.
+///
+/// Deliberately does NOT collect a username or email here — both are
+/// optional on CreateMerchant (a merchant can add either later from
+/// Settings) precisely so signup doesn't ask for more than a phone number
+/// and a password. Login still accepts email for merchants who add one,
+/// but phone-only is a fully working account from the moment this screen
+/// finishes — see LoginScreen and ApiClient.login for the phone/email
+/// auto-detect that makes that work.
 ///
 /// Real SMS delivery is wired up server-side (Arkesel, see otp.go) when
 /// the API is configured with an SMS_API_KEY — falls back to log-only
@@ -28,12 +37,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _businessNameController = TextEditingController();
   final _categoryController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
   final _codeController = TextEditingController();
   final _api = ApiClient();
 
   bool _otpRequested = false;
   bool _requestingOtp = false;
   bool _verifying = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
   String? _error;
   String? _devOtp;
   int? _attemptsRemaining;
@@ -43,14 +56,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _businessNameController.dispose();
     _categoryController.dispose();
     _phoneController.dispose();
+    _passwordController.dispose();
+    _confirmController.dispose();
     _codeController.dispose();
     super.dispose();
   }
 
-  String get _fullPhone => '+233${_phoneController.text.replaceAll(RegExp(r'\s'), '')}';
+  String get _fullPhone => normalizeGhPhone(_phoneController.text);
 
   Future<void> _sendOtp() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_passwordController.text != _confirmController.text) {
+      setState(() => _error = 'Passwords do not match');
+      return;
+    }
     setState(() {
       _requestingOtp = true;
       _error = null;
@@ -70,7 +89,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  Future<void> _verifyOtp() async {
+  /// Verifies the OTP, then immediately creates the merchant with just the
+  /// business info, phone, and password already sitting in the form — a
+  /// single tap covers both. No username/email is sent (see this screen's
+  /// doc comment), so there's nothing to verify a link against; a short
+  /// confirmation replaces the old "check your email" dialog.
+  ///
+  /// If account creation fails after a successful OTP verify, the phone
+  /// stays verified server-side for 30 minutes, so retrying this button
+  /// after fixing a field works without sending another code.
+  Future<void> _verifyOtpAndCreateAccount() async {
     if (_codeController.text.trim().isEmpty) {
       setState(() => _error = 'Enter the code you received');
       return;
@@ -81,17 +109,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
     try {
       await _api.verifyOtp(_fullPhone, _codeController.text.trim());
+      await _api.registerMerchant(
+        businessName: _businessNameController.text,
+        category: _categoryController.text,
+        phone: _fullPhone,
+        password: _passwordController.text,
+      );
       if (!mounted) return;
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => RegisterCredentialsScreen(
-            businessName: _businessNameController.text,
-            category: _categoryController.text,
-            phone: _fullPhone,
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Account created'),
+          content: const Text(
+            'Log in with your phone number and password to get started. '
+            'You can add an email later from Settings.',
           ),
+          actions: [
+            OxpButton(
+              label: 'Go to Login',
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
         ),
       );
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
     } on ApiException catch (e) {
       setState(() {
         _error = e.message;
@@ -135,7 +178,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'STEP 1 OF 2 · MINIMUM KYC',
+                        'CREATE YOUR ACCOUNT · MINIMUM KYC',
                         style: TextStyle(
                           color: AppColors.accent,
                           fontSize: 11,
@@ -196,6 +239,42 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 16),
+                      OxpField(
+                        label: 'Password',
+                        controller: _passwordController,
+                        hintText: 'At least 8 characters',
+                        obscureText: _obscurePassword,
+                        readOnly: _otpRequested,
+                        validator: (v) => (v == null || v.length < 8) ? 'At least 8 characters' : null,
+                        suffix: IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            color: AppColors.textSecondary,
+                          ),
+                          onPressed: _otpRequested
+                              ? null
+                              : () => setState(() => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      OxpField(
+                        label: 'Confirm password',
+                        controller: _confirmController,
+                        hintText: 'Re-enter your password',
+                        obscureText: _obscureConfirm,
+                        readOnly: _otpRequested,
+                        validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                        suffix: IconButton(
+                          icon: Icon(
+                            _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            color: AppColors.textSecondary,
+                          ),
+                          onPressed: _otpRequested
+                              ? null
+                              : () => setState(() => _obscureConfirm = !_obscureConfirm),
+                        ),
+                      ),
                       if (_otpRequested) ...[
                         const SizedBox(height: 16),
                         OxpField(
@@ -247,9 +326,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         )
                       else ...[
                         OxpButton(
-                          label: _verifying ? 'Verifying…' : 'Verify Code',
+                          label: _verifying ? 'Creating account…' : 'Verify & Create Account',
                           loading: _verifying,
-                          onPressed: _verifying ? null : _verifyOtp,
+                          onPressed: _verifying ? null : _verifyOtpAndCreateAccount,
                         ),
                         const SizedBox(height: 10),
                         OxpButton(

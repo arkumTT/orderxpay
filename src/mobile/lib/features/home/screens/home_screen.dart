@@ -30,10 +30,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _api.listInvoices(merchantId),
       _api.listOrderRequests(merchantId),
       _api.listNotifications(merchantId),
+      _api.getMerchant(merchantId),
     ]);
     final invoices = results[0] as List<Invoice>;
     final requests = results[1] as List<OrderRequest>;
     final notifications = results[2] as NotificationFeed;
+    final merchant = results[3] as Merchant;
 
     final now = DateTime.now();
     bool isToday(DateTime d) =>
@@ -54,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ordersToday: todaysInvoices.length,
       pendingToday: pendingToday,
       unreadNotifications: notifications.unreadCount,
+      hasEmail: merchant.email != null,
     );
   }
 
@@ -228,6 +231,49 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ],
+                  if (!data.hasEmail) ...[
+                    const SizedBox(height: 16),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(AppRadius.control),
+                      onTap: () async {
+                        final added = await Navigator.pushNamed(context, '/add-email');
+                        if (added == true) await _refresh();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.1),
+                          border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                          borderRadius: BorderRadius.circular(AppRadius.control),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: AppColors.accent.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.mail_outline, color: AppColors.accent, size: 16),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'Add your email — a backup way to log in',
+                                style: TextStyle(
+                                  color: AppColors.accent,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right, color: AppColors.accent),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 18),
                   Row(
                     children: [
@@ -352,6 +398,7 @@ class _HomeData {
     required this.ordersToday,
     required this.pendingToday,
     required this.unreadNotifications,
+    required this.hasEmail,
   });
 
   final List<Invoice> invoices;
@@ -360,6 +407,10 @@ class _HomeData {
   final int ordersToday;
   final int pendingToday;
   final int unreadNotifications;
+  /// False for a merchant who registered phone-first and never added an
+  /// email from Settings (Section 4.1) — drives the "add your email" nudge
+  /// below the order-requests one, same tappable-card pattern.
+  final bool hasEmail;
 }
 
 class _StatColumn extends StatelessWidget {
