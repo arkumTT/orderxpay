@@ -301,6 +301,7 @@ type Querier interface {
 	UpdateKYCTierLimit(ctx context.Context, arg UpdateKYCTierLimitParams) (KycTierLimit, error)
 	UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error)
 	UpdateMerchantDeliveryEnabled(ctx context.Context, arg UpdateMerchantDeliveryEnabledParams) (Merchant, error)
+	UpdateMerchantEmail(ctx context.Context, arg UpdateMerchantEmailParams) (Merchant, error)
 	UpdateMerchantFeeSettings(ctx context.Context, arg UpdateMerchantFeeSettingsParams) (Merchant, error)
 	// Used by the Back Office tier override, which moves the tier without a
 	// submission behind it and so leaves business_type alone.

@@ -13,6 +13,7 @@ class Merchant {
     required this.businessName,
     required this.category,
     required this.phone,
+    required this.email,
     required this.kycTier,
     required this.businessType,
     required this.status,
@@ -34,6 +35,10 @@ class Merchant {
   final String businessName;
   final String? category;
   final String phone;
+  /// Null for a merchant who registered phone-first and never added one
+  /// from Settings (Section 4.1) — see OnboardingScreen and CreateMerchant,
+  /// which no longer require it at signup.
+  final String? email;
   final int kycTier;
   /// informal | registered, or null until a submission is approved — an
   /// unverified merchant hasn't told us which kind of business they are.
@@ -66,6 +71,7 @@ class Merchant {
     businessName: _str(j['business_name']),
     category: _strOrNull(j['category']),
     phone: _str(j['phone']),
+    email: _strOrNull(j['email']),
     kycTier: _int(j['kyc_tier']),
     businessType: _strOrNull(j['business_type']),
     status: _str(j['status']),

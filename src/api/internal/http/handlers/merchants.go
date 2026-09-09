@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -46,37 +47,53 @@ type createMerchantRequest struct {
 	Password     string `json:"password"`
 }
 
-// CreateMerchant is Page 2 of the real registration flow (Section 4.1):
-// Page 1 (business_name/category/phone) must already have a phone verified
-// via RequestPhoneOTP/VerifyPhoneOTP (otp.go) within the last 30 minutes —
-// this handler re-checks that server-side rather than trusting the client
-// to have done Page 1 honestly. Page 2 itself supplies username/email/
-// password.
+// validate covers everything CreateMerchant can check without a DB round
+// trip. username and email are deliberately absent here — both optional,
+// see CreateMerchant's doc comment.
+func (r createMerchantRequest) validate() error {
+	if r.BusinessName == "" || r.Phone == "" {
+		return errors.New("business_name and phone are required")
+	}
+	if r.Password == "" {
+		return errors.New("password is required")
+	}
+	if len(r.Password) < minPasswordLength {
+		return fmt.Errorf("password must be at least %d characters", minPasswordLength)
+	}
+	return nil
+}
+
+// CreateMerchant is the real registration flow (Section 4.1): business
+// name/category/phone plus a password, gated on the phone already being
+// verified via RequestPhoneOTP/VerifyPhoneOTP (otp.go) within the last 30
+// minutes — this handler re-checks that server-side rather than trusting
+// the client to have done that step honestly.
 //
-// The merchant is created with email_verified_at unset; a real
-// verification token is generated and, when SMTP is configured
-// (h.Email.Enabled()), emailed via email.Client. The token/link is also
-// exposed in the response when running in ENV=development, so the flow
-// stays genuinely testable locally without a real mailbox. Email
-// verification is advisory, not a login gate: see MerchantLogin, which
-// returns email_verified so the app can show that state without blocking
-// access.
+// username and email are both optional at signup — see
+// db/migrations/000016_merchant_staff_login and
+// 000017_phone_otp_email_verification, which added merchants.username and
+// merchants.email as nullable, unique columns from the start; this handler
+// used to require them anyway, which was the only place that requirement
+// actually lived (nothing in the schema forced it). A merchant can add
+// either later from Settings. Login accepts phone as an identifier
+// whenever email is absent — see MerchantLogin.
+//
+// When an email is supplied, the merchant is created with
+// email_verified_at unset; a real verification token is generated and,
+// when SMTP is configured (h.Email.Enabled()), emailed via email.Client.
+// The token/link is also exposed in the response when running in
+// ENV=development, so the flow stays genuinely testable locally without a
+// real mailbox. Email verification is advisory, not a login gate: see
+// MerchantLogin, which returns email_verified so the app can show that
+// state without blocking access. With no email at all, that whole step is
+// simply skipped — there's nowhere to send a link.
 func (h *Handler) CreateMerchant(c *fiber.Ctx) error {
 	var req createMerchantRequest
 	if err := c.BodyParser(&req); err != nil {
 		return badRequest(c, "invalid request body")
 	}
-	if req.BusinessName == "" || req.Phone == "" {
-		return badRequest(c, "business_name and phone are required")
-	}
-	if req.Username == "" {
-		return badRequest(c, "username is required")
-	}
-	if req.Email == "" || req.Password == "" {
-		return badRequest(c, "email and password are required")
-	}
-	if len(req.Password) < minPasswordLength {
-		return badRequest(c, "password must be at least 8 characters")
+	if err := req.validate(); err != nil {
+		return badRequest(c, err.Error())
 	}
 
 	_, err := h.Queries.GetRecentVerifiedPhoneOTP(c.Context(), db.GetRecentVerifiedPhoneOTPParams{
@@ -107,41 +124,43 @@ func (h *Handler) CreateMerchant(c *fiber.Ctx) error {
 	}
 
 	var devToken string
-	token, err := generateVerificationToken()
-	if err != nil {
-		log.Printf("email verification: failed to generate token for merchant %s: %v", merchant.ID, err)
-	} else {
-		ev, err := h.Queries.CreateEmailVerification(c.Context(), db.CreateEmailVerificationParams{
-			MerchantID: merchant.ID,
-			Token:      token,
-			ExpiresAt:  pgtype.Timestamptz{Time: time.Now().Add(emailVerificationExpiry), Valid: true},
-		})
+	if req.Email != "" {
+		token, err := generateVerificationToken()
 		if err != nil {
-			log.Printf("email verification: failed to create record for merchant %s: %v", merchant.ID, err)
+			log.Printf("email verification: failed to generate token for merchant %s: %v", merchant.ID, err)
 		} else {
-			// Points at the API's own verify endpoint directly (a real,
-			// working GET that flips email_verified_at) rather than a
-			// polished web landing page — src/web has no verification
-			// page yet. Good enough to prove real delivery; a friendlier
-			// redirect-to-login landing page is a reasonable fast-follow,
-			// not required for the link itself to actually work.
-			link := fmt.Sprintf("%s/api/v1/public/email/verify?token=%s", h.APIPublicBaseURL, token)
-			if h.Email.Enabled() {
-				// Backgrounded for the same reason the OTP SMS send is
-				// (see otp.go's sendOTPSMSAsync): registration is already
-				// done the moment this handler returns a response, so
-				// there's no reason to make the merchant's signup wait on
-				// however long the SMTP round-trip takes.
-				body := fmt.Sprintf(
-					"Welcome to OrderxPay!\n\nVerify your email by opening this link:\n%s\n\nThis link expires in 24 hours.",
-					link,
-				)
-				go sendVerificationEmailAsync(h.Email, req.Email, body)
+			ev, err := h.Queries.CreateEmailVerification(c.Context(), db.CreateEmailVerificationParams{
+				MerchantID: merchant.ID,
+				Token:      token,
+				ExpiresAt:  pgtype.Timestamptz{Time: time.Now().Add(emailVerificationExpiry), Valid: true},
+			})
+			if err != nil {
+				log.Printf("email verification: failed to create record for merchant %s: %v", merchant.ID, err)
 			} else {
-				log.Printf("email verification: would email %s a link (%s) — no SMTP configured, dev-mode-only delivery", req.Email, link)
-			}
-			if h.DevMode {
-				devToken = ev.Token
+				// Points at the API's own verify endpoint directly (a real,
+				// working GET that flips email_verified_at) rather than a
+				// polished web landing page — src/web has no verification
+				// page yet. Good enough to prove real delivery; a friendlier
+				// redirect-to-login landing page is a reasonable fast-follow,
+				// not required for the link itself to actually work.
+				link := fmt.Sprintf("%s/api/v1/public/email/verify?token=%s", h.APIPublicBaseURL, token)
+				if h.Email.Enabled() {
+					// Backgrounded for the same reason the OTP SMS send is
+					// (see otp.go's sendOTPSMSAsync): registration is already
+					// done the moment this handler returns a response, so
+					// there's no reason to make the merchant's signup wait on
+					// however long the SMTP round-trip takes.
+					body := fmt.Sprintf(
+						"Welcome to OrderxPay!\n\nVerify your email by opening this link:\n%s\n\nThis link expires in 24 hours.",
+						link,
+					)
+					go sendVerificationEmailAsync(h.Email, req.Email, body)
+				} else {
+					log.Printf("email verification: would email %s a link (%s) — no SMTP configured, dev-mode-only delivery", req.Email, link)
+				}
+				if h.DevMode {
+					devToken = ev.Token
+				}
 			}
 		}
 	}
@@ -427,6 +446,64 @@ func (h *Handler) UpdateMerchantDeliveryEnabled(c *fiber.Ctx) error {
 		return notFound(c)
 	} else if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update delivery settings"})
+	}
+	return c.JSON(stripMerchantSecrets(merchant))
+}
+
+type updateMerchantEmailRequest struct {
+	Email string `json:"email"`
+}
+
+func (r *updateMerchantEmailRequest) normalize() {
+	r.Email = strings.TrimSpace(r.Email)
+}
+
+func (r updateMerchantEmailRequest) validate() error {
+	if r.Email == "" {
+		return errors.New("email is required")
+	}
+	return nil
+}
+
+// UpdateMerchantEmail is how a merchant who registered phone-first (Section
+// 4.1 — CreateMerchant no longer requires an email) adds one afterwards
+// from Settings. Deliberately a separate, minimal endpoint rather than
+// folding email into UpdateMerchantFeeSettings-style multi-field updates:
+// it's the one field a phone-only merchant is actually missing, and the
+// home-screen nudge (see home_screen.dart) only ever needs to set this one
+// thing.
+//
+// No format validation beyond non-empty, matching CreateMerchant's own
+// posture on email (this codebase doesn't validate email shape anywhere).
+// Does not send a verification email or generate a token the way
+// CreateMerchant does — email_verified_at is left unset, same "advisory,
+// not a login gate" posture MerchantLogin already has for a freshly
+// registered merchant's email.
+func (h *Handler) UpdateMerchantEmail(c *fiber.Ctx) error {
+	id, err := parseUUIDParam(c, "id")
+	if err != nil {
+		return badRequest(c, "invalid merchant id")
+	}
+
+	var req updateMerchantEmailRequest
+	if err := c.BodyParser(&req); err != nil {
+		return badRequest(c, "invalid request body")
+	}
+	req.normalize()
+	if err := req.validate(); err != nil {
+		return badRequest(c, err.Error())
+	}
+
+	merchant, err := h.Queries.UpdateMerchantEmail(c.Context(), db.UpdateMerchantEmailParams{
+		ID:    id,
+		Email: textOrNull(req.Email),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return notFound(c)
+	} else if isUniqueViolation(err) {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "that email is already in use"})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update email"})
 	}
 	return c.JSON(stripMerchantSecrets(merchant))
 }

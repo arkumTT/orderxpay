@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'config.dart';
 import 'models.dart';
+import 'phone_format.dart';
 import 'session.dart';
 
 class ApiException implements Exception {
@@ -89,13 +90,23 @@ class ApiClient {
     Map<String, dynamic> body,
   ) async => (await _send('POST', path, body: body)) as Map<String, dynamic>;
 
-  /// Section 4.1/4.9 — real email+password login, shared by merchant owners
-  /// and staff. Returns access_token/merchant_id/actor_type/business_name;
-  /// the caller (LoginScreen) is responsible for saving it into Session.
-  Future<Map<String, dynamic>> login(String email, String password) => post(
-    '/api/v1/public/auth/login',
-    {'email': email, 'password': password},
-  );
+  /// Section 4.1/4.9 — real password login, shared by merchant owners and
+  /// staff, identified by either email or phone. [identifier] is whatever
+  /// the merchant typed into the single login field — LoginScreen sniffs
+  /// an "@" to decide which key to send it under, matching how the backend
+  /// (MerchantLogin) expects exactly one of email/phone per request. Phone
+  /// exists as an identifier because registerMerchant no longer requires
+  /// an email at signup — see its own doc comment.
+  /// Returns access_token/merchant_id/actor_type/business_name; the caller
+  /// (LoginScreen) is responsible for saving it into Session.
+  Future<Map<String, dynamic>> login(String identifier, String password) {
+    final isEmail = identifier.contains('@');
+    final value = isEmail ? identifier : normalizeGhPhone(identifier);
+    return post('/api/v1/public/auth/login', {
+      if (isEmail) 'email': value else 'phone': value,
+      'password': password,
+    });
+  }
 
   /// Section 4.1 registration Page 1 — sends a 6-digit code for [phone].
   /// No SMS provider is wired up server-side, so in dev builds the response
@@ -109,18 +120,22 @@ class ApiClient {
   Future<Map<String, dynamic>> verifyOtp(String phone, String code) =>
       post('/api/v1/public/otp/verify', {'phone': phone, 'code': code});
 
-  /// Section 4.1 registration Page 2 — creates the merchant. The backend
+  /// Section 4.1 registration — creates the merchant with just business
+  /// info, phone, and a password (phone-first signup). The backend
   /// re-checks that [phone] was actually OTP-verified recently; this call
-  /// fails with a clear error if Page 1 wasn't genuinely completed. Returns
-  /// the merchant plus (dev builds only) dev_email_verify_token, since no
-  /// email provider is wired up server-side either (see CreateMerchant).
+  /// fails with a clear error if that step wasn't genuinely completed.
+  /// [username]/[email] are optional — a merchant can add either later
+  /// from Settings — and CreateMerchant's own validation no longer
+  /// requires them. Returns the merchant plus (dev builds only, and only
+  /// when [email] was given) dev_email_verify_token, since no email
+  /// provider is wired up server-side either (see CreateMerchant).
   Future<Map<String, dynamic>> registerMerchant({
     required String businessName,
     required String category,
     required String phone,
-    required String username,
-    required String email,
     required String password,
+    String username = '',
+    String email = '',
   }) => post('/api/v1/public/merchants', {
     'business_name': businessName,
     'category': category,
@@ -402,6 +417,19 @@ class ApiClient {
       'PATCH',
       '/api/v1/app/merchants/$merchantId/delivery-settings',
       body: {'enabled': enabled},
+    );
+    return Merchant.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Section 4.1 — how a merchant who registered phone-first adds an email
+  /// afterwards (see OnboardingScreen and CreateMerchant, which no longer
+  /// require one at signup). Throws [ApiException] with a 409 if the email
+  /// is already used by another account.
+  Future<Merchant> updateMerchantEmail(String merchantId, {required String email}) async {
+    final res = await _send(
+      'PATCH',
+      '/api/v1/app/merchants/$merchantId/email',
+      body: {'email': email},
     );
     return Merchant.fromJson(res as Map<String, dynamic>);
   }
