@@ -6,6 +6,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 import 'item_form_screen.dart';
 
 class CatalogScreen extends StatefulWidget {
@@ -30,7 +31,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   Future<void> _openForm([Item? item]) async {

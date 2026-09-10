@@ -5,6 +5,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 import '../../invoices/screens/new_order_screen.dart';
 
 /// Section 4.6 pending-request queue. Approving pre-fills New Order
@@ -32,7 +33,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   Future<void> _approve(OrderRequest request) async {

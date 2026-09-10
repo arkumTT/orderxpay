@@ -8,6 +8,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 
 /// Feedback item 4 — pickup/delivery reference locations. Deliberately a
 /// flat, merchant-managed list for this first cut (no per-delivery-option
@@ -46,7 +47,7 @@ class _LocationsScreenState extends State<LocationsScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   Future<void> _makeDefault(MerchantLocation location) async {

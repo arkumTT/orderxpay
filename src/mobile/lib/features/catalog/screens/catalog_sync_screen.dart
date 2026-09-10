@@ -6,6 +6,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 
 const _featureFlagKey = 'whatsapp_catalog_sync';
 
@@ -60,7 +61,7 @@ class _CatalogSyncScreenState extends State<CatalogSyncScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   Future<void> _sync() async {

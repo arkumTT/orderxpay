@@ -6,6 +6,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 
 /// Section 4.11 / 7.3 / 9.4: master "Offer delivery" switch, the merchant's
 /// own delivery contacts (Tier 1 — can be more than one rider, each with an
@@ -62,7 +63,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   Future<void> _toggleMaster(bool value) async {

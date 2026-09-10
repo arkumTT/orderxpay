@@ -4,6 +4,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 
 class _Staff {
   _Staff({required this.id, required this.name, required this.phone, required this.role});
@@ -50,7 +51,7 @@ class _StaffScreenState extends State<StaffScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   Future<void> _addStaff() async {

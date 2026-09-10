@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'app_navigator.dart';
 import 'config.dart';
@@ -45,6 +46,12 @@ class ApiClient {
   /// found it.
   Future<dynamic> _send(String method, String path, {Object? body}) async {
     final uri = _base.resolve(path);
+    // Snapshot this before the request: a sibling request in the same
+    // batch (the home screen fires four at once) that also 401s will call
+    // _onSessionExpired and null the token mid-flight — without the
+    // snapshot, this request would then miss the branch below and surface
+    // a raw "token is invalid" instead of the friendly expiry message.
+    final sentWithToken = Session.instance.token != null;
     try {
       final http.Response res;
       switch (method) {
@@ -77,7 +84,7 @@ class ApiClient {
         default:
           throw ArgumentError('unsupported method $method');
       }
-      if (res.statusCode == 401 && _isAuthenticatedRoute(path) && Session.instance.token != null) {
+      if (res.statusCode == 401 && _isAuthenticatedRoute(path) && sentWithToken) {
         await _onSessionExpired();
         throw ApiException(401, 'Your session has expired — please log in again.');
       }
@@ -103,6 +110,11 @@ class ApiClient {
     if (_redirecting) return;
     _redirecting = true;
     appNavigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (_) => false);
+    appMessengerKey.currentState
+      ?..clearSnackBars()
+      ..showSnackBar(
+        const SnackBar(content: Text('Your session expired — please log in again.')),
+      );
     Future<void>.delayed(const Duration(seconds: 3), () => _redirecting = false);
   }
 

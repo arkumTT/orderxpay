@@ -9,6 +9,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 
 /// Section 4.3 order flow revision — a real saved-customer list, managed
 /// here and offered as a quick-pick on New Order. Most rows arrive
@@ -87,7 +88,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   /// One sheet for both add and edit — pass [existing] to pre-fill and
