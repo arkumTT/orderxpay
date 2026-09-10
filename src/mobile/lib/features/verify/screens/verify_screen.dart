@@ -478,6 +478,26 @@ class _KYCSectionState extends State<_KYCSection> {
                         ? 'Required for a registered business'
                         : null,
                   ),
+                  const SizedBox(height: 6),
+                  const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.verified_user_outlined,
+                          size: 13, color: AppColors.textDisabled),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Checked against the Registrar-General and GRA before '
+                          'your account is approved — so no one can put your '
+                          'registered business behind their own payout account.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textDisabled,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
                     initialValue: _entityType,
