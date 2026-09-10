@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'app_navigator.dart';
 import 'config.dart';
 import 'models.dart';
 import 'phone_format.dart';
@@ -76,6 +77,10 @@ class ApiClient {
         default:
           throw ArgumentError('unsupported method $method');
       }
+      if (res.statusCode == 401 && _isAuthenticatedRoute(path) && Session.instance.token != null) {
+        await _onSessionExpired();
+        throw ApiException(401, 'Your session has expired — please log in again.');
+      }
       return _decode(res);
     } on ApiException {
       rethrow;
@@ -84,14 +89,43 @@ class ApiClient {
     }
   }
 
+  static bool _isAuthenticatedRoute(String path) =>
+      path.contains('/api/v1/app/') || path.contains('/api/v1/admin/');
+
+  /// A 401 on a route that's only reachable with a token means the token
+  /// we sent was rejected — almost always expiry (merchant tokens last
+  /// 24h). Clear the dead session and bounce to Login. The guard collapses
+  /// a burst of parallel 401s (e.g. the home screen's four concurrent
+  /// loads) into a single redirect instead of stacking Login on Login.
+  static bool _redirecting = false;
+  Future<void> _onSessionExpired() async {
+    await Session.instance.clear();
+    if (_redirecting) return;
+    _redirecting = true;
+    appNavigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (_) => false);
+    Future<void>.delayed(const Duration(seconds: 3), () => _redirecting = false);
+  }
+
   dynamic _decode(http.Response res) {
     if (res.statusCode >= 400) {
-      final body = res.body.isNotEmpty
-          ? jsonDecode(res.body) as Map<String, dynamic>
-          : <String, dynamic>{};
+      // Handler errors are `{"error": "..."}` JSON, but a middleware-level
+      // failure (auth, 404) can come back as a plain-text body, and a
+      // proxy or load balancer in front could return HTML. Parse what we
+      // can, fall back to the raw text when it's short enough to show.
+      Map<String, dynamic> body = const {};
+      try {
+        final decoded = res.body.isNotEmpty ? jsonDecode(res.body) : null;
+        if (decoded is Map<String, dynamic>) body = decoded;
+      } catch (_) {
+        // not JSON — handled by the fallbacks below
+      }
+      final raw = res.body.trim();
       throw ApiException(
         res.statusCode,
-        body['error']?.toString() ?? res.reasonPhrase ?? 'request failed',
+        body['error']?.toString() ??
+            (raw.isNotEmpty && raw.length <= 120 ? raw : null) ??
+            res.reasonPhrase ??
+            'request failed',
         body: body,
       );
     }

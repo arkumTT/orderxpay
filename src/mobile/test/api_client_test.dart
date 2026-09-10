@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:orderxpay_mobile/core/api_client.dart';
+import 'package:orderxpay_mobile/core/session.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// A request that never reaches the server at all (API not running, `adb
 /// reverse` not forwarded on a physical device, no signal, DNS failure)
@@ -14,6 +16,13 @@ import 'package:orderxpay_mobile/core/api_client.dart';
 /// ApiClient must convert that into a catchable, user-facing ApiException,
 /// while still letting a real HTTP error response through unchanged.
 void main() {
+  setUp(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+    Session.instance.token = null;
+    Session.instance.merchantId = null;
+  });
+
   test('a network failure becomes a catchable ApiException with a clear message', () async {
     final client = ApiClient(
       client: MockClient((request) async => throw http.ClientException('Connection refused')),
@@ -75,5 +84,58 @@ void main() {
     expect(decoded['phone'], '+233240000000'); // matches what login will send
     expect(decoded['email'], '');
     expect(decoded['role'], 'staff');
+  });
+
+  test('a plain-text error body no longer crashes _decode with a FormatException', () async {
+    // Fiber's auth middleware serves "token has expired" as plain text.
+    final client = ApiClient(
+      client: MockClient((request) async => http.Response('service unavailable', 503)),
+    );
+
+    await expectLater(
+      () => client.get('/api/v1/public/something'),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 503)
+            .having((e) => e.message, 'message', 'service unavailable'),
+      ),
+    );
+  });
+
+  test('a 401 on an authenticated route clears the session and reports it as expired', () async {
+    Session.instance.token = 'stale-token';
+    Session.instance.merchantId = 'm1';
+    final client = ApiClient(
+      client: MockClient((request) async => http.Response('token has expired', 401)),
+    );
+
+    await expectLater(
+      () => client.listStaff('m1'),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 401)
+            .having((e) => e.message, 'message', contains('session has expired')),
+      ),
+    );
+    expect(Session.instance.token, isNull, reason: 'the dead session should be cleared');
+  });
+
+  test('a 401 on a public route is NOT treated as session expiry', () async {
+    Session.instance.token = 'some-token'; // e.g. a stale token still in memory
+    final client = ApiClient(
+      client: MockClient(
+        (request) async => http.Response(jsonEncode({'error': 'invalid credentials'}), 401),
+      ),
+    );
+
+    await expectLater(
+      () => client.post('/api/v1/public/auth/login', {'phone': '+233200553771', 'password': 'wrong'}),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 401)
+            .having((e) => e.message, 'message', 'invalid credentials'),
+      ),
+    );
+    expect(Session.instance.token, 'some-token', reason: 'a login 401 must not clear the session');
   });
 }
