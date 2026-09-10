@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../../core/api_client.dart';
+import '../../../core/phone_format.dart';
 import '../../../core/push_notifications.dart';
 import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
@@ -13,12 +14,14 @@ import '../../../core/design/widgets.dart';
 /// the backend (MerchantLogin) figures out which actor an identifier
 /// belongs to and returns the right actor_type.
 ///
-/// One identifier field, not separate email/phone fields — ApiClient.login
-/// sniffs an "@" to decide which key to send it under. A merchant who
-/// registered phone-first (see OnboardingScreen — signup no longer
-/// requires an email) types their phone here exactly like a merchant who
-/// added an email later types that instead; the field doesn't need to
-/// know which one it's holding.
+/// One identifier field, not separate email/phone fields or a toggle — an
+/// "@" is enough to tell a phone number from an email (see
+/// loginIdentifierIsEmail), so a toggle would just tax every login. What
+/// the single field *does* need is to show which one it's reading: a
+/// merchant who fat-fingers an email without the "@" would otherwise have
+/// it silently treated as a phone. So there's a live hint under the field
+/// — and for a phone, it echoes the resolved +233 number, which also makes
+/// the trunk-0 normalization visible.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -37,7 +40,30 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // Rebuild the "reading this as…" hint as the merchant types.
+    _identifierController.addListener(_onIdentifierChanged);
+  }
+
+  void _onIdentifierChanged() => setState(() {});
+
+  /// null when the field is empty; otherwise a short line telling the
+  /// merchant how their input is being read.
+  String? get _identifierHint {
+    final text = _identifierController.text.trim();
+    if (text.isEmpty) return null;
+    if (loginIdentifierIsEmail(text)) return 'Signing in with your email';
+    final normalized = normalizeGhPhone(text);
+    if (RegExp(r'^\+233\d{9}$').hasMatch(normalized)) {
+      return 'Signing in with ${formatGhPhoneForDisplay(normalized)}';
+    }
+    return 'Signing in with your phone number';
+  }
+
+  @override
   void dispose() {
+    _identifierController.removeListener(_onIdentifierChanged);
     _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -116,6 +142,30 @@ class _LoginScreenState extends State<LoginScreen> {
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
                       ),
+                      if (_identifierHint != null) ...[
+                        const SizedBox(height: 7),
+                        Row(
+                          children: [
+                            Icon(
+                              loginIdentifierIsEmail(_identifierController.text.trim())
+                                  ? Icons.alternate_email
+                                  : Icons.phone_iphone,
+                              size: 13,
+                              color: AppColors.textSecondary,
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                _identifierHint!,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       OxpField(
                         label: 'Password',
