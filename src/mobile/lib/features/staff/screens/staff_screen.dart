@@ -79,8 +79,9 @@ class _StaffScreenState extends State<StaffScreen> {
               const Text('Add Staff', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
               const SizedBox(height: 4),
               const Text(
-                "Set their login email and a starting password, and tell them "
-                "both yourself — they'll log in with these on the app's Login screen.",
+                "Set a starting password and tell them yourself — they'll log "
+                "in with their phone number and that password on the Login "
+                "screen. Add their email too if they have one.",
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
               ),
               const SizedBox(height: 16),
@@ -89,7 +90,7 @@ class _StaffScreenState extends State<StaffScreen> {
               OxpField(label: 'Phone', controller: phoneController, keyboardType: TextInputType.phone),
               const SizedBox(height: 12),
               OxpField(
-                label: 'Email',
+                label: 'Email (optional)',
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -123,15 +124,12 @@ class _StaffScreenState extends State<StaffScreen> {
                           error = null;
                         });
                         try {
-                          await _api.post(
-                            '/api/v1/app/merchants/${Session.instance.merchantId}/staff',
-                            {
-                              'name': nameController.text,
-                              'phone': phoneController.text,
-                              'role': 'staff',
-                              'email': emailController.text,
-                              'password': passwordController.text,
-                            },
+                          await _api.createStaff(
+                            Session.instance.merchantId!,
+                            name: nameController.text,
+                            phone: phoneController.text,
+                            password: passwordController.text,
+                            email: emailController.text.trim(),
                           );
                           if (context.mounted) Navigator.pop(context, true);
                         } on ApiException catch (e) {

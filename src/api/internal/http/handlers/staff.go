@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
@@ -23,11 +26,32 @@ type createStaffRequest struct {
 	Password string `json:"password"`
 }
 
+// validate covers everything CreateStaff can check without a DB round trip.
+// email is deliberately absent — a staff member logs in by phone or email
+// (MerchantLogin), so a phone number and a password are enough to give
+// them a working account, same as a phone-first merchant. A merchant who
+// onboarded without an email can now add staff the same way.
+func (r createStaffRequest) validate() error {
+	if r.Name == "" || r.Phone == "" {
+		return errors.New("name and phone are required")
+	}
+	if r.Password == "" {
+		return errors.New("a password is required so this staff member can log in")
+	}
+	if len(r.Password) < minPasswordLength {
+		return fmt.Errorf("password must be at least %d characters", minPasswordLength)
+	}
+	if r.Role != "" && r.Role != "owner" && r.Role != "staff" {
+		return errors.New("role must be owner or staff")
+	}
+	return nil
+}
+
 // CreateStaff adds a merchant staff member (Section 4.9 multi-user roles).
-// Email/password are required — set by the merchant on the staff member's
-// behalf (they're told the password out-of-band) — so the staff member can
-// log in themselves via MerchantLogin (auth.go) rather than sharing the
-// owner's session.
+// The password is set by the merchant on the staff member's behalf (told
+// to them out-of-band) so the staff member can log in themselves via
+// MerchantLogin (auth.go) rather than sharing the owner's session. Email
+// is optional — see createStaffRequest.validate.
 func (h *Handler) CreateStaff(c *fiber.Ctx) error {
 	merchantID, err := parseUUIDParam(c, "id")
 	if err != nil {
@@ -38,21 +62,12 @@ func (h *Handler) CreateStaff(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return badRequest(c, "invalid request body")
 	}
-	if req.Name == "" || req.Phone == "" {
-		return badRequest(c, "name and phone are required")
-	}
-	if req.Email == "" || req.Password == "" {
-		return badRequest(c, "email and password are required so this staff member can log in")
-	}
-	if len(req.Password) < minPasswordLength {
-		return badRequest(c, "password must be at least 8 characters")
+	if err := req.validate(); err != nil {
+		return badRequest(c, err.Error())
 	}
 	role := req.Role
 	if role == "" {
 		role = "staff"
-	}
-	if role != "owner" && role != "staff" {
-		return badRequest(c, "role must be owner or staff")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)

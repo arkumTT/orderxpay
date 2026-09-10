@@ -54,4 +54,26 @@ void main() {
     final res = await client.post('/api/v1/public/otp/request', {'phone': '+233200553771'});
     expect(res['dev_otp'], '123456');
   });
+
+  test('createStaff normalizes the phone and defaults email to empty', () async {
+    late String sentBody;
+    final client = ApiClient(
+      client: MockClient((request) async {
+        sentBody = request.body;
+        return http.Response(jsonEncode({'id': 's1'}), 201);
+      }),
+    );
+
+    await client.createStaff(
+      'm1',
+      name: 'Ama Boateng',
+      phone: '024 000 0000', // trunk 0 + spaces — how a merchant actually types it
+      password: 'hunter222',
+    );
+
+    final decoded = jsonDecode(sentBody) as Map<String, dynamic>;
+    expect(decoded['phone'], '+233240000000'); // matches what login will send
+    expect(decoded['email'], '');
+    expect(decoded['role'], 'staff');
+  });
 }
