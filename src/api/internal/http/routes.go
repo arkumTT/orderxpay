@@ -184,6 +184,7 @@ func registerAdminRoutes(r fiber.Router, h *handlers.Handler) {
 	r.Delete("/feature-flags/:id/merchants/:merchantId", perm("pricing.manage"), h.RemoveFeatureFlagMerchant)
 
 	r.Get("/reporting", perm("reporting.view"), h.GetReporting)
+	r.Get("/reconciliation", perm("reporting.view"), h.GetReconciliation)
 
 	r.Get("/integrations", perm("integrations.manage"), h.ListIntegrations)
 	r.Post("/integrations/:key/secret", perm("integrations.manage"), h.SetIntegrationSecret)
