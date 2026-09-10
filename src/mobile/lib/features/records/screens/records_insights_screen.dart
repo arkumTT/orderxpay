@@ -7,6 +7,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 
 /// Section 4.7 — simple merchant analytics: best-selling items, daily
 /// collections, average order value, and repeat customers. All figures are
@@ -36,7 +37,7 @@ class _RecordsInsightsScreenState extends State<RecordsInsightsScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   @override

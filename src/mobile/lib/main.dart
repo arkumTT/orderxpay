@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'core/app_navigator.dart';
 import 'core/biometric_lock.dart';
 import 'core/design/app_theme.dart';
 import 'core/push_notifications.dart';
@@ -100,7 +101,8 @@ class _OrderxPayAppState extends State<OrderxPayApp> with WidgetsBindingObserver
     return MaterialApp(
       title: 'OrderxPay',
       theme: appTheme,
-      navigatorKey: PushNotifications.navigatorKey,
+      navigatorKey: appNavigatorKey,
+      scaffoldMessengerKey: appMessengerKey,
       initialRoute: widget.initialRoute,
       routes: {
         '/login': (context) => const LoginScreen(),

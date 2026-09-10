@@ -6,6 +6,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -65,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   @override

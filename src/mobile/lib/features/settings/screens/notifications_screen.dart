@@ -6,6 +6,7 @@ import '../../../core/session.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
+import '../../../core/pull_to_refresh.dart';
 import '../../order_requests/screens/order_requests_screen.dart';
 import '../../records/screens/invoice_detail_screen.dart';
 import '../../verify/screens/verify_screen.dart';
@@ -40,7 +41,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     setState(() {
       _future = next;
     });
-    await next;
+    await settleForRefresh(next);
   }
 
   Future<void> _markAllRead() async {
