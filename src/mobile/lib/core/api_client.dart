@@ -29,40 +29,59 @@ class ApiClient {
       'Authorization': 'Bearer ${Session.instance.token}',
   };
 
+  /// Every call in this file funnels through here — which is exactly why
+  /// the try/catch below lives at this one choke point instead of at each
+  /// call site. A request that never reaches the server at all (API not
+  /// running, `adb reverse` not forwarded on a physical device, no network
+  /// signal, DNS failure) throws `http.ClientException`, not `ApiException`
+  /// — `ApiException` only ever comes from `_decode`, i.e. a real HTTP
+  /// response. Every screen in this app catches `on ApiException`, so
+  /// before this, a network-layer failure was never caught anywhere: it
+  /// just propagated as an unhandled exception, and the UI's only visible
+  /// symptom was a loading button quietly resetting to idle with zero
+  /// explanation — indistinguishable from the button being broken. See
+  /// the commit that added this comment for the real bug report that
+  /// found it.
   Future<dynamic> _send(String method, String path, {Object? body}) async {
     final uri = _base.resolve(path);
-    final http.Response res;
-    switch (method) {
-      case 'GET':
-        res = await _client.get(uri, headers: _headers);
-      case 'POST':
-        res = await _client.post(
-          uri,
-          headers: _headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-      case 'PATCH':
-        res = await _client.patch(
-          uri,
-          headers: _headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-      case 'PUT':
-        res = await _client.put(
-          uri,
-          headers: _headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-      case 'DELETE':
-        res = await _client.delete(
-          uri,
-          headers: _headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-      default:
-        throw ArgumentError('unsupported method $method');
+    try {
+      final http.Response res;
+      switch (method) {
+        case 'GET':
+          res = await _client.get(uri, headers: _headers);
+        case 'POST':
+          res = await _client.post(
+            uri,
+            headers: _headers,
+            body: body != null ? jsonEncode(body) : null,
+          );
+        case 'PATCH':
+          res = await _client.patch(
+            uri,
+            headers: _headers,
+            body: body != null ? jsonEncode(body) : null,
+          );
+        case 'PUT':
+          res = await _client.put(
+            uri,
+            headers: _headers,
+            body: body != null ? jsonEncode(body) : null,
+          );
+        case 'DELETE':
+          res = await _client.delete(
+            uri,
+            headers: _headers,
+            body: body != null ? jsonEncode(body) : null,
+          );
+        default:
+          throw ArgumentError('unsupported method $method');
+      }
+      return _decode(res);
+    } on ApiException {
+      rethrow;
+    } on http.ClientException {
+      throw ApiException(0, "Can't reach the server — check your connection and try again.");
     }
-    return _decode(res);
   }
 
   dynamic _decode(http.Response res) {
@@ -820,7 +839,15 @@ class ApiClient {
   /// it via share_plus rather than this client writing to disk.
   Future<String> exportRecordsCsv(String merchantId) async {
     final uri = _base.resolve('/api/v1/app/merchants/$merchantId/records/export');
-    final res = await _client.get(uri, headers: _headers);
+    final http.Response res;
+    try {
+      res = await _client.get(uri, headers: _headers);
+    } on http.ClientException {
+      // Bypasses _send (needs the raw CSV body, not JSON-decoded), so it
+      // needs the same network-failure handling independently — see
+      // _send's doc comment for why this matters.
+      throw ApiException(0, "Can't reach the server — check your connection and try again.");
+    }
     if (res.statusCode >= 400) {
       throw ApiException(res.statusCode, 'failed to export records');
     }
