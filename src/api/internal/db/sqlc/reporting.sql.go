@@ -133,3 +133,77 @@ func (q *Queries) GetMerchantRevenueBreakdown(ctx context.Context, arg GetMercha
 	}
 	return items, nil
 }
+
+const getUnderwaterPayments = `-- name: GetUnderwaterPayments :many
+SELECT
+  p.id AS payment_id,
+  i.reference AS invoice_reference,
+  m.id AS merchant_id,
+  m.business_name,
+  p.amount_pesewas,
+  p.psp_fee_pesewas,
+  (i.commission_pesewas * p.amount_pesewas / NULLIF(i.total_pesewas, 0))::bigint AS commission_pesewas,
+  p.paid_at
+FROM payments p
+JOIN invoices i ON i.id = p.invoice_id
+JOIN merchants m ON m.id = i.merchant_id
+WHERE p.status = 'success'
+  AND p.paid_at >= $1::timestamptz
+  AND p.paid_at < $2::timestamptz
+  AND p.psp_fee_pesewas > (i.commission_pesewas * p.amount_pesewas / NULLIF(i.total_pesewas, 0))
+ORDER BY p.psp_fee_pesewas - (i.commission_pesewas * p.amount_pesewas / NULLIF(i.total_pesewas, 0)) DESC
+LIMIT 100
+`
+
+type GetUnderwaterPaymentsParams struct {
+	PeriodStart pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd   pgtype.Timestamptz `json:"period_end"`
+}
+
+type GetUnderwaterPaymentsRow struct {
+	PaymentID         pgtype.UUID        `json:"payment_id"`
+	InvoiceReference  string             `json:"invoice_reference"`
+	MerchantID        pgtype.UUID        `json:"merchant_id"`
+	BusinessName      string             `json:"business_name"`
+	AmountPesewas     int64              `json:"amount_pesewas"`
+	PspFeePesewas     int64              `json:"psp_fee_pesewas"`
+	CommissionPesewas int64              `json:"commission_pesewas"`
+	PaidAt            pgtype.Timestamptz `json:"paid_at"`
+}
+
+// The row-level side of margin reconciliation: individual successful
+// payments in the period where the PSP fee Paystack actually reported came
+// out higher than the commission booked against that payment. Commission is
+// prorated across partial payments the same way GetMerchantRevenueBreakdown
+// does it. An aggregate can't show this — a single delivery-heavy invoice
+// that lost money disappears the moment it is summed into a merchant who is
+// net positive, which is exactly how the bundled-delivery leak stayed
+// invisible. Capped at 100; ordered worst-first.
+func (q *Queries) GetUnderwaterPayments(ctx context.Context, arg GetUnderwaterPaymentsParams) ([]GetUnderwaterPaymentsRow, error) {
+	rows, err := q.db.Query(ctx, getUnderwaterPayments, arg.PeriodStart, arg.PeriodEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUnderwaterPaymentsRow{}
+	for rows.Next() {
+		var i GetUnderwaterPaymentsRow
+		if err := rows.Scan(
+			&i.PaymentID,
+			&i.InvoiceReference,
+			&i.MerchantID,
+			&i.BusinessName,
+			&i.AmountPesewas,
+			&i.PspFeePesewas,
+			&i.CommissionPesewas,
+			&i.PaidAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

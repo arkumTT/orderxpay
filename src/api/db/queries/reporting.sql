@@ -38,3 +38,31 @@ WHERE p.status = 'success'
   AND p.paid_at < sqlc.arg(period_end)::timestamptz
 GROUP BY DATE(p.paid_at)
 ORDER BY day;
+
+-- name: GetUnderwaterPayments :many
+-- The row-level side of margin reconciliation: individual successful
+-- payments in the period where the PSP fee Paystack actually reported came
+-- out higher than the commission booked against that payment. Commission is
+-- prorated across partial payments the same way GetMerchantRevenueBreakdown
+-- does it. An aggregate can't show this — a single delivery-heavy invoice
+-- that lost money disappears the moment it is summed into a merchant who is
+-- net positive, which is exactly how the bundled-delivery leak stayed
+-- invisible. Capped at 100; ordered worst-first.
+SELECT
+  p.id AS payment_id,
+  i.reference AS invoice_reference,
+  m.id AS merchant_id,
+  m.business_name,
+  p.amount_pesewas,
+  p.psp_fee_pesewas,
+  (i.commission_pesewas * p.amount_pesewas / NULLIF(i.total_pesewas, 0))::bigint AS commission_pesewas,
+  p.paid_at
+FROM payments p
+JOIN invoices i ON i.id = p.invoice_id
+JOIN merchants m ON m.id = i.merchant_id
+WHERE p.status = 'success'
+  AND p.paid_at >= sqlc.arg(period_start)::timestamptz
+  AND p.paid_at < sqlc.arg(period_end)::timestamptz
+  AND p.psp_fee_pesewas > (i.commission_pesewas * p.amount_pesewas / NULLIF(i.total_pesewas, 0))
+ORDER BY p.psp_fee_pesewas - (i.commission_pesewas * p.amount_pesewas / NULLIF(i.total_pesewas, 0)) DESC
+LIMIT 100;

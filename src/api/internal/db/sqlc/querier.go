@@ -167,6 +167,15 @@ type Querier interface {
 	GetStaffByEmail(ctx context.Context, dollar_1 string) (Staff, error)
 	GetStaffByPhone(ctx context.Context, phone string) (Staff, error)
 	GetSupportTransaction(ctx context.Context, reference string) (GetSupportTransactionRow, error)
+	// The row-level side of margin reconciliation: individual successful
+	// payments in the period where the PSP fee Paystack actually reported came
+	// out higher than the commission booked against that payment. Commission is
+	// prorated across partial payments the same way GetMerchantRevenueBreakdown
+	// does it. An aggregate can't show this — a single delivery-heavy invoice
+	// that lost money disappears the moment it is summed into a merchant who is
+	// net positive, which is exactly how the bundled-delivery leak stayed
+	// invisible. Capped at 100; ordered worst-first.
+	GetUnderwaterPayments(ctx context.Context, arg GetUnderwaterPaymentsParams) ([]GetUnderwaterPaymentsRow, error)
 	GetUser(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	// GetUserPermissionKeys is the union of permissions granted via the user's

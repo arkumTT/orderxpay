@@ -242,6 +242,49 @@ export type ReportingResponse = {
   merchants: MerchantRevenue[];
 };
 
+export type ReconciliationSummary = {
+  gmv_pesewas: number;
+  booked_commission_pesewas: number;
+  psp_fee_actual_pesewas: number;
+  psp_fee_expected_pesewas: number;
+  psp_fee_drift_pesewas: number;
+  realized_margin_pesewas: number;
+  realized_margin_bps: number;
+  expected_collection_fee_bps: number;
+  underwater_merchant_count: number;
+  underwater_payment_count: number;
+};
+
+export type ReconciliationMerchant = {
+  merchant_id: string;
+  business_name: string;
+  gmv_pesewas: number;
+  booked_commission_pesewas: number;
+  psp_fee_pesewas: number;
+  realized_margin_pesewas: number;
+  effective_take_rate_bps: number;
+  payment_count: number;
+};
+
+export type UnderwaterPayment = {
+  invoice_reference: string;
+  merchant_id: string;
+  business_name: string;
+  amount_pesewas: number;
+  booked_commission_pesewas: number;
+  psp_fee_pesewas: number;
+  shortfall_pesewas: number;
+  paid_at: string;
+};
+
+export type ReconciliationResponse = {
+  period_start: string;
+  period_end: string;
+  summary: ReconciliationSummary;
+  merchants: ReconciliationMerchant[];
+  underwater: UnderwaterPayment[];
+};
+
 export type Integration = {
   id: string;
   provider_key:
