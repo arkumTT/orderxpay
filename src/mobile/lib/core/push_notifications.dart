@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'api_client.dart';
+import 'app_navigator.dart';
 import 'session.dart';
 
 /// Section 4.10 Phase 2 — push notifications via Firebase Cloud Messaging,
@@ -13,14 +14,17 @@ import 'session.dart';
 /// order-request banner on Home) already works without any of this; this
 /// module is purely additive on top of it.
 ///
-/// [navigatorKey] is shared with the app's MaterialApp so a notification
-/// tap — which happens outside any widget's BuildContext, possibly before
-/// the app has even finished launching — can still navigate.
+/// A notification tap — which happens outside any widget's BuildContext,
+/// possibly before the app has even finished launching — navigates through
+/// the app-wide [appNavigatorKey] (see app_navigator.dart).
 class PushNotifications {
   PushNotifications._();
   static final PushNotifications instance = PushNotifications._();
 
-  static final navigatorKey = GlobalKey<NavigatorState>();
+  /// Kept as an alias for existing call sites; the key itself now lives in
+  /// app_navigator.dart so ApiClient can reach it too, without pulling in
+  /// Firebase.
+  static GlobalKey<NavigatorState> get navigatorKey => appNavigatorKey;
 
   final _local = FlutterLocalNotificationsPlugin();
   static const _channel = AndroidNotificationChannel(

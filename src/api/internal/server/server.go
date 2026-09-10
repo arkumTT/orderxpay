@@ -1,6 +1,8 @@
 package server
 
 import (
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -11,6 +13,22 @@ import (
 	orderxpayhttp "github.com/orderxpay/api/internal/http"
 	"github.com/orderxpay/api/internal/http/handlers"
 )
+
+// jsonErrorHandler renders every error — including Fiber's own
+// middleware-level ones (auth failures, 404s), which the default handler
+// serves as plain text — as `{"error": "..."}`, matching what every
+// handler in internal/http/handlers already returns. Clients can then rely
+// on one error shape instead of special-casing a plain-text body (a real
+// bug: the mobile app's JSON decoder choked on the plain-text "token has
+// expired" from the auth middleware).
+func jsonErrorHandler(c *fiber.Ctx, err error) error {
+	code := fiber.StatusInternalServerError
+	var fe *fiber.Error
+	if errors.As(err, &fe) {
+		code = fe.Code
+	}
+	return c.Status(code).JSON(fiber.Map{"error": err.Error()})
+}
 
 type Options struct {
 	Pool              *pgxpool.Pool
@@ -46,7 +64,8 @@ type Options struct {
 
 func New(opts Options) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName: "orderxpay-api",
+		AppName:      "orderxpay-api",
+		ErrorHandler: jsonErrorHandler,
 	})
 
 	app.Use(recover.New())
