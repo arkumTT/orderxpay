@@ -30,6 +30,21 @@ InvoiceAmounts amounts({
 int pspCost(int total) => total * 195 ~/ 10000;
 
 void main() {
+  group('merchantNetNote', () {
+    test('customer covers the fee — net matches the ask', () {
+      expect(
+        merchantNetNote(ask: 10000, net: 10001), // gross-up leaves a spare pesewa
+        'Your full price — the customer covers our fee',
+      );
+      expect(merchantNetNote(ask: 10000, net: 10000),
+          'Your full price — the customer covers our fee');
+    });
+
+    test('merchant absorbs part of the fee — names the amount', () {
+      expect(merchantNetNote(ask: 10000, net: 9750), 'After GH₵2.50 in fees');
+    });
+  });
+
   test('customer pays the fee — merchant is left whole', () {
     final a = amounts(subtotal: 10000, allocation: 'customer_only');
     expect(a.totalPesewas, 10256);

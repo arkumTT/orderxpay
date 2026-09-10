@@ -218,6 +218,12 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     deliveryBundled: _deliveryFeeHandling == 'bundled',
   );
 
+  String get _merchantNetNote => merchantNetNote(
+    ask: _subtotalPesewas +
+        (_deliveryFeeHandling == 'bundled' ? _deliveryFeePesewas : 0),
+    net: _amounts.merchantNetPesewas,
+  );
+
   List<Map<String, dynamic>> get _lineItemsPayload {
     final lines = <Map<String, dynamic>>[];
     for (final item in _items) {
@@ -460,6 +466,37 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    const Text(
+                      "You'll receive",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      formatPesewas(_amounts.merchantNetPesewas),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.payGreen,
+                      ),
+                    ),
+                  ],
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _merchantNetNote,
+                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  ),
                 ),
               ],
             ),
