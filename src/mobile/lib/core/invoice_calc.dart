@@ -1,8 +1,11 @@
+import 'format.dart';
+
 /// Client-side preview mirroring internal/http/handlers/invoice_engine.go's
 /// computeInvoiceAmounts — the server recomputes and is authoritative; this
-/// is only for showing a live total before the user submits. Any change here
-/// has to land in the Go version in the same breath, or the merchant's
-/// preview and their actual invoice will disagree.
+/// is only for showing a live total before the user submits. Any change to
+/// the *math* here has to land in the Go version in the same breath, or the
+/// merchant's preview and their actual invoice will disagree.
+/// ([merchantNetNote] below is UI copy, not math — Go doesn't need it.)
 class InvoiceAmounts {
   InvoiceAmounts({
     required this.commissionPesewas,
@@ -17,6 +20,17 @@ class InvoiceAmounts {
   /// What the merchant banks once the platform takes its commission — the
   /// figure worth showing them, since it is the one they actually care about.
   int get merchantNetPesewas => totalPesewas - commissionPesewas;
+}
+
+/// The one line shown under "You'll receive" at invoice creation. [ask] is
+/// the merchant's own price (goods + any bundled delivery); [net] is
+/// [InvoiceAmounts.merchantNetPesewas]. Either the customer is covering the
+/// platform fee (net matches the ask, give or take a rounding pesewa) or
+/// the merchant is absorbing some of it.
+String merchantNetNote({required int ask, required int net}) {
+  final absorbed = ask - net;
+  if (absorbed <= 0) return 'Your full price — the customer covers our fee';
+  return 'After ${formatPesewas(absorbed)} in fees';
 }
 
 /// How much of the commission the customer pays on top of the merchant's
