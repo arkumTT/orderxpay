@@ -560,6 +560,27 @@ class ApiClient {
     return (res as List).cast<Map<String, dynamic>>();
   }
 
+  /// Section 4.9 — a merchant adds a staff member who then logs in
+  /// themselves (MerchantLogin, by phone or email). [email] is optional:
+  /// a phone number and a password are enough for a working account, the
+  /// same as a phone-first merchant. The phone is normalized here the way
+  /// login normalizes it, so a number entered by the merchant matches when
+  /// the staffer signs in.
+  Future<Map<String, dynamic>> createStaff(
+    String merchantId, {
+    required String name,
+    required String phone,
+    required String password,
+    String role = 'staff',
+    String email = '',
+  }) => post('/api/v1/app/merchants/$merchantId/staff', {
+    'name': name,
+    'phone': normalizeGhPhone(phone),
+    'role': role,
+    'email': email,
+    'password': password,
+  });
+
   Future<Merchant> getMerchant(String merchantId) async {
     final res = await _send('GET', '/api/v1/app/merchants/$merchantId');
     return Merchant.fromJson(res as Map<String, dynamic>);
