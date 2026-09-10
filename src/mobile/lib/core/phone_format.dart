@@ -35,3 +35,12 @@ String normalizeGhPhone(String raw) {
 
   return '+233$digits';
 }
+
+/// "+233244812345" → "+233 24 481 2345" for display. Returns the input
+/// unchanged if it isn't a well-formed +233 mobile number (e.g. still
+/// mid-typing), so callers can show it either way.
+String formatGhPhoneForDisplay(String e164) {
+  final m = RegExp(r'^\+233(\d{2})(\d{3})(\d{4})$').firstMatch(e164);
+  if (m == null) return e164;
+  return '+233 ${m.group(1)} ${m.group(2)} ${m.group(3)}';
+}

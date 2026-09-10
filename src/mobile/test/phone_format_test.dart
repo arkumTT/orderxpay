@@ -41,4 +41,17 @@ void main() {
   test('self-heals the malformed +2330… form if fed back through', () {
     expect(normalizeGhPhone('+2330592824972'), '+233592824972');
   });
+
+  group('formatGhPhoneForDisplay', () {
+    test('groups a well-formed +233 mobile number', () {
+      expect(formatGhPhoneForDisplay('+233244812345'), '+233 24 481 2345');
+      expect(formatGhPhoneForDisplay(canonical), '+233 59 282 4972');
+    });
+
+    test('returns anything malformed unchanged (still mid-typing)', () {
+      expect(formatGhPhoneForDisplay('+23324'), '+23324');
+      expect(formatGhPhoneForDisplay('+2332448123456'), '+2332448123456'); // too long
+      expect(formatGhPhoneForDisplay(''), '');
+    });
+  });
 }

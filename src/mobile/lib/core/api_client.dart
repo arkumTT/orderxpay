@@ -17,6 +17,13 @@ class ApiException implements Exception {
   String toString() => 'ApiException($statusCode): $message';
 }
 
+/// The single login field (LoginScreen) holds either a phone number or an
+/// email; an "@" is what tells them apart — phone numbers never contain one,
+/// emails always do. Used both by [ApiClient.login] (to pick the request
+/// key) and by LoginScreen (to show the user which one it's reading), so
+/// the two can't drift.
+bool loginIdentifierIsEmail(String identifier) => identifier.contains('@');
+
 /// Thin, typed wrapper around the Go API (src/api). Attaches the session
 /// token (see session.dart) to every /app request automatically.
 class ApiClient {
@@ -165,7 +172,7 @@ class ApiClient {
   /// Returns access_token/merchant_id/actor_type/business_name; the caller
   /// (LoginScreen) is responsible for saving it into Session.
   Future<Map<String, dynamic>> login(String identifier, String password) {
-    final isEmail = identifier.contains('@');
+    final isEmail = loginIdentifierIsEmail(identifier);
     final value = isEmail ? identifier : normalizeGhPhone(identifier);
     return post('/api/v1/public/auth/login', {
       if (isEmail) 'email': value else 'phone': value,
