@@ -3,8 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -231,6 +233,11 @@ func (h *Handler) ResolveDispute(c *fiber.Ctx) error {
 			return badRequest(c, "refund_amount_pesewas exceeds the refundable balance on that payment")
 		}
 
+		invoice, err := h.Queries.GetInvoice(c.Context(), pmt.InvoiceID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load invoice"})
+		}
+
 		if _, err := pspClient.RefundTransaction(c.Context(), pmt.PspReference, req.RefundAmountPesewas); err != nil {
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "failed to process refund with provider"})
 		}
@@ -239,21 +246,43 @@ func (h *Handler) ResolveDispute(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "refund succeeded with the provider but failed to record — needs manual reconciliation"})
 		}
 
-		invoice, err := h.Queries.GetInvoice(c.Context(), dispute.InvoiceID)
+		// Section 7.7: if this payment was already claimed by a settlement,
+		// the merchant was already paid their share of it — Phase 1 payouts
+		// are manual, so once settlement_id is set that money genuinely left
+		// OrderxPay's balance. Record a clawback for the merchant's entitled
+		// share of what's being refunded now (not the whole refund —
+		// OrderxPay's own commission on that slice was never paid to the
+		// merchant, so it isn't owed back), to be deducted from their next
+		// settlement. Unlike the invoice-status update below, a failure here
+		// is not best-effort: it's real money the merchant now owes back,
+		// so it has to surface loudly rather than silently go untracked.
+		if pmt.SettlementID.Valid {
+			owed := merchantEntitledShare(req.RefundAmountPesewas, invoice.TotalPesewas, invoice.CommissionPesewas)
+			if owed > 0 {
+				if _, err := h.Queries.CreateSettlementClawback(c.Context(), db.CreateSettlementClawbackParams{
+					MerchantID:    invoice.MerchantID,
+					PaymentID:     pmt.ID,
+					DisputeID:     dispute.ID,
+					AmountPesewas: owed,
+					Reason:        fmt.Sprintf("refund of %s on a payment already paid out (dispute %s)", formatPesewas(req.RefundAmountPesewas), uuid.UUID(dispute.ID.Bytes).String()),
+				}); err != nil {
+					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "refund succeeded but failed to record the settlement clawback — needs manual reconciliation"})
+				}
+			}
+		}
+
+		allPayments, err := h.Queries.ListPaymentsByInvoice(c.Context(), dispute.InvoiceID)
 		if err == nil {
-			allPayments, err := h.Queries.ListPaymentsByInvoice(c.Context(), dispute.InvoiceID)
-			if err == nil {
-				var totalRefunded int64
-				for _, p := range allPayments {
-					if p.ID == pmt.ID {
-						totalRefunded += p.RefundedAmountPesewas + req.RefundAmountPesewas
-					} else {
-						totalRefunded += p.RefundedAmountPesewas
-					}
+			var totalRefunded int64
+			for _, p := range allPayments {
+				if p.ID == pmt.ID {
+					totalRefunded += p.RefundedAmountPesewas + req.RefundAmountPesewas
+				} else {
+					totalRefunded += p.RefundedAmountPesewas
 				}
-				if totalRefunded >= invoice.TotalPesewas {
-					_, _ = h.Queries.SetInvoiceStatus(c.Context(), db.SetInvoiceStatusParams{ID: invoice.ID, Status: "refunded"})
-				}
+			}
+			if totalRefunded >= invoice.TotalPesewas {
+				_, _ = h.Queries.SetInvoiceStatus(c.Context(), db.SetInvoiceStatusParams{ID: invoice.ID, Status: "refunded"})
 			}
 		}
 	}
@@ -282,4 +311,18 @@ func (h *Handler) ResolveDispute(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(updated)
+}
+
+// merchantEntitledShare is the portion of a refund that was actually paid
+// to the merchant, as opposed to OrderxPay's own commission on that slice —
+// the amount a clawback needs to recover once the payment carrying it has
+// already gone through a settlement. Mirrors ComputeSettlementAggregate's
+// net_payout proration: total_pesewas is exactly subtotal + service_charge
+// (+ bundled delivery), so (total - commission) is the merchant's share of
+// every pesewa on the invoice, same as at settlement time.
+func merchantEntitledShare(refundAmountPesewas, invoiceTotalPesewas, invoiceCommissionPesewas int64) int64 {
+	if invoiceTotalPesewas <= 0 {
+		return 0
+	}
+	return refundAmountPesewas * (invoiceTotalPesewas - invoiceCommissionPesewas) / invoiceTotalPesewas
 }

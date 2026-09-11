@@ -11,16 +11,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const applySettlementClawback = `-- name: ApplySettlementClawback :exec
+UPDATE settlement_clawbacks SET applied_settlement_id = $1
+WHERE id = $2
+`
+
+type ApplySettlementClawbackParams struct {
+	AppliedSettlementID pgtype.UUID `json:"applied_settlement_id"`
+	ID                  pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) ApplySettlementClawback(ctx context.Context, arg ApplySettlementClawbackParams) error {
+	_, err := q.db.Exec(ctx, applySettlementClawback, arg.AppliedSettlementID, arg.ID)
+	return err
+}
+
 const computeSettlementAggregate = `-- name: ComputeSettlementAggregate :one
 SELECT
-  COALESCE(SUM(p.amount_pesewas), 0)::bigint AS gross_collections_pesewas,
+  COALESCE(SUM(p.amount_pesewas - p.refunded_amount_pesewas), 0)::bigint AS gross_collections_pesewas,
   COALESCE(SUM(p.psp_fee_pesewas), 0)::bigint AS psp_fees_pesewas,
-  COALESCE(SUM(i.commission_pesewas * p.amount_pesewas / NULLIF(i.total_pesewas, 0)), 0)::bigint AS commission_pesewas,
+  COALESCE(SUM(i.commission_pesewas * (p.amount_pesewas - p.refunded_amount_pesewas) / NULLIF(i.total_pesewas, 0)), 0)::bigint AS commission_pesewas,
   COALESCE(SUM(
     (i.subtotal_pesewas + i.service_charge_pesewas
       + CASE WHEN i.delivery_fee_handling = 'bundled' THEN COALESCE(i.delivery_fee_pesewas, 0) ELSE 0 END
       - i.commission_pesewas
-    ) * p.amount_pesewas / NULLIF(i.total_pesewas, 0)
+    ) * (p.amount_pesewas - p.refunded_amount_pesewas) / NULLIF(i.total_pesewas, 0)
   ), 0)::bigint AS net_payout_pesewas,
   COUNT(*)::bigint AS payment_count
 FROM payments p
@@ -58,6 +73,13 @@ type ComputeSettlementAggregateRow struct {
 // invoice settles correctly on whichever payment(s) landed in this window,
 // without ever needing to touch a payment already claimed by an earlier
 // settlement (p.settlement_id IS NULL).
+//
+// Every sum below uses (amount_pesewas - refunded_amount_pesewas), not the
+// raw amount — a payment refunded before it was ever settled must not still
+// pay the merchant, or book OrderxPay commission, on money that already
+// went back to the customer. A payment refunded *after* settlement is a
+// different problem entirely (the merchant was already paid) — see
+// settlement_clawbacks and GenerateSettlement for that half.
 func (q *Queries) ComputeSettlementAggregate(ctx context.Context, arg ComputeSettlementAggregateParams) (ComputeSettlementAggregateRow, error) {
 	row := q.db.QueryRow(ctx, computeSettlementAggregate, arg.MerchantID, arg.PeriodStart, arg.PeriodEnd)
 	var i ComputeSettlementAggregateRow
@@ -72,9 +94,9 @@ func (q *Queries) ComputeSettlementAggregate(ctx context.Context, arg ComputeSet
 }
 
 const createSettlement = `-- name: CreateSettlement :one
-INSERT INTO settlements (merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, withdrawal_fee_pesewas, net_payout_pesewas)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas
+INSERT INTO settlements (merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, withdrawal_fee_pesewas, clawback_pesewas, net_payout_pesewas)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas, clawback_pesewas
 `
 
 type CreateSettlementParams struct {
@@ -85,6 +107,7 @@ type CreateSettlementParams struct {
 	PspFeesPesewas          int64       `json:"psp_fees_pesewas"`
 	CommissionPesewas       int64       `json:"commission_pesewas"`
 	WithdrawalFeePesewas    int64       `json:"withdrawal_fee_pesewas"`
+	ClawbackPesewas         int64       `json:"clawback_pesewas"`
 	NetPayoutPesewas        int64       `json:"net_payout_pesewas"`
 }
 
@@ -97,6 +120,7 @@ func (q *Queries) CreateSettlement(ctx context.Context, arg CreateSettlementPara
 		arg.PspFeesPesewas,
 		arg.CommissionPesewas,
 		arg.WithdrawalFeePesewas,
+		arg.ClawbackPesewas,
 		arg.NetPayoutPesewas,
 	)
 	var i Settlement
@@ -113,12 +137,53 @@ func (q *Queries) CreateSettlement(ctx context.Context, arg CreateSettlementPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.WithdrawalFeePesewas,
+		&i.ClawbackPesewas,
+	)
+	return i, err
+}
+
+const createSettlementClawback = `-- name: CreateSettlementClawback :one
+INSERT INTO settlement_clawbacks (merchant_id, payment_id, dispute_id, amount_pesewas, reason)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, merchant_id, payment_id, dispute_id, amount_pesewas, reason, applied_settlement_id, created_at
+`
+
+type CreateSettlementClawbackParams struct {
+	MerchantID    pgtype.UUID `json:"merchant_id"`
+	PaymentID     pgtype.UUID `json:"payment_id"`
+	DisputeID     pgtype.UUID `json:"dispute_id"`
+	AmountPesewas int64       `json:"amount_pesewas"`
+	Reason        string      `json:"reason"`
+}
+
+// Section 7.7: records what a merchant now owes back because a payment
+// that already went through a completed settlement got refunded. See
+// 000034's migration comment for why amount_pesewas is the merchant's
+// entitled share of the refund, not the whole refund.
+func (q *Queries) CreateSettlementClawback(ctx context.Context, arg CreateSettlementClawbackParams) (SettlementClawback, error) {
+	row := q.db.QueryRow(ctx, createSettlementClawback,
+		arg.MerchantID,
+		arg.PaymentID,
+		arg.DisputeID,
+		arg.AmountPesewas,
+		arg.Reason,
+	)
+	var i SettlementClawback
+	err := row.Scan(
+		&i.ID,
+		&i.MerchantID,
+		&i.PaymentID,
+		&i.DisputeID,
+		&i.AmountPesewas,
+		&i.Reason,
+		&i.AppliedSettlementID,
+		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getSettlement = `-- name: GetSettlement :one
-SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas FROM settlements WHERE id = $1
+SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas, clawback_pesewas FROM settlements WHERE id = $1
 `
 
 func (q *Queries) GetSettlement(ctx context.Context, id pgtype.UUID) (Settlement, error) {
@@ -137,12 +202,51 @@ func (q *Queries) GetSettlement(ctx context.Context, id pgtype.UUID) (Settlement
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.WithdrawalFeePesewas,
+		&i.ClawbackPesewas,
 	)
 	return i, err
 }
 
+const listOutstandingClawbacksByMerchant = `-- name: ListOutstandingClawbacksByMerchant :many
+SELECT id, merchant_id, payment_id, dispute_id, amount_pesewas, reason, applied_settlement_id, created_at FROM settlement_clawbacks
+WHERE merchant_id = $1 AND applied_settlement_id IS NULL
+ORDER BY created_at ASC
+`
+
+// Oldest first — GenerateSettlement consumes a merchant's debt in this
+// order, one whole clawback at a time (see that function's comment on why
+// a clawback is never split across settlements).
+func (q *Queries) ListOutstandingClawbacksByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]SettlementClawback, error) {
+	rows, err := q.db.Query(ctx, listOutstandingClawbacksByMerchant, merchantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SettlementClawback{}
+	for rows.Next() {
+		var i SettlementClawback
+		if err := rows.Scan(
+			&i.ID,
+			&i.MerchantID,
+			&i.PaymentID,
+			&i.DisputeID,
+			&i.AmountPesewas,
+			&i.Reason,
+			&i.AppliedSettlementID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSettlementsAdmin = `-- name: ListSettlementsAdmin :many
-SELECT s.id, s.merchant_id, s.period_start, s.period_end, s.gross_collections_pesewas, s.psp_fees_pesewas, s.commission_pesewas, s.net_payout_pesewas, s.status, s.created_at, s.updated_at, s.withdrawal_fee_pesewas, m.business_name AS merchant_business_name
+SELECT s.id, s.merchant_id, s.period_start, s.period_end, s.gross_collections_pesewas, s.psp_fees_pesewas, s.commission_pesewas, s.net_payout_pesewas, s.status, s.created_at, s.updated_at, s.withdrawal_fee_pesewas, s.clawback_pesewas, m.business_name AS merchant_business_name
 FROM settlements s
 JOIN merchants m ON m.id = s.merchant_id
 WHERE ($1::text = '' OR s.status = $1::text)
@@ -169,6 +273,7 @@ type ListSettlementsAdminRow struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	WithdrawalFeePesewas    int64              `json:"withdrawal_fee_pesewas"`
+	ClawbackPesewas         int64              `json:"clawback_pesewas"`
 	MerchantBusinessName    string             `json:"merchant_business_name"`
 }
 
@@ -197,6 +302,7 @@ func (q *Queries) ListSettlementsAdmin(ctx context.Context, arg ListSettlementsA
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.WithdrawalFeePesewas,
+			&i.ClawbackPesewas,
 			&i.MerchantBusinessName,
 		); err != nil {
 			return nil, err
@@ -210,7 +316,7 @@ func (q *Queries) ListSettlementsAdmin(ctx context.Context, arg ListSettlementsA
 }
 
 const listSettlementsByMerchant = `-- name: ListSettlementsByMerchant :many
-SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas FROM settlements WHERE merchant_id = $1 ORDER BY period_start DESC
+SELECT id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas, clawback_pesewas FROM settlements WHERE merchant_id = $1 ORDER BY period_start DESC
 `
 
 func (q *Queries) ListSettlementsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]Settlement, error) {
@@ -235,6 +341,7 @@ func (q *Queries) ListSettlementsByMerchant(ctx context.Context, merchantID pgty
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.WithdrawalFeePesewas,
+			&i.ClawbackPesewas,
 		); err != nil {
 			return nil, err
 		}
@@ -284,7 +391,7 @@ func (q *Queries) MarkPaymentsSettled(ctx context.Context, arg MarkPaymentsSettl
 
 const setSettlementStatus = `-- name: SetSettlementStatus :one
 UPDATE settlements SET status = $2 WHERE id = $1
-RETURNING id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas
+RETURNING id, merchant_id, period_start, period_end, gross_collections_pesewas, psp_fees_pesewas, commission_pesewas, net_payout_pesewas, status, created_at, updated_at, withdrawal_fee_pesewas, clawback_pesewas
 `
 
 type SetSettlementStatusParams struct {
@@ -308,6 +415,7 @@ func (q *Queries) SetSettlementStatus(ctx context.Context, arg SetSettlementStat
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.WithdrawalFeePesewas,
+		&i.ClawbackPesewas,
 	)
 	return i, err
 }

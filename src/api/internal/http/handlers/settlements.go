@@ -127,17 +127,35 @@ func (h *Handler) GenerateSettlement(c *fiber.Ctx) error {
 		return badRequest(c, "no unsettled successful payments for this merchant in the given period")
 	}
 
+	// Section 7.7: work off any debt this merchant owes from a refund/
+	// chargeback that landed on a payment from an *earlier* settlement —
+	// the merchant was already paid that money, so it comes out of this
+	// one instead. Must happen before the threshold check below: a payout
+	// that clawback reduces to near nothing shouldn't clear the bar to be
+	// worth paying out at all.
+	outstanding, err := qtx.ListOutstandingClawbacksByMerchant(c.Context(), merchantID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load outstanding clawbacks"})
+	}
+	netAfterClawback, clawbacksApplied := consumeOutstandingClawbacks(agg.NetPayoutPesewas, outstanding)
+	clawbackPesewas := agg.NetPayoutPesewas - netAfterClawback
+
 	// Section 7.2: a merchant can hold payouts back until they are worth
 	// taking. The withdrawal fee below is flat, so paying out ₵20 a day costs
 	// proportionally far more than paying out ₵300 once a week — the
 	// threshold is how a merchant opts into the cheaper shape.
-	if agg.NetPayoutPesewas < merchant.PayoutMinThresholdPesewas {
+	if netAfterClawback < merchant.PayoutMinThresholdPesewas {
+		if clawbackPesewas > 0 {
+			return badRequest(c, fmt.Sprintf(
+				"net payout of %s (after %s clawed back for prior refunds) is below this merchant's minimum payout threshold of %s",
+				formatPesewas(netAfterClawback), formatPesewas(clawbackPesewas), formatPesewas(merchant.PayoutMinThresholdPesewas)))
+		}
 		return badRequest(c, fmt.Sprintf(
 			"net payout of %s is below this merchant's minimum payout threshold of %s",
-			formatPesewas(agg.NetPayoutPesewas), formatPesewas(merchant.PayoutMinThresholdPesewas)))
+			formatPesewas(netAfterClawback), formatPesewas(merchant.PayoutMinThresholdPesewas)))
 	}
 
-	withdrawalFee, err := h.withdrawalFeeFor(c.Context(), merchantID, merchant.PayoutAccountType, agg.NetPayoutPesewas)
+	withdrawalFee, err := h.withdrawalFeeFor(c.Context(), merchantID, merchant.PayoutAccountType, netAfterClawback)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to resolve withdrawal fee"})
 	}
@@ -150,10 +168,20 @@ func (h *Handler) GenerateSettlement(c *fiber.Ctx) error {
 		PspFeesPesewas:          agg.PspFeesPesewas,
 		CommissionPesewas:       agg.CommissionPesewas,
 		WithdrawalFeePesewas:    withdrawalFee,
-		NetPayoutPesewas:        agg.NetPayoutPesewas - withdrawalFee,
+		ClawbackPesewas:         clawbackPesewas,
+		NetPayoutPesewas:        netAfterClawback - withdrawalFee,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create settlement"})
+	}
+
+	for _, cb := range clawbacksApplied {
+		if err := qtx.ApplySettlementClawback(c.Context(), db.ApplySettlementClawbackParams{
+			ID:                  cb.ID,
+			AppliedSettlementID: settlement.ID,
+		}); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to apply settlement clawback"})
+		}
 	}
 
 	if err := qtx.MarkPaymentsSettled(c.Context(), db.MarkPaymentsSettledParams{
@@ -171,6 +199,7 @@ func (h *Handler) GenerateSettlement(c *fiber.Ctx) error {
 		"psp_fees_pesewas":          settlement.PspFeesPesewas,
 		"commission_pesewas":        settlement.CommissionPesewas,
 		"withdrawal_fee_pesewas":    settlement.WithdrawalFeePesewas,
+		"clawback_pesewas":          settlement.ClawbackPesewas,
 		"net_payout_pesewas":        settlement.NetPayoutPesewas,
 		"payment_count":             agg.PaymentCount,
 		"period_start":              req.PeriodStart,
@@ -353,4 +382,30 @@ func withdrawalFee(momoFee, bankFee, waiver int64, accountType pgtype.Text, netP
 		fee = netPayoutPesewas
 	}
 	return fee
+}
+
+// consumeOutstandingClawbacks applies a merchant's outstanding clawback
+// debt against a settlement's gross net payout, oldest debt first, one
+// whole clawback at a time. A clawback is never split across settlements —
+// if the oldest outstanding one doesn't fit inside what's left, it (and
+// every clawback behind it in the queue) stays outstanding for next time
+// rather than letting a later, smaller one jump the line. That keeps a
+// single large chargeback from being silently nibbled away across many
+// settlements while looking, on any one of them, like it was never
+// applied at all.
+//
+// Returns the payout remaining after deductions (always >= 0, and never
+// more is taken than the payout itself has) and exactly which clawbacks
+// were fully absorbed — the caller still owes qtx.ApplySettlementClawback
+// on each of those before committing.
+func consumeOutstandingClawbacks(netPayoutPesewas int64, outstanding []db.SettlementClawback) (remaining int64, applied []db.SettlementClawback) {
+	remaining = netPayoutPesewas
+	for _, cb := range outstanding {
+		if cb.AmountPesewas > remaining {
+			break
+		}
+		remaining -= cb.AmountPesewas
+		applied = append(applied, cb)
+	}
+	return remaining, applied
 }

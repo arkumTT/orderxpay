@@ -395,6 +395,18 @@ type Settlement struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	WithdrawalFeePesewas    int64              `json:"withdrawal_fee_pesewas"`
+	ClawbackPesewas         int64              `json:"clawback_pesewas"`
+}
+
+type SettlementClawback struct {
+	ID                  pgtype.UUID        `json:"id"`
+	MerchantID          pgtype.UUID        `json:"merchant_id"`
+	PaymentID           pgtype.UUID        `json:"payment_id"`
+	DisputeID           pgtype.UUID        `json:"dispute_id"`
+	AmountPesewas       int64              `json:"amount_pesewas"`
+	Reason              string             `json:"reason"`
+	AppliedSettlementID pgtype.UUID        `json:"applied_settlement_id"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 }
 
 type Staff struct {
