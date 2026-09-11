@@ -8,6 +8,7 @@ import 'core/push_notifications.dart';
 import 'core/session.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/onboarding/screens/biometric_lock_screen.dart';
+import 'features/onboarding/screens/forgot_password_screen.dart';
 import 'features/onboarding/screens/login_screen.dart';
 import 'features/onboarding/screens/onboarding_screen.dart';
 import 'features/catalog/screens/catalog_screen.dart';
@@ -107,6 +108,7 @@ class _OrderxPayAppState extends State<OrderxPayApp> with WidgetsBindingObserver
       routes: {
         '/login': (context) => const LoginScreen(),
         '/onboarding': (context) => const OnboardingScreen(),
+        '/forgot-password': (context) => const ForgotPasswordScreen(),
         '/biometric-lock': (context) => const BiometricLockScreen(),
         '/': (context) => const HomeScreen(),
         '/catalog': (context) => const CatalogScreen(),

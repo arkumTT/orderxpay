@@ -86,6 +86,27 @@ void main() {
     expect(decoded['role'], 'staff');
   });
 
+  test('resetPassword posts to the reset-password endpoint without a code or token', () async {
+    late String sentPath;
+    late String sentBody;
+    final client = ApiClient(
+      client: MockClient((request) async {
+        sentPath = request.url.path;
+        sentBody = request.body;
+        return http.Response(jsonEncode({'reset': true}), 200);
+      }),
+    );
+
+    final res = await client.resetPassword('+233244123456', 'NewSecret1');
+
+    expect(sentPath, '/api/v1/public/auth/reset-password');
+    final decoded = jsonDecode(sentBody) as Map<String, dynamic>;
+    expect(decoded['phone'], '+233244123456');
+    expect(decoded['new_password'], 'NewSecret1');
+    expect(decoded.containsKey('code'), false); // the code was already spent by verifyOtp
+    expect(res['reset'], true);
+  });
+
   test('a plain-text error body no longer crashes _decode with a FormatException', () async {
     // Fiber's auth middleware serves "token has expired" as plain text.
     final client = ApiClient(

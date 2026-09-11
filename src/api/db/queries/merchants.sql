@@ -41,6 +41,10 @@ RETURNING *;
 UPDATE merchants SET email = $2 WHERE id = $1
 RETURNING *;
 
+-- name: UpdateMerchantPassword :one
+UPDATE merchants SET password_hash = $2 WHERE id = $1
+RETURNING *;
+
 -- name: UpdateMerchantFeeSettings :one
 UPDATE merchants
 SET service_charge_allocation = $2,

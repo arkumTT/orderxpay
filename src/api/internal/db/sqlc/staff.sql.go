@@ -146,3 +146,30 @@ func (q *Queries) ListStaffByMerchant(ctx context.Context, merchantID pgtype.UUI
 	}
 	return items, nil
 }
+
+const updateStaffPassword = `-- name: UpdateStaffPassword :one
+UPDATE staff SET password_hash = $2 WHERE id = $1
+RETURNING id, merchant_id, name, phone, role, created_at, updated_at, email, password_hash
+`
+
+type UpdateStaffPasswordParams struct {
+	ID           pgtype.UUID `json:"id"`
+	PasswordHash pgtype.Text `json:"password_hash"`
+}
+
+func (q *Queries) UpdateStaffPassword(ctx context.Context, arg UpdateStaffPasswordParams) (Staff, error) {
+	row := q.db.QueryRow(ctx, updateStaffPassword, arg.ID, arg.PasswordHash)
+	var i Staff
+	err := row.Scan(
+		&i.ID,
+		&i.MerchantID,
+		&i.Name,
+		&i.Phone,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.PasswordHash,
+	)
+	return i, err
+}

@@ -12,6 +12,10 @@ SELECT * FROM staff WHERE email = $1::text;
 -- name: ListStaffByMerchant :many
 SELECT * FROM staff WHERE merchant_id = $1 ORDER BY created_at DESC;
 
+-- name: UpdateStaffPassword :one
+UPDATE staff SET password_hash = $2 WHERE id = $1
+RETURNING *;
+
 -- name: DeleteStaff :execrows
 -- merchant_id in the WHERE clause, not just id — a staff row belongs to
 -- exactly one merchant, and the caller must own it (RowsAffected() == 0

@@ -26,6 +26,7 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handler) {
 	public := v1.Group("/public")
 	public.Post("/admin/auth/login", h.UserLogin)
 	public.Post("/auth/login", h.MerchantLogin)
+	public.Post("/auth/reset-password", h.ResetPassword)
 	public.Post("/merchants", h.CreateMerchant)
 	public.Post("/otp/request", h.RequestPhoneOTP)
 	public.Post("/otp/verify", h.VerifyPhoneOTP)
