@@ -107,6 +107,44 @@ void main() {
     expect(res['reset'], true);
   });
 
+  test('declineOrderRequest sends the category and note as decline fields', () async {
+    late String sentBody;
+    final client = ApiClient(
+      client: MockClient((request) async {
+        sentBody = request.body;
+        return http.Response(jsonEncode({'status': 'declined'}), 200);
+      }),
+    );
+
+    await client.declineOrderRequest(
+      'm1',
+      'r1',
+      category: 'out_of_stock',
+      note: 'restocking Thursday',
+    );
+
+    final decoded = jsonDecode(sentBody) as Map<String, dynamic>;
+    expect(decoded['status'], 'declined');
+    expect(decoded['decline_reason_category'], 'out_of_stock');
+    expect(decoded['decline_reason'], 'restocking Thursday');
+  });
+
+  test('declineOrderRequest defaults note to empty when not given', () async {
+    late String sentBody;
+    final client = ApiClient(
+      client: MockClient((request) async {
+        sentBody = request.body;
+        return http.Response(jsonEncode({'status': 'declined'}), 200);
+      }),
+    );
+
+    await client.declineOrderRequest('m1', 'r1', category: 'duplicate');
+
+    final decoded = jsonDecode(sentBody) as Map<String, dynamic>;
+    expect(decoded['decline_reason_category'], 'duplicate');
+    expect(decoded['decline_reason'], '');
+  });
+
   test('a plain-text error body no longer crashes _decode with a FormatException', () async {
     // Fiber's auth middleware serves "token has expired" as plain text.
     final client = ApiClient(
