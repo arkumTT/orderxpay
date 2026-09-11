@@ -56,7 +56,10 @@ export default async function SettlementsPage() {
           amount payable per merchant. Generating a batch settles every
           not-yet-settled successful payment in the chosen period; marking a
           settlement paid records that the payout was actually sent — Phase
-          1 payouts are executed manually, outside this system.
+          1 payouts are executed manually, outside this system. A refund or
+          chargeback resolved against a payment from an earlier, already-paid
+          settlement is recovered by withholding it from this merchant&apos;s
+          next batch — see the Clawback column.
         </p>
       </div>
 
@@ -77,6 +80,7 @@ export default async function SettlementsPage() {
                 <th className="px-4 py-2 text-right">Gross collected</th>
                 <th className="px-4 py-2 text-right">PSP fees</th>
                 <th className="px-4 py-2 text-right">Commission</th>
+                <th className="px-4 py-2 text-right">Clawback</th>
                 <th className="px-4 py-2 text-right">Net payout</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2">Actions</th>
@@ -99,6 +103,18 @@ export default async function SettlementsPage() {
                   </td>
                   <td className="px-4 py-2 text-right text-neutral-600">
                     {formatPesewas(s.commission_pesewas)}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {s.clawback_pesewas > 0 ? (
+                      <span
+                        className="text-red-600"
+                        title="Withheld to repay a refund or chargeback on a payment from an earlier, already-paid settlement"
+                      >
+                        −{formatPesewas(s.clawback_pesewas)}
+                      </span>
+                    ) : (
+                      <span className="text-neutral-300">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right font-medium text-neutral-900">
                     {formatPesewas(s.net_payout_pesewas)}

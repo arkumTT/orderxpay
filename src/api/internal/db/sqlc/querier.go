@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	AddFeatureFlagMerchant(ctx context.Context, arg AddFeatureFlagMerchantParams) error
 	AddPaymentRefund(ctx context.Context, arg AddPaymentRefundParams) (Payment, error)
+	ApplySettlementClawback(ctx context.Context, arg ApplySettlementClawbackParams) error
 	// Used when a submission is approved: the tier and the fork that earned it
 	// land together, so a Tier 2 merchant always carries business_type
 	// 'registered' and the two can never drift apart.
@@ -30,6 +31,13 @@ type Querier interface {
 	// invoice settles correctly on whichever payment(s) landed in this window,
 	// without ever needing to touch a payment already claimed by an earlier
 	// settlement (p.settlement_id IS NULL).
+	//
+	// Every sum below uses (amount_pesewas - refunded_amount_pesewas), not the
+	// raw amount — a payment refunded before it was ever settled must not still
+	// pay the merchant, or book OrderxPay commission, on money that already
+	// went back to the customer. A payment refunded *after* settlement is a
+	// different problem entirely (the merchant was already paid) — see
+	// settlement_clawbacks and GenerateSettlement for that half.
 	ComputeSettlementAggregate(ctx context.Context, arg ComputeSettlementAggregateParams) (ComputeSettlementAggregateRow, error)
 	// Rate-limit for RequestPhoneOTP: how many codes have been requested for
 	// this phone since [since] (e.g. the last hour).
@@ -65,6 +73,11 @@ type Querier interface {
 	// (risk_flags_dedupe_open) — a scan re-run should never spam duplicates.
 	CreateRiskFlag(ctx context.Context, arg CreateRiskFlagParams) error
 	CreateSettlement(ctx context.Context, arg CreateSettlementParams) (Settlement, error)
+	// Section 7.7: records what a merchant now owes back because a payment
+	// that already went through a completed settlement got refunded. See
+	// 000034's migration comment for why amount_pesewas is the merchant's
+	// entitled share of the refund, not the whole refund.
+	CreateSettlementClawback(ctx context.Context, arg CreateSettlementClawbackParams) (SettlementClawback, error)
 	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWebhookDelivery(ctx context.Context, arg CreateWebhookDeliveryParams) error
@@ -232,6 +245,10 @@ type Querier interface {
 	ListMerchantNotes(ctx context.Context, merchantID pgtype.UUID) ([]ListMerchantNotesRow, error)
 	ListMerchants(ctx context.Context, arg ListMerchantsParams) ([]Merchant, error)
 	ListNotificationsByMerchant(ctx context.Context, arg ListNotificationsByMerchantParams) ([]Notification, error)
+	// Oldest first — GenerateSettlement consumes a merchant's debt in this
+	// order, one whole clawback at a time (see that function's comment on why
+	// a clawback is never split across settlements).
+	ListOutstandingClawbacksByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]SettlementClawback, error)
 	ListPaymentsByInvoice(ctx context.Context, invoiceID pgtype.UUID) ([]Payment, error)
 	ListPendingOrderRequestsByMerchant(ctx context.Context, merchantID pgtype.UUID) ([]OrderRequest, error)
 	ListPermissions(ctx context.Context) ([]Permission, error)

@@ -12,6 +12,10 @@ export type Settlement = {
   // Flat fee charged for moving this batch out to the merchant's wallet or
   // bank, already deducted from net_payout_pesewas.
   withdrawal_fee_pesewas: number;
+  // How much of this batch's payout was withheld to repay a refund or
+  // chargeback on a payment from an earlier, already-paid settlement —
+  // also already deducted from net_payout_pesewas. Zero most of the time.
+  clawback_pesewas: number;
   net_payout_pesewas: number;
   status: "pending" | "processing" | "paid" | "failed";
   created_at: string;

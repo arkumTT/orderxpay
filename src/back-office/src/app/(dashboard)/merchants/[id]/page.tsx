@@ -312,6 +312,14 @@ export default async function MerchantDetailPage(
                     </td>
                     <td className="px-4 py-2 text-right text-neutral-900">
                       {formatPesewas(s.net_payout_pesewas)}
+                      {s.clawback_pesewas > 0 && (
+                        <div
+                          className="text-xs font-normal text-red-600"
+                          title="Withheld to repay a refund or chargeback on a payment from an earlier, already-paid settlement"
+                        >
+                          −{formatPesewas(s.clawback_pesewas)} clawed back
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-2">
                       <span

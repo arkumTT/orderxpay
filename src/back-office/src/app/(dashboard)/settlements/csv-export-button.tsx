@@ -29,7 +29,7 @@ export function CsvExportButton({
 }) {
   function handleExport() {
     const lines = [
-      ["Merchant", "Period start", "Period end", "Gross collections (GHS)", "PSP fees (GHS)", "Commission (GHS)", "Net payout (GHS)", "Status"],
+      ["Merchant", "Period start", "Period end", "Gross collections (GHS)", "PSP fees (GHS)", "Commission (GHS)", "Clawback (GHS)", "Net payout (GHS)", "Status"],
       ...settlements.map((s) => [
         s.merchant_business_name,
         s.period_start,
@@ -37,6 +37,7 @@ export function CsvExportButton({
         ghs(s.gross_collections_pesewas),
         ghs(s.psp_fees_pesewas),
         ghs(s.commission_pesewas),
+        ghs(s.clawback_pesewas),
         ghs(s.net_payout_pesewas),
         s.status,
       ]),
