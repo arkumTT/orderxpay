@@ -336,6 +336,7 @@ type Querier interface {
 	// UpdateDeliveryOption — the route path only carries the location's own
 	// id, not the merchant id.
 	UpdateMerchantLocation(ctx context.Context, arg UpdateMerchantLocationParams) (int64, error)
+	UpdateMerchantPassword(ctx context.Context, arg UpdateMerchantPasswordParams) (Merchant, error)
 	// account_name and verified_at travel together with the account details
 	// they describe — never set independently, so a resolved name can never
 	// outlive the account number it was resolved against. See
@@ -360,6 +361,7 @@ type Querier interface {
 	// records the resulting phone_number_id here.
 	UpdateMerchantWhatsAppPhoneNumberID(ctx context.Context, arg UpdateMerchantWhatsAppPhoneNumberIDParams) (Merchant, error)
 	UpdateMerchantWhatsAppSettings(ctx context.Context, arg UpdateMerchantWhatsAppSettingsParams) (Merchant, error)
+	UpdateStaffPassword(ctx context.Context, arg UpdateStaffPasswordParams) (Staff, error)
 	// Best-effort auto-save (called after every invoice send) and the
 	// manual "+ Add Customer" path share this same query — both are really
 	// "remember this contact, keeping whatever name we already know unless

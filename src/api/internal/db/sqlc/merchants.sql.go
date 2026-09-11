@@ -597,6 +597,53 @@ func (q *Queries) UpdateMerchantKYCTier(ctx context.Context, arg UpdateMerchantK
 	return i, err
 }
 
+const updateMerchantPassword = `-- name: UpdateMerchantPassword :one
+UPDATE merchants SET password_hash = $2 WHERE id = $1
+RETURNING id, business_name, category, phone, kyc_tier, status, service_charge_allocation, service_charge_split_bps, payout_account_type, payout_account_ref, payout_schedule, payout_min_threshold_pesewas, created_at, updated_at, whatsapp_auto_reply_enabled, whatsapp_greeting_message, delivery_enabled, email, password_hash, username, email_verified_at, whatsapp_phone_number_id, storage_used_bytes, whatsapp_catalog_id, business_type, payout_bank_code, payout_account_name, payout_account_verified_at, paystack_subaccount_code
+`
+
+type UpdateMerchantPasswordParams struct {
+	ID           pgtype.UUID `json:"id"`
+	PasswordHash pgtype.Text `json:"password_hash"`
+}
+
+func (q *Queries) UpdateMerchantPassword(ctx context.Context, arg UpdateMerchantPasswordParams) (Merchant, error) {
+	row := q.db.QueryRow(ctx, updateMerchantPassword, arg.ID, arg.PasswordHash)
+	var i Merchant
+	err := row.Scan(
+		&i.ID,
+		&i.BusinessName,
+		&i.Category,
+		&i.Phone,
+		&i.KycTier,
+		&i.Status,
+		&i.ServiceChargeAllocation,
+		&i.ServiceChargeSplitBps,
+		&i.PayoutAccountType,
+		&i.PayoutAccountRef,
+		&i.PayoutSchedule,
+		&i.PayoutMinThresholdPesewas,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.WhatsappAutoReplyEnabled,
+		&i.WhatsappGreetingMessage,
+		&i.DeliveryEnabled,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Username,
+		&i.EmailVerifiedAt,
+		&i.WhatsappPhoneNumberID,
+		&i.StorageUsedBytes,
+		&i.WhatsappCatalogID,
+		&i.BusinessType,
+		&i.PayoutBankCode,
+		&i.PayoutAccountName,
+		&i.PayoutAccountVerifiedAt,
+		&i.PaystackSubaccountCode,
+	)
+	return i, err
+}
+
 const updateMerchantPayoutAccount = `-- name: UpdateMerchantPayoutAccount :one
 UPDATE merchants
 SET payout_account_type = $1,

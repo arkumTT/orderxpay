@@ -192,6 +192,19 @@ class ApiClient {
   Future<Map<String, dynamic>> verifyOtp(String phone, String code) =>
       post('/api/v1/public/otp/verify', {'phone': phone, 'code': code});
 
+  /// Forgot-password recovery — call after [requestOtp] and [verifyOtp]
+  /// have already proven the caller controls [phone]; this doesn't take the
+  /// code again, since the server checks that same verified-phone proof
+  /// (fresh within its verified window) rather than asking for it twice.
+  /// Works for a merchant owner or a staff phone, whichever the number
+  /// belongs to. Returns `{'reset': true}` on success; never a token — the
+  /// caller signs in normally afterward with the new password.
+  Future<Map<String, dynamic>> resetPassword(String phone, String newPassword) =>
+      post('/api/v1/public/auth/reset-password', {
+        'phone': phone,
+        'new_password': newPassword,
+      });
+
   /// Section 4.1 registration — creates the merchant with just business
   /// info, phone, and a password (phone-first signup). The backend
   /// re-checks that [phone] was actually OTP-verified recently; this call

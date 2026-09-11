@@ -38,4 +38,18 @@ void main() {
     await tester.pump();
     expect(find.text('Signing in with your phone number'), findsOneWidget);
   });
+
+  testWidgets('forgot password is reachable from login and starts in its initial state', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const OrderxPayApp(initialRoute: '/login'));
+
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+
+    // Starts on the "enter phone + new password" stage — no code field yet.
+    expect(find.text('FORGOT PASSWORD'), findsOneWidget);
+    expect(find.text('Send Code'), findsOneWidget);
+    expect(find.text('Enter code'), findsNothing);
+  });
 }
