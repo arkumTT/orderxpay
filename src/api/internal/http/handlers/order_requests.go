@@ -103,9 +103,25 @@ func (h *Handler) ListPendingOrderRequests(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
+// validDeclineReasons mirrors validDisputeReasons' shape: a short fixed
+// vocabulary for the common cases, plus "other" as the escape hatch that
+// requires the merchant's own text since nothing canned fits. The mobile
+// client owns the human-facing labels and the canned message each category
+// maps to when prompting the merchant to let the customer know — this list
+// only needs to agree with the client on the keys.
+var validDeclineReasons = map[string]bool{
+	"out_of_stock":       true,
+	"cant_deliver_there": true,
+	"not_taking_orders":  true,
+	"duplicate":          true,
+	"suspected_spam":     true,
+	"other":              true,
+}
+
 type setOrderRequestStatusRequest struct {
-	Status        string `json:"status"` // confirmed | declined
-	DeclineReason string `json:"decline_reason"`
+	Status                string `json:"status"` // confirmed | declined
+	DeclineReasonCategory string `json:"decline_reason_category"`
+	DeclineReason         string `json:"decline_reason"` // optional note on top of the category; required when the category is "other"
 
 	// Confirm-only: the merchant's final line items, which may differ from
 	// what the customer originally requested — Section 4.6 lets the
@@ -116,6 +132,26 @@ type setOrderRequestStatusRequest struct {
 	DeliveryFeeHandling string            `json:"delivery_fee_handling"`
 	DeliveryFeePesewas  int64             `json:"delivery_fee_pesewas"`
 	PickupLocationID    string            `json:"pickup_location_id"`
+}
+
+// validate covers everything that doesn't need a DB round trip. Declining
+// always needs a reason category from the fixed vocabulary; the free-text
+// note is only mandatory when that category is "other", since every other
+// category already carries its own canned explanation client-side.
+func (r setOrderRequestStatusRequest) validate() error {
+	if r.Status != "confirmed" && r.Status != "declined" {
+		return errors.New("status must be confirmed or declined")
+	}
+	if r.Status != "declined" {
+		return nil
+	}
+	if !validDeclineReasons[r.DeclineReasonCategory] {
+		return errors.New("decline_reason_category must be one of: out_of_stock, cant_deliver_there, not_taking_orders, duplicate, suspected_spam, other")
+	}
+	if r.DeclineReasonCategory == "other" && r.DeclineReason == "" {
+		return errors.New("decline_reason is required when decline_reason_category is other")
+	}
+	return nil
 }
 
 // SetOrderRequestStatus lets the merchant confirm or decline a request
@@ -136,11 +172,8 @@ func (h *Handler) SetOrderRequestStatus(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return badRequest(c, "invalid request body")
 	}
-	if req.Status != "confirmed" && req.Status != "declined" {
-		return badRequest(c, "status must be confirmed or declined")
-	}
-	if req.Status == "declined" && req.DeclineReason == "" {
-		return badRequest(c, "decline_reason is required when declining")
+	if err := req.validate(); err != nil {
+		return badRequest(c, err.Error())
 	}
 
 	orderRequest, err := h.Queries.GetOrderRequest(c.Context(), requestID)
@@ -195,9 +228,10 @@ func (h *Handler) SetOrderRequestStatus(c *fiber.Ctx) error {
 	}
 
 	orderRequest, err = h.Queries.SetOrderRequestStatus(c.Context(), db.SetOrderRequestStatusParams{
-		ID:            requestID,
-		Status:        req.Status,
-		DeclineReason: textOrNull(req.DeclineReason),
+		ID:                    requestID,
+		Status:                req.Status,
+		DeclineReason:         textOrNull(req.DeclineReason),
+		DeclineReasonCategory: textOrNull(req.DeclineReasonCategory),
 	})
 	if err != nil {
 		// The invoice (if any) was already committed above — status update

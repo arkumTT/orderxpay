@@ -391,14 +391,22 @@ class ApiClient {
     return (res as List).map((e) => OrderRequest.fromJson(e)).toList();
   }
 
+  /// [category] is one of decline_reasons.dart's declineReasonKeys — the
+  /// server rejects anything else. [note] is the optional free-text add-on
+  /// (required by the server only when category is 'other').
   Future<void> declineOrderRequest(
     String merchantId,
-    String requestId,
-    String reason,
-  ) => _send(
+    String requestId, {
+    required String category,
+    String note = '',
+  }) => _send(
     'PATCH',
     '/api/v1/app/merchants/$merchantId/order-requests/$requestId',
-    body: {'status': 'declined', 'decline_reason': reason},
+    body: {
+      'status': 'declined',
+      'decline_reason_category': category,
+      'decline_reason': note,
+    },
   );
 
   Future<Invoice> confirmOrderRequest(

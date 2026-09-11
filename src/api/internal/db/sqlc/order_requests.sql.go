@@ -14,7 +14,7 @@ import (
 const createOrderRequest = `-- name: CreateOrderRequest :one
 INSERT INTO order_requests (merchant_id, customer_contact, customer_name, requested_items)
 VALUES ($1, $2, $3, $4)
-RETURNING id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name
+RETURNING id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name, decline_reason_category
 `
 
 type CreateOrderRequestParams struct {
@@ -42,12 +42,13 @@ func (q *Queries) CreateOrderRequest(ctx context.Context, arg CreateOrderRequest
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CustomerName,
+		&i.DeclineReasonCategory,
 	)
 	return i, err
 }
 
 const getOrderRequest = `-- name: GetOrderRequest :one
-SELECT id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name FROM order_requests WHERE id = $1
+SELECT id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name, decline_reason_category FROM order_requests WHERE id = $1
 `
 
 func (q *Queries) GetOrderRequest(ctx context.Context, id pgtype.UUID) (OrderRequest, error) {
@@ -63,12 +64,13 @@ func (q *Queries) GetOrderRequest(ctx context.Context, id pgtype.UUID) (OrderReq
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CustomerName,
+		&i.DeclineReasonCategory,
 	)
 	return i, err
 }
 
 const listPendingOrderRequestsByMerchant = `-- name: ListPendingOrderRequestsByMerchant :many
-SELECT id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name FROM order_requests
+SELECT id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name, decline_reason_category FROM order_requests
 WHERE merchant_id = $1 AND status = 'pending'
 ORDER BY created_at
 `
@@ -92,6 +94,7 @@ func (q *Queries) ListPendingOrderRequestsByMerchant(ctx context.Context, mercha
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CustomerName,
+			&i.DeclineReasonCategory,
 		); err != nil {
 			return nil, err
 		}
@@ -105,19 +108,25 @@ func (q *Queries) ListPendingOrderRequestsByMerchant(ctx context.Context, mercha
 
 const setOrderRequestStatus = `-- name: SetOrderRequestStatus :one
 UPDATE order_requests
-SET status = $2, decline_reason = $3
+SET status = $2, decline_reason = $3, decline_reason_category = $4
 WHERE id = $1
-RETURNING id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name
+RETURNING id, merchant_id, customer_contact, requested_items, status, decline_reason, created_at, updated_at, customer_name, decline_reason_category
 `
 
 type SetOrderRequestStatusParams struct {
-	ID            pgtype.UUID `json:"id"`
-	Status        string      `json:"status"`
-	DeclineReason pgtype.Text `json:"decline_reason"`
+	ID                    pgtype.UUID `json:"id"`
+	Status                string      `json:"status"`
+	DeclineReason         pgtype.Text `json:"decline_reason"`
+	DeclineReasonCategory pgtype.Text `json:"decline_reason_category"`
 }
 
 func (q *Queries) SetOrderRequestStatus(ctx context.Context, arg SetOrderRequestStatusParams) (OrderRequest, error) {
-	row := q.db.QueryRow(ctx, setOrderRequestStatus, arg.ID, arg.Status, arg.DeclineReason)
+	row := q.db.QueryRow(ctx, setOrderRequestStatus,
+		arg.ID,
+		arg.Status,
+		arg.DeclineReason,
+		arg.DeclineReasonCategory,
+	)
 	var i OrderRequest
 	err := row.Scan(
 		&i.ID,
@@ -129,6 +138,7 @@ func (q *Queries) SetOrderRequestStatus(ctx context.Context, arg SetOrderRequest
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CustomerName,
+		&i.DeclineReasonCategory,
 	)
 	return i, err
 }

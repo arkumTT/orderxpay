@@ -7,6 +7,8 @@ import '../../../core/design/app_theme.dart';
 import '../../../core/design/widgets.dart';
 import '../../../core/pull_to_refresh.dart';
 import '../../invoices/screens/new_order_screen.dart';
+import 'decline_reason_sheet.dart';
+import 'decline_sent_screen.dart';
 
 /// Section 4.6 pending-request queue. Approving pre-fills New Order
 /// (Section 4.6: "confirm as-is, adjust quantities/items, or decline") so
@@ -49,32 +51,38 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   }
 
   Future<void> _decline(OrderRequest request) async {
-    final reasonController = TextEditingController();
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Decline request'),
-        content: TextField(
-          controller: reasonController,
-          decoration: const InputDecoration(hintText: 'Reason'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, reasonController.text),
-            child: const Text('Decline'),
-          ),
-        ],
-      ),
-    );
-    if (reason == null || reason.isEmpty) return;
+    final choice = await showDeclineReasonSheet(context);
+    if (choice == null) return;
+    if (!mounted) return;
     try {
-      await _api.declineOrderRequest(Session.instance.merchantId!, request.id, reason);
-      _refresh();
+      await _api.declineOrderRequest(
+        Session.instance.merchantId!,
+        request.id,
+        category: choice.category,
+        note: choice.note,
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      return;
     }
+    if (!mounted) return;
+    // The customer has no app account and no other way to hear back — this
+    // is the only place they ever find out a request was declined. See
+    // DeclineSentScreen's doc comment for why it's a device deep link, not
+    // a backend send.
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DeclineSentScreen(
+          customerContact: request.customerContact,
+          customerName: request.customerName,
+          category: choice.category,
+          note: choice.note,
+        ),
+      ),
+    );
+    if (mounted) _refresh();
   }
 
   @override

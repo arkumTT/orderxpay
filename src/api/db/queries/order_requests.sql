@@ -13,6 +13,6 @@ ORDER BY created_at;
 
 -- name: SetOrderRequestStatus :one
 UPDATE order_requests
-SET status = $2, decline_reason = $3
+SET status = $2, decline_reason = $3, decline_reason_category = $4
 WHERE id = $1
 RETURNING *;

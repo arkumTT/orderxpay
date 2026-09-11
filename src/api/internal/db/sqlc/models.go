@@ -299,15 +299,16 @@ type Notification struct {
 }
 
 type OrderRequest struct {
-	ID              pgtype.UUID        `json:"id"`
-	MerchantID      pgtype.UUID        `json:"merchant_id"`
-	CustomerContact string             `json:"customer_contact"`
-	RequestedItems  []byte             `json:"requested_items"`
-	Status          string             `json:"status"`
-	DeclineReason   pgtype.Text        `json:"decline_reason"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	CustomerName    pgtype.Text        `json:"customer_name"`
+	ID                    pgtype.UUID        `json:"id"`
+	MerchantID            pgtype.UUID        `json:"merchant_id"`
+	CustomerContact       string             `json:"customer_contact"`
+	RequestedItems        []byte             `json:"requested_items"`
+	Status                string             `json:"status"`
+	DeclineReason         pgtype.Text        `json:"decline_reason"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	CustomerName          pgtype.Text        `json:"customer_name"`
+	DeclineReasonCategory pgtype.Text        `json:"decline_reason_category"`
 }
 
 type Payment struct {
