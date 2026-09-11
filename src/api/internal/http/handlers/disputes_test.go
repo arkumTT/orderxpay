@@ -1,6 +1,12 @@
 package handlers
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	db "github.com/orderxpay/api/internal/db/sqlc"
+)
 
 func TestMerchantEntitledShare(t *testing.T) {
 	cases := []struct {
@@ -64,5 +70,65 @@ func TestMerchantEntitledShareExcludesCommission(t *testing.T) {
 	}
 	if got == refund {
 		t.Error("the merchant's entitled share should never equal the raw refund when commission is nonzero")
+	}
+}
+
+func TestMerchantAlreadyReceivedPayout(t *testing.T) {
+	valid := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	validText := pgtype.Text{String: "SUB_abc123", Valid: true}
+
+	cases := []struct {
+		name string
+		pmt  db.Payment
+		want bool
+	}{
+		{
+			name: "neither settled nor split — money is still sitting in OrderxPay's balance",
+			pmt:  db.Payment{},
+			want: false,
+		},
+		{
+			name: "settled — a completed settlement already paid the merchant",
+			pmt:  db.Payment{SettlementID: valid},
+			want: true,
+		},
+		{
+			name: "split — Paystack sent the merchant's share straight to their subaccount",
+			pmt:  db.Payment{PaystackSubaccountCode: validText},
+			want: true,
+		},
+		{
+			name: "theoretically both set — still true, not double-counted by this bool",
+			pmt:  db.Payment{SettlementID: valid, PaystackSubaccountCode: validText},
+			want: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := merchantAlreadyReceivedPayout(tc.pmt); got != tc.want {
+				t.Errorf("merchantAlreadyReceivedPayout(%+v) = %v, want %v", tc.pmt, got, tc.want)
+			}
+		})
+	}
+}
+
+// The bug this locks in: a split payment's settlement_id is NULL forever
+// (ComputeSettlementAggregate excludes split payments from every
+// settlement it ever computes), so checking SettlementID alone silently
+// misses every split-payment refund — exactly the gap the Fee Architecture
+// brief named as needing an answer before split payments go live for
+// anyone.
+func TestMerchantAlreadyReceivedPayoutCatchesSplitPaymentsSettlementIDMisses(t *testing.T) {
+	splitPayment := db.Payment{
+		PaystackSubaccountCode: pgtype.Text{String: "SUB_abc123", Valid: true},
+		// SettlementID deliberately left zero-value (invalid) — this is the
+		// permanent state for a split payment, not a transient one.
+	}
+	if splitPayment.SettlementID.Valid {
+		t.Fatal("test setup error: SettlementID should be invalid for this case")
+	}
+	if !merchantAlreadyReceivedPayout(splitPayment) {
+		t.Error("a split payment's merchant share already left OrderxPay's balance even though settlement_id is NULL — merchantAlreadyReceivedPayout must catch this")
 	}
 }

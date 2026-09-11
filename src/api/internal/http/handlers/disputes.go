@@ -246,25 +246,33 @@ func (h *Handler) ResolveDispute(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "refund succeeded with the provider but failed to record — needs manual reconciliation"})
 		}
 
-		// Section 7.7: if this payment was already claimed by a settlement,
-		// the merchant was already paid their share of it — Phase 1 payouts
-		// are manual, so once settlement_id is set that money genuinely left
-		// OrderxPay's balance. Record a clawback for the merchant's entitled
-		// share of what's being refunded now (not the whole refund —
-		// OrderxPay's own commission on that slice was never paid to the
-		// merchant, so it isn't owed back), to be deducted from their next
-		// settlement. Unlike the invoice-status update below, a failure here
-		// is not best-effort: it's real money the merchant now owes back,
-		// so it has to surface loudly rather than silently go untracked.
-		if pmt.SettlementID.Valid {
+		// Section 7.7: the merchant's share of this payment may already have
+		// left OrderxPay's balance by either of two paths — see
+		// merchantAlreadyReceivedPayout. Record a clawback for the
+		// merchant's entitled share of what's being refunded now (not the
+		// whole refund — OrderxPay's own commission on that slice was never
+		// paid to the merchant, so it isn't owed back), to be deducted from
+		// their next settlement. Unlike the invoice-status update below, a
+		// failure here is not best-effort: it's real money the merchant now
+		// owes back, so it has to surface loudly rather than silently go
+		// untracked.
+		if merchantAlreadyReceivedPayout(pmt) {
 			owed := merchantEntitledShare(req.RefundAmountPesewas, invoice.TotalPesewas, invoice.CommissionPesewas)
 			if owed > 0 {
+				via := "a payment already paid out via settlement"
+				if !pmt.SettlementID.Valid {
+					// Split payments never accrue a settlement_id at all —
+					// see ComputeSettlementAggregate's exclusion of them —
+					// so this is the only path left once SettlementID is
+					// the false half of the OR.
+					via = "a split payment Paystack already sent straight to the merchant's subaccount"
+				}
 				if _, err := h.Queries.CreateSettlementClawback(c.Context(), db.CreateSettlementClawbackParams{
 					MerchantID:    invoice.MerchantID,
 					PaymentID:     pmt.ID,
 					DisputeID:     dispute.ID,
 					AmountPesewas: owed,
-					Reason:        fmt.Sprintf("refund of %s on a payment already paid out (dispute %s)", formatPesewas(req.RefundAmountPesewas), uuid.UUID(dispute.ID.Bytes).String()),
+					Reason:        fmt.Sprintf("refund of %s on %s (dispute %s)", formatPesewas(req.RefundAmountPesewas), via, uuid.UUID(dispute.ID.Bytes).String()),
 				}); err != nil {
 					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "refund succeeded but failed to record the settlement clawback — needs manual reconciliation"})
 				}
@@ -325,4 +333,39 @@ func merchantEntitledShare(refundAmountPesewas, invoiceTotalPesewas, invoiceComm
 		return 0
 	}
 	return refundAmountPesewas * (invoiceTotalPesewas - invoiceCommissionPesewas) / invoiceTotalPesewas
+}
+
+// merchantAlreadyReceivedPayout reports whether a payment's merchant share
+// has already left OrderxPay's balance by one of two genuinely different
+// paths, both of which need the same clawback treatment on refund:
+//
+//  1. It was claimed by a completed settlement (settlement_id set) — Phase
+//     1 payouts are manual, so once that's set the money is gone.
+//  2. It was a Paystack split-at-charge payment (paystack_subaccount_code
+//     set) — Paystack sent the merchant's share straight to their own
+//     subaccount at charge time, bypassing the settlement system
+//     entirely. This is the case ComputeSettlementAggregate's own
+//     filter (AND p.paystack_subaccount_code IS NULL) means
+//     settlement_id checked alone will always miss: a split payment
+//     never gets aggregated into any settlement, so settlement_id for it
+//     stays NULL forever, not just until the next settlement run. Without
+//     this second check, refunding a split payment silently recorded no
+//     debt at all — exactly the gap the Fee Architecture brief named
+//     before split payments were ever allowed to go live for anyone.
+//
+// What this function fixes is detection — the clawback row now always
+// gets created. What it can't fix on its own: GenerateSettlement is how a
+// clawback actually gets collected (deducted from a merchant's next
+// settlement), and a merchant who takes ONLY split payments never has a
+// settlement generated for them at all — there's nothing non-split left
+// to aggregate. For that merchant the clawback stays visible and
+// outstanding (Back Office shows it), but nothing automatically collects
+// it; a merchant who has any mix of split and non-split activity is fully
+// covered, since the debt applies to whatever real settlement they next
+// get. Recovering from a 100%-split merchant would need its own
+// collection mechanism — initiating a transfer to pull money back, not
+// withholding one — which is a materially different, higher-stakes
+// feature than this one and hasn't been built.
+func merchantAlreadyReceivedPayout(pmt db.Payment) bool {
+	return pmt.SettlementID.Valid || pmt.PaystackSubaccountCode.Valid
 }
